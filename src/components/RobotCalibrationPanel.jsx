@@ -36,6 +36,13 @@ export default function RobotCalibrationPanel({
     && lastStatus?.timestamp
     && clock - lastStatus.timestamp < RESPONSE_TIMEOUT_MS
   const controlsBlocked = !mqttConnected || !jointState.positionKnown || jointState.moving
+  const guideSteps = [
+    { label: 'Conectar MQTT', done: mqttConnected, detail: mqttConnected ? 'Conectado' : 'Actívalo desde configuración' },
+    { label: 'Confirmar ESP32', done: esp32Available, detail: esp32Available ? 'Estado recibido' : `Esperando ${topics.status}` },
+    { label: 'Colocar HOME', done: jointState.positionKnown, detail: jointState.positionKnown ? 'Posición conocida' : 'Coloca el brazo y confirma HOME' },
+    { label: 'Probar articulaciones', done: jointState.positionKnown && !jointState.moving, detail: jointState.moving ? 'Movimiento en curso' : 'Mueve un servo cada vez' },
+    { label: 'Continuar', done: jointState.positionKnown && esp32Available && !jointState.moving, detail: 'Brazo listo para el plan' },
+  ]
   const selectedConfig = ARM_SERVOS.find((servo) => servo.id === selectedServo)
   const statusDetail = useMemo(() => parseDetail(lastStatus?.payload?.detail), [lastStatus])
   const errorDetail = useMemo(() => parseDetail(lastError?.payload?.detail), [lastError])
@@ -147,6 +154,31 @@ export default function RobotCalibrationPanel({
         <StatusItem label="Movimiento" value={jointState.moving ? 'Activo' : 'Detenido'} state={jointState.moving ? 'warning' : 'ok'} />
       </div>
 
+      <section className="rounded-md border border-zinc-800 bg-zinc-900/60 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">Orden recomendado</p>
+            <p className="mt-1 text-xs text-zinc-500">Avanza de izquierda a derecha. Si un paso queda bloqueado, revisa el mensaje de detalle.</p>
+          </div>
+          <div className="text-xs text-zinc-500">
+            Escucha <span className="text-cyan-200">{topics.status}</span>
+            <span className="mx-1">·</span>
+            último estado {formatAge(lastStatus?.timestamp, clock)}
+          </div>
+        </div>
+        <div className="mt-4 grid gap-2 md:grid-cols-5">
+          {guideSteps.map((step, index) => (
+            <div key={step.label} className={`rounded-md border px-3 py-2 ${step.done ? 'border-emerald-400/30 bg-emerald-400/10' : 'border-zinc-800 bg-zinc-950/70'}`}>
+              <div className="flex items-center gap-2 text-[10px] uppercase text-zinc-500">
+                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step.done ? 'bg-emerald-400 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}>{index + 1}</span>
+                {step.label}
+              </div>
+              <p className="mt-2 text-xs text-zinc-300">{step.detail}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="sticky top-3 z-10 flex flex-wrap items-center gap-3 rounded-md border border-zinc-700 bg-zinc-950/95 p-3 shadow-2xl backdrop-blur">
         <button
           type="button"
@@ -178,7 +210,13 @@ export default function RobotCalibrationPanel({
         </button>
       </section>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-white">Prueba por articulación</p>
+          <p className="mt-1 text-xs text-zinc-500">Usa pasos pequeños primero. Los controles se activan después de confirmar HOME.</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {ARM_SERVOS.map((servo) => (
           <ServoCard
             key={servo.id}
@@ -189,24 +227,28 @@ export default function RobotCalibrationPanel({
             onJog={jog}
           />
         ))}
-      </div>
+        </div>
+      </section>
 
-      <form onSubmit={setAngle} className="grid gap-3 border-t border-zinc-800 pt-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
-        <Field label="Servo">
-          <select value={selectedServo} onChange={(event) => setSelectedServo(event.target.value)} className={inputClass} disabled={jointState.moving}>
-            {ARM_SERVOS.map((servo) => <option key={servo.id} value={servo.id}>{servo.label}</option>)}
-          </select>
-        </Field>
-        <Field label={`Ángulo (${selectedConfig.minAngle}°–${selectedConfig.maxAngle}°)`}>
-          <input type="number" min={selectedConfig.minAngle} max={selectedConfig.maxAngle} step="1" value={directAngle} onChange={(event) => setDirectAngle(event.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Duración (200–5000 ms)">
-          <input type="number" min="200" max="5000" step="50" value={durationMs} onChange={(event) => setDurationMs(event.target.value)} className={inputClass} />
-        </Field>
-        <button type="submit" disabled={controlsBlocked} className="h-10 rounded-md bg-cyan-300 px-4 text-sm font-bold text-zinc-950 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40">
-          Mover
-        </button>
-      </form>
+      <details className="rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-zinc-200">Controles avanzados</summary>
+        <form onSubmit={setAngle} className="mt-4 grid gap-3 border-t border-zinc-800 pt-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
+          <Field label="Servo">
+            <select value={selectedServo} onChange={(event) => setSelectedServo(event.target.value)} className={inputClass} disabled={jointState.moving}>
+              {ARM_SERVOS.map((servo) => <option key={servo.id} value={servo.id}>{servo.label}</option>)}
+            </select>
+          </Field>
+          <Field label={`Ángulo (${selectedConfig.minAngle}°–${selectedConfig.maxAngle}°)`}>
+            <input type="number" min={selectedConfig.minAngle} max={selectedConfig.maxAngle} step="1" value={directAngle} onChange={(event) => setDirectAngle(event.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Duración (200–5000 ms)">
+            <input type="number" min="200" max="5000" step="50" value={durationMs} onChange={(event) => setDurationMs(event.target.value)} className={inputClass} />
+          </Field>
+          <button type="submit" disabled={controlsBlocked} className="h-10 rounded-md bg-cyan-300 px-4 text-sm font-bold text-zinc-950 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40">
+            Mover
+          </button>
+        </form>
+      </details>
 
       <p className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-sm text-cyan-100">
         Los grados mostrados son ángulos ordenados, no mediciones físicas reales.
@@ -312,6 +354,13 @@ function messageText(payload) {
 
 function formatTime(timestamp) {
   return timestamp ? new Date(timestamp).toLocaleTimeString('es-ES') : 'Sin mensajes'
+}
+
+function formatAge(timestamp, now) {
+  if (!timestamp) return 'sin mensajes'
+  const seconds = Math.max(0, Math.round((now - timestamp) / 1000))
+  if (seconds < 2) return 'ahora'
+  return `hace ${seconds}s`
 }
 
 const inputClass = 'h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none focus:border-cyan-300 disabled:opacity-40'
