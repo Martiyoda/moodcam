@@ -4,41 +4,37 @@ export default function ConversationPanel({
   error,
   transcript,
   mode,
+  voiceEnabled,
   remainingSeconds,
   sessionActive,
-  onStart,
   onFinish,
   onReset,
-  disabled,
 }) {
   const progress = sessionActive ? Math.max(0, Math.min(100, ((60 - remainingSeconds) / 60) * 100)) : 0
+  const modeLabel = voiceEnabled ? mode?.label || 'Sesión visual' : 'Sesión sólo rostro'
+  const modeDescription = voiceEnabled
+    ? mode?.description || 'Moodcam mide la emoción visual durante 60 segundos.'
+    : 'Moodcam usa únicamente la cámara para estimar la emoción durante 60 segundos.'
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">2. Captura con {artist.name}</h2>
-          <p className="text-xs text-gray-500 mt-1">{mode?.description || 'Moodcam mide la emoción visual durante 60 segundos.'}</p>
+          <p className="text-xs text-gray-500 mt-1">{modeDescription}</p>
         </div>
-        <StatusBadge status={status} mode={mode} />
+        <StatusBadge status={status} mode={mode} voiceEnabled={voiceEnabled} />
       </div>
 
       <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-4 space-y-3">
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{mode?.label || 'Sesión visual'}</span>
+          <span>{modeLabel}</span>
           <span className="text-2xl font-semibold text-white">{sessionActive ? `${remainingSeconds}s` : '60s'}</span>
         </div>
         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
           <div className="h-full bg-gradient-to-r from-cyan-300 via-amber-300 to-rose-400 transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={onStart}
-            disabled={disabled || sessionActive}
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-400 text-gray-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors"
-          >
-            Iniciar captura
-          </button>
           <button
             onClick={onFinish}
             disabled={!sessionActive}
@@ -62,7 +58,9 @@ export default function ConversationPanel({
       )}
 
       <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-3 max-h-56 overflow-y-auto space-y-2">
-        {transcript.length === 0 ? (
+        {!voiceEnabled ? (
+          <p className="text-sm text-gray-500">Voz desactivada. La emoción se calculará sólo con la cámara.</p>
+        ) : transcript.length === 0 ? (
           <p className="text-sm text-gray-500">El transcript aparecerá aquí si el navegador permite speech-to-text. Si no, Moodcam seguirá midiendo energía, pausas y rostro.</p>
         ) : (
           transcript.map((item) => (
@@ -79,7 +77,7 @@ export default function ConversationPanel({
   )
 }
 
-function StatusBadge({ status, mode }) {
+function StatusBadge({ status, mode, voiceEnabled }) {
   const styles = {
     idle: 'bg-gray-700 text-gray-300',
     starting: 'bg-amber-400/15 text-amber-200',
@@ -99,7 +97,7 @@ function StatusBadge({ status, mode }) {
     error: 'Error',
   }
 
-  const label = mode?.id === 'none' && status === 'idle' ? mode.statusLabel : labels[status] || status
+  const label = !voiceEnabled ? 'Sólo rostro' : mode?.id === 'none' && status === 'idle' ? mode.statusLabel : labels[status] || status
 
   return (
     <span className={`px-2 py-1 rounded-md text-xs font-semibold ${styles[status] || styles.idle}`}>

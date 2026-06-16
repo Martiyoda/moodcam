@@ -129,7 +129,7 @@ const MQTT_STATUS_MAP = {
   error: { label: 'Error', color: 'bg-red-500' },
 }
 
-export default function SettingsModal({ isOpen, onClose, config, onConfigChange, onReset, mqttConfig, onMqttConfigChange, onMqttReset, mqttStatus, mqttError }) {
+export default function SettingsModal({ isOpen, onClose, config, onConfigChange, onReset, mqttConfig, onMqttConfigChange, onMqttReset, mqttStatus, mqttError, useVoiceCapture, onUseVoiceCaptureChange }) {
   const [expandedSection, setExpandedSection] = useState('emotion')
 
   if (!isOpen) return null
@@ -164,6 +164,35 @@ export default function SettingsModal({ isOpen, onClose, config, onConfigChange,
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin">
+          <div className="border border-gray-800 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setExpandedSection(expandedSection === 'capture' ? null : 'capture')}
+              className="w-full flex items-center justify-between p-3 hover:bg-gray-800/50 transition-colors"
+            >
+              <div className="text-left">
+                <span className="text-sm font-semibold text-white">Captura</span>
+                {expandedSection !== 'capture' && (
+                  <span className="block text-xs text-gray-500 mt-0.5">Fuente de emoción usada durante la sesión.</span>
+                )}
+              </div>
+              <span className={`text-gray-500 transition-transform duration-200 ${expandedSection === 'capture' ? 'rotate-180' : ''}`}>
+                ▾
+              </span>
+            </button>
+
+            {expandedSection === 'capture' && (
+              <div className="px-3 pb-3 space-y-3 border-t border-gray-800/50 pt-3">
+                <p className="text-xs text-gray-500">Desactiva la voz para usar sólo la cámara en el cálculo emocional.</p>
+                <ToggleParam
+                  param={{ key: 'useVoiceCapture', label: 'Usar voz para calcular emociones' }}
+                  value={useVoiceCapture}
+                  onChange={(_, value) => onUseVoiceCaptureChange(value)}
+                />
+                <p className="text-[11px] text-gray-600">Si está apagado, la app no pedirá micrófono ni mezclará voz en el resumen final.</p>
+              </div>
+            )}
+          </div>
+
           {SECTIONS.map((section) => {
             const isExpanded = expandedSection === section.key
 

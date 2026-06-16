@@ -10,13 +10,12 @@ import ArtPlanPanel from './components/ArtPlanPanel'
 import ConversationPanel from './components/ConversationPanel'
 import VoiceEmotionPanel from './components/VoiceEmotionPanel'
 import RobotCalibrationPanel from './components/RobotCalibrationPanel'
-import PainterVideoManager from './components/PainterVideoManager'
 import DemoReadinessPanel from './components/DemoReadinessPanel'
+import LiveExperienceView from './components/LiveExperienceView'
 import { calculateEmotionSummary, generateArtPlan, getArtistById } from './lib/artEngine'
 import { DEFAULT_CONVERSATION_MODE, getConversationMode } from './lib/conversationModes'
 import { calibrationTopicsFromMap, createSessionId } from './lib/mqttContract'
 import { getPainterProfile } from './lib/painterProfiles'
-import { selectPainterResponse } from './lib/painterResponseSelector'
 import {
   DEFAULT_ROBOT_CALIBRATION,
   combineEmotionSummaries,
@@ -93,6 +92,7 @@ function App() {
   const [sessionId, setSessionId] = useState(null)
   const [conversationModeId] = useState(DEFAULT_CONVERSATION_MODE)
   const [armCalibrationState, setArmCalibrationState] = useState({ active: false, moving: false })
+  const [useVoiceCapture, setUseVoiceCapture] = useState(false)
 
   const faceSamplesRef = useRef([])
   const voiceSamplesRef = useRef([])
@@ -112,17 +112,13 @@ function App() {
       artistId: selectedArtist,
       mobility,
       calibration: robotCalibration,
-      colorPreferences: voiceSummary.color_preferences,
-      voiceSummary,
+      colorPreferences: useVoiceCapture ? voiceSummary.color_preferences : [],
+      voiceSummary: useVoiceCapture ? voiceSummary : null,
     })
-  }, [combinedEmotionSummary, mobility, robotCalibration, selectedArtist, voiceSummary])
+  }, [combinedEmotionSummary, mobility, robotCalibration, selectedArtist, useVoiceCapture, voiceSummary])
   const aiArtPlan = lastAiPlan?.payload?.robot_commands ? lastAiPlan.payload : null
   const artPlan = aiArtPlan || fallbackArtPlan
   const planSource = aiArtPlan ? 'ai_bridge' : 'local_fallback'
-  const painterResponse = useMemo(() => selectPainterResponse({
-    painterId: selectedArtist,
-    emotion: latestVoiceSample?.dominant || combinedEmotionSummary[0]?.simple_emotion || 'neutral',
-  }), [combinedEmotionSummary, latestVoiceSample, selectedArtist])
 
   useEffect(() => {
     faceSamplesRef.current = faceEmotionSamples
@@ -172,15 +168,25 @@ function App() {
 
   const finishSession = useCallback(() => {
     const nextFaceSummary = calculateEmotionSummary(faceSamplesRef.current)
-    const fusedEmotion = buildVoiceFusion(emotions)
-    const nextVoiceSummary = {
-      ...voiceSummary,
-      main_emotions: fusedEmotion.art_summary,
-      fused_emotion: fusedEmotion,
-    }
-    const nextCombinedSummary = fusedEmotion.art_summary?.length
+    const fusedEmotion = useVoiceCapture ? buildVoiceFusion(emotions) : null
+    const nextVoiceSummary = useVoiceCapture
+      ? {
+        ...voiceSummary,
+        main_emotions: fusedEmotion.art_summary,
+        fused_emotion: fusedEmotion,
+      }
+      : {
+        ...voiceSummary,
+        main_emotions: [],
+        simple_emotion: 'disabled',
+        label: 'voz desactivada',
+        confidence: 0,
+      }
+    const nextCombinedSummary = useVoiceCapture && fusedEmotion.art_summary?.length
       ? fusedEmotion.art_summary
-      : combineEmotionSummaries(nextFaceSummary, nextVoiceSummary)
+      : useVoiceCapture
+        ? combineEmotionSummaries(nextFaceSummary, nextVoiceSummary)
+        : nextFaceSummary
 
     stopVoiceDetection()
     setSessionActive(false)
@@ -198,13 +204,13 @@ function App() {
         transcript: transcriptRef.current,
         calibration: robotCalibration,
         mobility,
-        conversationMode: conversationMode.id,
+        conversationMode: useVoiceCapture ? conversationMode.id : 'face_only',
       })
     }
 
     setActionMessage(nextCombinedSummary.length > 0
       ? 'Sesión enviada al AI Bridge. Esperando plan IA por HiveMQ.'
-      : 'No hay suficientes datos de emoción. Repite la conversación con cámara y micrófono activos.')
+      : `No hay suficientes datos de emoción. Repite la captura con cámara${useVoiceCapture ? ' y micrófono' : ''} activos.`)
     if (nextCombinedSummary.length > 0) setCurrentStep(3)
   }, [
     buildVoiceFusion,
@@ -216,6 +222,7 @@ function App() {
     selectedArtistInfo,
     sessionId,
     stopVoiceDetection,
+    useVoiceCapture,
     voiceSummary,
   ])
 
@@ -242,6 +249,7 @@ function App() {
     setCombinedEmotionSummary([])
     lastFaceSampleRef.current = 0
     faceSamplesRef.current = []
+    resetVoiceDetection()
     const nextSessionId = createSessionId(mqttConfig.deviceId)
     setSessionId(nextSessionId)
 
@@ -249,7 +257,7 @@ function App() {
     if (!ready) ready = await startCamera()
     if (!ready) return
 
-    if (conversationMode.id === 'voice_detector') {
+    if (useVoiceCapture && conversationMode.id === 'voice_detector') {
       const started = await startVoiceDetection()
       if (!started) {
         setActionMessage('No se pudo activar el micrófono. La sesión puede continuar solo con rostro si lo deseas.')
@@ -261,7 +269,7 @@ function App() {
       artist: selectedArtistInfo,
       mobility,
       calibration: robotCalibration,
-      conversationMode: conversationMode.id,
+      conversationMode: useVoiceCapture ? conversationMode.id : 'face_only',
     })
 
     setRemainingMs(SESSION_MS)
@@ -279,6 +287,8 @@ function App() {
     startCamera,
     startVoiceDetection,
     calibrationLocked,
+    resetVoiceDetection,
+    useVoiceCapture,
   ])
 
   const handleResetExperience = useCallback(() => {
@@ -355,15 +365,21 @@ function App() {
   const remainingSeconds = Math.ceil(remainingMs / 1000)
   const calibrationTopics = calibrationTopicsFromMap(mqttConfig.topics)
   const robotStatusPayload = lastRobotStatus?.payload
+  const robotCommandSent = lastPublished?.payload?.type === 'paint_sequence'
   const canOpenStep = useCallback((step) => {
-    if (step <= 2) return true
-    if (step === 3) return displayedFaceSummary.length > 0 || voiceSamples.length > 0 || combinedEmotionSummary.length > 0
-    if (step === 4) return true
-    if (step === 5) return combinedEmotionSummary.length > 0 && !calibrationLocked
+    if (step === 1) return true
+    if (step === 2) return Boolean(selectedArtist)
+    if (step === 3) return combinedEmotionSummary.length > 0
+    if (step === 4) return combinedEmotionSummary.length > 0 && connectionStatus === 'connected'
+    if (step === 5) return Boolean(artPlan) && connectionStatus === 'connected' && !calibrationLocked
+    if (step === 6) return Boolean(artPlan) && robotCommandSent && Boolean(lastRobotStatus)
     return false
-  }, [calibrationLocked, combinedEmotionSummary.length, displayedFaceSummary.length, voiceSamples.length])
+  }, [artPlan, calibrationLocked, combinedEmotionSummary.length, connectionStatus, lastRobotStatus, robotCommandSent, selectedArtist])
   const goToStep = useCallback((step) => {
-    if (!canOpenStep(step)) return
+    if (!canOpenStep(step)) {
+      setActionMessage(blockedStepMessage(step))
+      return
+    }
     if (step === 4 && sessionActive) {
       stopVoiceDetection()
       setSessionActive(false)
@@ -432,6 +448,7 @@ function App() {
           aiPlan={lastAiPlan}
           robotStatus={lastCalibrationStatus || lastRobotStatus}
           voiceStatus={voiceStatus}
+          voiceEnabled={useVoiceCapture}
           painter={selectedPainterProfile}
           sessionActive={sessionActive}
           calibrationActive={calibrationLocked}
@@ -450,7 +467,7 @@ function App() {
         )}
 
         {currentStep === 2 && (
-          <Screen title={`2. Capturar emoción con ${selectedArtistInfo.name}`} description="Moodcam toma muestras faciales y publica la sesión para que el AI Bridge decida el plan.">
+          <Screen title={`2. Capturar emoción con ${selectedArtistInfo.name}`} description={`Moodcam toma muestras faciales${useVoiceCapture ? ' y de voz' : ''} y publica la sesión para que el AI Bridge decida el plan.`}>
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] gap-5">
               <div className="space-y-4">
                 <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
@@ -479,11 +496,6 @@ function App() {
                 {error && <div className="bg-red-950/40 border border-red-700 text-red-200 rounded-lg p-3 text-sm text-center">{error}</div>}
               </div>
               <div className="space-y-4">
-                <PainterVideoManager
-                  painter={selectedPainterProfile}
-                  response={painterResponse}
-                  emotionLabel={latestVoiceSample?.label || combinedEmotionSummary[0]?.label}
-                />
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
                   <ConversationPanel
                     artist={selectedArtistInfo}
@@ -491,12 +503,11 @@ function App() {
                     error={voiceError}
                     transcript={transcript}
                     mode={conversationMode}
+                    voiceEnabled={useVoiceCapture}
                     remainingSeconds={remainingSeconds}
                     sessionActive={sessionActive}
-                    onStart={handleStartSession}
                     onFinish={finishSession}
                     onReset={handleResetExperience}
-                    disabled={!modelsLoaded || loading}
                   />
                 </div>
               </div>
@@ -521,7 +532,7 @@ function App() {
             </div>
             <ScreenActions>
               <button onClick={() => setCurrentStep(2)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-              <button onClick={() => setCurrentStep(4)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 hover:bg-amber-300 transition-colors">Calibrar A4</button>
+              <button onClick={() => goToStep(4)} disabled={!canOpenStep(4)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Calibrar A4</button>
             </ScreenActions>
           </Screen>
         )}
@@ -553,6 +564,25 @@ function App() {
             </div>
             <ScreenActions>
               <button onClick={() => setCurrentStep(4)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
+              <button onClick={() => goToStep(6)} disabled={!canOpenStep(6)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Abrir experiencia</button>
+            </ScreenActions>
+          </Screen>
+        )}
+
+        {currentStep === 6 && (
+          <Screen title="Experiencia en directo" description="Vista final para el usuario: cámara, emoción, pintor y actividad del brazo sin controles técnicos.">
+            <LiveExperienceView
+              videoRef={videoRef}
+              canvasRef={canvasRef}
+              cameraActive={cameraActive}
+              artist={selectedArtistInfo}
+              emotionSummary={combinedEmotionSummary}
+              plan={artPlan}
+              robotStatus={robotStatusPayload}
+              lastPublished={lastPublished}
+            />
+            <ScreenActions>
+              <button onClick={() => setCurrentStep(5)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Volver al envío</button>
             </ScreenActions>
           </Screen>
         )}
@@ -583,16 +613,18 @@ function App() {
         onMqttReset={resetMqttConfig}
         mqttStatus={connectionStatus}
         mqttError={lastError}
+        useVoiceCapture={useVoiceCapture}
+        onUseVoiceCaptureChange={setUseVoiceCapture}
       />
     </div>
   )
 }
 
 function StepStrip({ active, currentStep, canOpenStep, onSelect }) {
-  const steps = ['Pintor', 'Captura', 'Emociones', 'Calibración', 'ESP32']
+  const steps = ['Pintor', 'Captura', 'Emociones', 'Calibración', 'ESP32', 'Experiencia']
 
   return (
-    <div className="grid grid-cols-5 gap-2">
+    <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
       {steps.map((step, index) => {
         const number = index + 1
         const current = number === active
@@ -603,15 +635,15 @@ function StepStrip({ active, currentStep, canOpenStep, onSelect }) {
           <button
             key={step}
             onClick={() => onSelect(number)}
-            disabled={!open}
-            className={`rounded-lg border px-2 py-2 text-center text-xs transition-colors disabled:cursor-not-allowed ${
+            aria-disabled={!open}
+            className={`rounded-lg border px-2 py-2 text-center text-xs transition-colors ${
               current || currentStep === number
                 ? 'border-amber-400 bg-amber-400/10 text-white'
                 : done
                   ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
                   : open
                     ? 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600'
-                    : 'border-zinc-900 bg-zinc-950/50 text-zinc-700'
+                    : 'cursor-not-allowed border-zinc-900 bg-zinc-950/50 text-zinc-700'
             }`}
           >
             <span className="block text-[10px]">{number}</span>
@@ -646,6 +678,14 @@ function ScreenActions({ children }) {
 function formatSystemError(payload) {
   if (typeof payload === 'string') return payload
   return payload?.message || payload?.error || JSON.stringify(payload)
+}
+
+function blockedStepMessage(step) {
+  if (step === 3) return 'Completa una captura emocional antes de revisar el resultado.'
+  if (step === 4) return 'Conecta MQTT y completa la captura antes de calibrar el brazo.'
+  if (step === 5) return 'Necesitas un plan artístico y MQTT conectado antes de enviar al ESP32.'
+  if (step === 6) return 'La experiencia final se habilita cuando el plan se ha enviado y el robot ha publicado estado.'
+  return 'Completa el paso anterior antes de continuar.'
 }
 
 export default App

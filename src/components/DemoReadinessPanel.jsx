@@ -3,6 +3,7 @@ export default function DemoReadinessPanel({
   aiPlan,
   robotStatus,
   voiceStatus,
+  voiceEnabled,
   painter,
   sessionActive,
   calibrationActive,
@@ -21,13 +22,8 @@ export default function DemoReadinessPanel({
     },
     {
       label: 'Voz',
-      value: voiceStatusLabel(voiceStatus, sessionActive),
-      state: voiceStatus === 'listening' || voiceStatus === 'ended' ? 'ok' : sessionActive ? 'pending' : 'idle',
-    },
-    {
-      label: 'Videos',
-      value: 'mock HeyGen listo',
-      state: 'ok',
+      value: voiceEnabled ? voiceStatusLabel(voiceStatus, sessionActive) : 'desactivada',
+      state: voiceEnabled ? voiceStatus === 'listening' || voiceStatus === 'ended' ? 'ok' : sessionActive ? 'pending' : 'idle' : 'idle',
     },
     {
       label: 'AI Bridge',
@@ -52,7 +48,7 @@ export default function DemoReadinessPanel({
           device sync
         </span>
       </div>
-      <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
         {checks.map((check) => (
           <div key={check.label} className="rounded-md border border-zinc-800 bg-zinc-950/70 px-3 py-2 min-w-0">
             <div className="flex items-center gap-2">
