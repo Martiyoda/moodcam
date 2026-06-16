@@ -35,10 +35,10 @@ Las posiciones se obtendran primero calibrando manualmente grados de servos. Las
 ## Flujo futuro
 
 ```text
-emotion/input
+moodcam/{deviceId}/emotion/face
 -> AI Bridge decide stroke_id
 -> validator.js valida stroke_id
--> robot/command
+-> robot/{deviceId}/command
 -> ESP32 ejecuta solo con FINAL_ARM_MODE activo y calibracion explicita
 ```
 

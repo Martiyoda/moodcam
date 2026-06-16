@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import {
-  ARM_CALIBRATION_TOPICS,
   ARM_SERVOS,
   INITIAL_ATTACHED_STATE,
   INITIAL_JOINT_STATE,
@@ -20,6 +19,7 @@ export default function RobotCalibrationPanel({
   lastStatus,
   lastError,
   lastCommand,
+  topics,
   onSend,
   onCalibrationStateChange,
 }) {
@@ -162,7 +162,7 @@ export default function RobotCalibrationPanel({
         <button type="button" onClick={releaseServos} disabled={!mqttConnected || !jointState.positionKnown || jointState.moving} className="min-h-12 rounded-md border border-amber-500/50 px-4 text-sm font-semibold text-amber-200 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40">
           Liberar servos
         </button>
-        <span className="ml-auto text-xs text-zinc-500">{ARM_CALIBRATION_TOPICS.command}</span>
+        <span className="ml-auto text-xs text-zinc-500">{topics.command}</span>
       </div>
 
       <section className="border-y border-zinc-800 py-4">

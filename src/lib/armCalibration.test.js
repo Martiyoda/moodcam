@@ -2,7 +2,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  ARM_CALIBRATION_TOPICS,
   INITIAL_ATTACHED_STATE,
   INITIAL_JOINT_STATE,
   buildJogCommand,
@@ -12,14 +11,6 @@ import {
   parseDetail,
   updateAttachedState,
 } from './armCalibration.js'
-
-test('usa los topics exactos del firmware', () => {
-  assert.deepEqual(ARM_CALIBRATION_TOPICS, {
-    command: 'robot/test',
-    status: 'robot/status',
-    error: 'robot/error',
-  })
-})
 
 test('construye únicamente comandos de calibración permitidos', () => {
   assert.deepEqual(buildStartCalibrationCommand(), { type: 'start_calibration', assume_home: true })

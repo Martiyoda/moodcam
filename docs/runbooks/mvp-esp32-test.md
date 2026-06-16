@@ -26,7 +26,6 @@ MQTT_DEVICE_ID=device1
 MQTT_URL=wss://broker.hivemq.com:8884/mqtt
 MQTT_USERNAME=
 MQTT_PASSWORD=
-MQTT_ROBOT_COMMAND_TOPIC=robot/test
 MQTT_COMMAND_DELAY_MS=60
 ESP32_SIMULATOR_DELAY_MS=80
 ```
@@ -71,14 +70,41 @@ En la web:
 
 1. Abrir `http://127.0.0.1:5173`.
 2. Abrir configuracion.
-3. Activar MQTT y confirmar:
+3. En `Captura`, decidir si `Usar voz para calcular emociones` esta activado. Para demos fisicas estables se recomienda empezar con voz desactivada.
+4. Activar MQTT y confirmar:
    - broker `wss://broker.hivemq.com:8884/mqtt` o HiveMQ Cloud privado.
    - device id igual al worker, por ejemplo `device1`.
-4. Elegir pintor.
-5. Iniciar captura.
-6. Hablar durante la conversacion.
-7. Finalizar o esperar 60 segundos.
-8. Confirmar `Plan IA recibido` y `Robot status`.
+5. Elegir pintor.
+6. Iniciar captura.
+7. Si la voz esta activada, hablar durante la conversacion. Si no, mantener rostro visible para la camara.
+8. Finalizar o esperar 60 segundos.
+9. Confirmar `Plan IA recibido` y `Robot status`.
+
+## Flujo guiado y experiencia final
+
+La web bloquea los pasos posteriores si faltan datos del paso anterior. Esto evita abrir la demo final sin sistema preparado.
+
+Condiciones esperadas:
+
+- `Captura`: requiere pintor seleccionado.
+- `Emociones`: requiere una sesion finalizada con resumen emocional.
+- `Calibracion`: requiere resumen emocional y MQTT conectado.
+- `ESP32`: requiere plan artistico y MQTT conectado.
+- `Experiencia`: requiere plan enviado al robot y un estado reciente publicado por ESP32 o simulador.
+
+La pantalla `Experiencia en directo` esta pensada para usuario final. Debe mostrar camara, emocion detectada, pintor seleccionado, preview del plan, paleta y estado del robot sin logs MQTT ni controles de calibracion.
+
+## Calibracion web
+
+El panel de calibracion muestra un orden recomendado:
+
+1. Conectar MQTT.
+2. Confirmar respuesta ESP32 en `robot/{deviceId}/status`.
+3. Colocar el brazo en HOME y confirmarlo.
+4. Probar una articulacion cada vez con pasos pequenos.
+5. Continuar cuando el brazo este detenido y con posicion conocida.
+
+Los controles directos de angulo quedan en `Controles avanzados`.
 
 ## Topics a monitorizar
 
@@ -97,13 +123,14 @@ system/{deviceId}/error
 La ESP32 de la prueba actual debe escuchar:
 
 ```txt
-robot/test
+robot/{deviceId}/command
 ```
 
 Y publicar:
 
 ```txt
 robot/{deviceId}/status
+system/{deviceId}/error
 ```
 
 Comando tipo:

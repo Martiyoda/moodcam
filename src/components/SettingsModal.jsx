@@ -319,7 +319,7 @@ export default function SettingsModal({ isOpen, onClose, config, onConfigChange,
                       value={mqttConfig.topics?.systemError}
                       onChange={(v) => onMqttConfigChange('topics.systemError', v)}
                       placeholder="system/device1/error"
-                      description="Errores o fallback del AI Bridge."
+                      description="Errores de ESP32, sistema o fallback del AI Bridge."
                     />
                     <TextParam
                       label="Topic estado Moodcam"

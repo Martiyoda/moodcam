@@ -41,7 +41,7 @@ http://127.0.0.1:5173/
 
 ## Resultado esperado
 
-- El panel recibe mensajes en `robot/status`.
+- El panel recibe mensajes en `robot/{deviceId}/status`.
 - La posicion pasa de desconocida a conocida tras iniciar calibracion.
 - Los grados cambian como angulos ordenados.
 - STOP responde sin necesitar hardware real.

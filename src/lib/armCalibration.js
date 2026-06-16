@@ -1,7 +1,3 @@
-import { ARM_CALIBRATION_TOPICS } from './mqttContract.js'
-
-export { ARM_CALIBRATION_TOPICS }
-
 export const ARM_SERVOS = [
   { id: 'base', label: 'Base', gpio: 26, minAngle: 80, maxAngle: 110 },
   { id: 'shoulder', label: 'Hombro', gpio: 25, minAngle: 80, maxAngle: 110 },

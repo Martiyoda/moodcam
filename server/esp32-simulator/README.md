@@ -6,8 +6,8 @@ Simula una ESP32 conectada a HiveMQ.
 
 - Comandos artisticos en `robot/{deviceId}/command`.
 - Estados del robot en `robot/{deviceId}/status`.
-- Calibracion angular en `robot/test`.
-- Respuestas de calibracion en `robot/status` y `robot/error`.
+- Calibracion angular en `robot/{deviceId}/command`.
+- Respuestas de calibracion en `robot/{deviceId}/status` y `system/{deviceId}/error`.
 
 ## Arranque
 

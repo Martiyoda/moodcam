@@ -175,7 +175,9 @@ void printHelp() {
   Serial.println("Comandos seguros:");
   Serial.println("  STATUS - muestra estado");
   Serial.println("  STOP   - cancela movimiento y mantiene servos adjuntos");
-  Serial.println("  MQTT robot/test - start_calibration, jog, set_angle, get_joint_state, stop, release_servos");
+  Serial.print("  MQTT ");
+  Serial.print(TOPIC_ROBOT_COMMAND);
+  Serial.println(" - start_calibration, jog, set_angle, get_joint_state, stop, release_servos");
 }
 
 void printStatus() {

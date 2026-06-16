@@ -1,5 +1,5 @@
 import mqtt from 'mqtt'
-import { ARM_CALIBRATION_TOPICS, DEFAULT_DEVICE_ID, TOPIC_KEYS, createTopicMap, normalizeDeviceId, parseJsonMessage } from '../../packages/contracts/mqttContract.js'
+import { DEFAULT_DEVICE_ID, TOPIC_KEYS, createMqttClientId, createTopicMap, normalizeDeviceId, parseJsonMessage } from '../../packages/contracts/mqttContract.js'
 import { loadServerEnv } from '../loadEnv.js'
 import { createCalibrationSimulator } from './calibrationState.js'
 
@@ -14,14 +14,14 @@ const calibration = createCalibrationSimulator()
 const client = mqtt.connect(mqttUrl, {
   clean: true,
   reconnectPeriod: 5000,
-  clientId: `moodcam-esp32-simulator-${deviceId}-${Math.random().toString(16).slice(2)}`,
+  clientId: createMqttClientId('simulator', deviceId),
   username: process.env.MQTT_USERNAME || undefined,
   password: process.env.MQTT_PASSWORD || undefined,
 })
 
 client.on('connect', () => {
   console.log(`ESP32 simulator conectado a ${mqttUrl} para ${deviceId}`)
-  client.subscribe([topics[TOPIC_KEYS.robotCommand], ARM_CALIBRATION_TOPICS.command], { qos: 1 })
+  client.subscribe(topics[TOPIC_KEYS.robotCommand], { qos: 1 })
   publishStatus('idle', { message: 'Simulador listo.' })
   publishCalibrationStatus({ status: 'joint_state', ...calibration.getState(), position_known: false, angles_are_commanded: true })
 })
@@ -30,7 +30,7 @@ client.on('message', async (topic, message) => {
   const command = parseJsonMessage(message)
   if (!command || typeof command !== 'object') return
 
-  if (topic === ARM_CALIBRATION_TOPICS.command) {
+  if (isCalibrationCommand(command.type)) {
     handleCalibrationCommand(command)
     return
   }
@@ -97,17 +97,21 @@ function publishStatus(status, extra = {}) {
 }
 
 function publishCalibrationStatus(payload) {
-  client.publish(ARM_CALIBRATION_TOPICS.status, JSON.stringify({
+  client.publish(topics[TOPIC_KEYS.robotStatus], JSON.stringify({
     ...payload,
     timestamp: Date.now(),
   }), { qos: 0 })
 }
 
 function publishCalibrationError(payload) {
-  client.publish(ARM_CALIBRATION_TOPICS.error, JSON.stringify({
+  client.publish(topics[TOPIC_KEYS.systemError], JSON.stringify({
     ...payload,
     timestamp: Date.now(),
   }), { qos: 0 })
+}
+
+function isCalibrationCommand(type) {
+  return ['start_calibration', 'jog', 'set_angle', 'get_joint_state', 'stop', 'release_servos'].includes(type)
 }
 
 function moveTo(x, y, z) {

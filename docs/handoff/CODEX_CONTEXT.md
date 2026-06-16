@@ -17,19 +17,19 @@ E-motion detecta emociones mediante camara y voz, permite seleccionar un pintor 
 Web E-motion (React/Vite)
   -> MQTT por WebSocket
   -> HiveMQ
-  -> ESP32 recibe robot/test
+  -> ESP32 recibe robot/{deviceId}/command
   -> firmware valida y mueve una articulacion
-  -> robot/status o robot/error
+  -> robot/{deviceId}/status o system/{deviceId}/error
   -> la web actualiza el panel
 ```
 
 Flujo artistico futuro, actualmente bloqueado:
 
 ```text
-emotion/input
+moodcam/{deviceId}/emotion/face
   -> AI Bridge decide stroke_id
   -> server/validator.js valida stroke_id
-  -> robot/command
+  -> robot/{deviceId}/command
   -> ESP32 ejecuta solo con FINAL_ARM_MODE y calibracion explicita
 ```
 
@@ -74,9 +74,9 @@ No cambiar estos pines sin confirmacion fisica explicita.
 
 ## MQTT de calibracion
 
-- Comandos: `robot/test`.
-- Estados: `robot/status`.
-- Errores: `robot/error`.
+- Comandos: `robot/{deviceId}/command`.
+- Estados: `robot/{deviceId}/status`.
+- Errores: `system/{deviceId}/error`.
 
 Comandos permitidos:
 
@@ -119,8 +119,8 @@ La web construye estos JSON automaticamente. HiveMQ sigue siendo el transporte i
 ## Firmware actual
 
 - WiFi y MQTT se configuran localmente mediante `arduino/main/src/config.h`.
-- El firmware escucha calibracion en `robot/test`.
-- Publica respuestas en `robot/status` y errores en `robot/error`.
+- El firmware escucha calibracion en `robot/{deviceId}/command`.
+- Publica respuestas en `robot/{deviceId}/status` y errores en `system/{deviceId}/error`.
 - Mantiene el ultimo angulo ordenado en RAM.
 - Informa el primer attach de cada servo.
 - Compila para `esp32:esp32:esp32`.

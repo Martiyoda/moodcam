@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mqtt from 'mqtt'
 import {
-    ARM_CALIBRATION_TOPICS,
     ARM_CALIBRATION_COMMAND_TYPES,
     DEFAULT_DEVICE_ID,
     TOPIC_KEYS,
     buildFaceEmotionPayload,
     buildSessionStartPayload,
     buildSessionSummaryPayload,
+    createMqttClientId,
     createRobotCommandSequence,
     createTopicMap,
     parseJsonMessage,
@@ -151,6 +151,7 @@ export default function useMqtt() {
             reconnectPeriod: 5000,
             connectTimeout: 10000,
             clean: true,
+            clientId: createMqttClientId('web', mqttConfig.deviceId || DEFAULT_DEVICE_ID, Math.random().toString(16).slice(2)),
             will: {
                 topic: getTopic(mqttConfig, TOPIC_KEYS.moodcamStatus),
                 payload: JSON.stringify({ status: 'offline', timestamp: Date.now() }),
@@ -190,22 +191,17 @@ export default function useMqtt() {
                 getTopic(configRef.current, TOPIC_KEYS.robotStatus),
                 getTopic(configRef.current, TOPIC_KEYS.strokePlan),
                 getTopic(configRef.current, TOPIC_KEYS.systemError),
-                ARM_CALIBRATION_TOPICS.status,
-                ARM_CALIBRATION_TOPICS.error,
             ])], { qos: 0 })
         })
 
         client.on('message', (topic, message) => {
             const parsedPayload = parseJsonMessage(message)
             const receivedMessage = { topic, payload: parsedPayload, timestamp: Date.now() }
-            if (topic === ARM_CALIBRATION_TOPICS.status) {
-                setLastCalibrationStatus(receivedMessage)
-            }
-            if (topic === ARM_CALIBRATION_TOPICS.error) {
-                setLastCalibrationError(receivedMessage)
-            }
             if (topic === getTopic(configRef.current, TOPIC_KEYS.robotStatus)) {
                 setLastRobotStatus(receivedMessage)
+                if (isCalibrationStatus(parsedPayload)) {
+                    setLastCalibrationStatus(receivedMessage)
+                }
             }
             if (topic === getTopic(configRef.current, TOPIC_KEYS.strokePlan)) {
                 setLastAiPlan({
@@ -220,6 +216,9 @@ export default function useMqtt() {
                     payload: parseJsonMessage(message),
                     timestamp: Date.now(),
                 })
+                if (parsedPayload?.type !== 'ai_bridge_error') {
+                    setLastCalibrationError(receivedMessage)
+                }
             }
         })
 
@@ -357,9 +356,10 @@ export default function useMqtt() {
         if (!payload || !ARM_CALIBRATION_COMMAND_TYPES.includes(payload.type)) return false
         if (!client || !client.connected || !config.enabled) return false
 
-        client.publish(ARM_CALIBRATION_TOPICS.command, toJsonPayload(payload), { qos: 1 })
+        const topic = getTopic(config, TOPIC_KEYS.robotCommand)
+        client.publish(topic, toJsonPayload(payload), { qos: 1 })
         const published = {
-            topic: ARM_CALIBRATION_TOPICS.command,
+            topic,
             payload,
             timestamp: Date.now(),
         }
@@ -388,4 +388,16 @@ export default function useMqtt() {
         publishRobotCommands,
         publishCalibrationCommand,
     }
+}
+
+function isCalibrationStatus(payload) {
+    return [
+        'joint_state',
+        'calibration_started',
+        'moving',
+        'movement_completed',
+        'stopped',
+        'servos_released',
+        'servo_attaching',
+    ].includes(payload?.status)
 }

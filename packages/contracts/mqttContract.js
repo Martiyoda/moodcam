@@ -1,11 +1,5 @@
 export const DEFAULT_DEVICE_ID = 'device1'
 
-export const ARM_CALIBRATION_TOPICS = {
-    command: 'robot/test',
-    status: 'robot/status',
-    error: 'robot/error',
-}
-
 export const ARM_CALIBRATION_COMMAND_TYPES = [
     'start_calibration',
     'jog',
@@ -55,6 +49,20 @@ export function createTopicMap(deviceId = DEFAULT_DEVICE_ID) {
     return Object.fromEntries(
         Object.values(TOPIC_KEYS).map((key) => [key, topicFor(key, deviceId)])
     )
+}
+
+export function createMqttClientId(role, deviceId = DEFAULT_DEVICE_ID, suffix = '') {
+    const base = `emotion-${normalizeDeviceId(role)}-${normalizeDeviceId(deviceId)}`
+    const normalizedSuffix = String(suffix || '').trim()
+    return normalizedSuffix ? `${base}-${normalizedSuffix}` : base
+}
+
+export function calibrationTopicsFromMap(topics) {
+    return {
+        command: topics[TOPIC_KEYS.robotCommand],
+        status: topics[TOPIC_KEYS.robotStatus],
+        error: topics[TOPIC_KEYS.systemError],
+    }
 }
 
 export function createSessionId(deviceId = DEFAULT_DEVICE_ID, timestamp = Date.now()) {

@@ -14,9 +14,10 @@
 #define MQTT_PORT 8883
 #define MQTT_USERNAME "TU_USUARIO_HIVEMQ"
 #define MQTT_PASSWORD "TU_PASSWORD_HIVEMQ"
-#define MQTT_CLIENT_ID "emotion-esp32-test"
+#define MQTT_DEVICE_ID "device1"
+#define MQTT_CLIENT_ID "emotion-esp32-" MQTT_DEVICE_ID
 
-#define TOPIC_ROBOT_COMMAND "robot/test"
-#define TOPIC_EMOTION_INPUT "emotion/input"
-#define TOPIC_ROBOT_STATUS "robot/status"
-#define TOPIC_ROBOT_ERROR "robot/error"
+#define TOPIC_ROBOT_COMMAND "robot/" MQTT_DEVICE_ID "/command"
+#define TOPIC_EMOTION_INPUT "moodcam/" MQTT_DEVICE_ID "/emotion/face"
+#define TOPIC_ROBOT_STATUS "robot/" MQTT_DEVICE_ID "/status"
+#define TOPIC_ROBOT_ERROR "system/" MQTT_DEVICE_ID "/error"

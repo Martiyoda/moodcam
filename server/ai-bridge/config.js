@@ -1,4 +1,4 @@
-import { DEFAULT_DEVICE_ID, createTopicMap, normalizeDeviceId } from '../../packages/contracts/mqttContract.js'
+import { DEFAULT_DEVICE_ID, createMqttClientId, createTopicMap, normalizeDeviceId } from '../../packages/contracts/mqttContract.js'
 import { loadServerEnv } from '../loadEnv.js'
 
 loadServerEnv()
@@ -25,7 +25,7 @@ export function buildMqttOptions(config) {
     clean: true,
     reconnectPeriod: 5000,
     connectTimeout: 10000,
-    clientId: `moodcam-ai-bridge-${config.deviceId}-${Math.random().toString(16).slice(2)}`,
+    clientId: createMqttClientId('ai-bridge', config.deviceId),
     will: {
       topic: config.topics.systemError,
       payload: JSON.stringify({

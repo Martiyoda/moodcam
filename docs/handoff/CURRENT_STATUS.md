@@ -44,9 +44,9 @@ FINAL_ARM_MODE = false
 
 Topics:
 
-- Comandos: `robot/test`.
-- Estados: `robot/status`.
-- Errores: `robot/error`.
+- Comandos: `robot/{deviceId}/command`.
+- Estados: `robot/{deviceId}/status`.
+- Errores: `system/{deviceId}/error`.
 
 Comandos: `start_calibration`, `jog`, `set_angle`, `get_joint_state`, `stop` y `release_servos`.
 

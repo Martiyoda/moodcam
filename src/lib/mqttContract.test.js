@@ -2,19 +2,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ARM_CALIBRATION_COMMAND_TYPES,
-  ARM_CALIBRATION_TOPICS,
   buildFaceEmotionPayload,
   buildSessionSummaryPayload,
+  calibrationTopicsFromMap,
+  createMqttClientId,
   createRobotCommandSequence,
   createTopicMap,
 } from './mqttContract.js'
 
-test('limita la calibración web a comandos y topics aprobados', () => {
-  assert.deepEqual(ARM_CALIBRATION_TOPICS, {
-    command: 'robot/test',
-    status: 'robot/status',
-    error: 'robot/error',
-  })
+test('limita la calibración web a comandos aprobados', () => {
   assert.deepEqual(ARM_CALIBRATION_COMMAND_TYPES, [
     'start_calibration', 'jog', 'set_angle', 'get_joint_state', 'stop', 'release_servos',
   ])
@@ -32,6 +28,17 @@ test('crea topics por deviceId para Moodcam, AI Bridge y robot', () => {
   assert.equal(topics.strokePlan, 'ai/robot-aula-1/stroke_plan')
   assert.equal(topics.robotCommand, 'robot/robot-aula-1/command')
   assert.equal(topics.systemError, 'system/robot-aula-1/error')
+  assert.deepEqual(calibrationTopicsFromMap(topics), {
+    command: 'robot/robot-aula-1/command',
+    status: 'robot/robot-aula-1/status',
+    error: 'system/robot-aula-1/error',
+  })
+})
+
+test('crea client ids MQTT legibles por rol y deviceId', () => {
+  assert.equal(createMqttClientId('esp32', 'robot aula 1'), 'emotion-esp32-robot-aula-1')
+  assert.equal(createMqttClientId('ai-bridge', 'device1'), 'emotion-ai-bridge-device1')
+  assert.equal(createMqttClientId('web', 'device1', 'abc123'), 'emotion-web-device1-abc123')
 })
 
 test('normaliza payloads de observacion y resumen de sesion', () => {

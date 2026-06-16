@@ -14,7 +14,7 @@ import PainterVideoManager from './components/PainterVideoManager'
 import DemoReadinessPanel from './components/DemoReadinessPanel'
 import { calculateEmotionSummary, generateArtPlan, getArtistById } from './lib/artEngine'
 import { DEFAULT_CONVERSATION_MODE, getConversationMode } from './lib/conversationModes'
-import { createSessionId } from './lib/mqttContract'
+import { calibrationTopicsFromMap, createSessionId } from './lib/mqttContract'
 import { getPainterProfile } from './lib/painterProfiles'
 import { selectPainterResponse } from './lib/painterResponseSelector'
 import {
@@ -353,6 +353,7 @@ function App() {
   }, [])
 
   const remainingSeconds = Math.ceil(remainingMs / 1000)
+  const calibrationTopics = calibrationTopicsFromMap(mqttConfig.topics)
   const robotStatusPayload = lastRobotStatus?.payload
   const canOpenStep = useCallback((step) => {
     if (step <= 2) return true
@@ -533,6 +534,7 @@ function App() {
                 lastStatus={lastCalibrationStatus}
                 lastError={lastCalibrationError}
                 lastCommand={lastCalibrationCommand}
+                topics={calibrationTopics}
                 onSend={publishCalibrationCommand}
                 onCalibrationStateChange={handleCalibrationStateChange}
               />
@@ -560,16 +562,14 @@ function App() {
             {actionMessage && <p>{actionMessage}</p>}
             {lastAiPlan && <p>Plan IA recibido: {lastAiPlan.payload?.id || lastAiPlan.payload?.plan_id || 'sin id'}</p>}
             {lastPublished && <p>Último MQTT: {lastPublished.topic}</p>}
-            {lastSystemError && <p className="text-amber-300">AI Bridge: {formatSystemError(lastSystemError.payload)}</p>}
+            {lastSystemError && <p className="text-amber-300">Sistema: {formatSystemError(lastSystemError.payload)}</p>}
             {lastError && <p className="text-red-300">MQTT: {lastError}</p>}
           </div>
         )}
       </main>
 
       <footer className="py-3 text-center text-xs text-zinc-600 border-t border-zinc-800">
-        {calibrationLocked
-          ? 'Topics: robot/test · robot/status · robot/error'
-          : `Topics: moodcam/${mqttConfig.deviceId}/session · ai/${mqttConfig.deviceId}/stroke_plan · robot/${mqttConfig.deviceId}/command`}
+        {`Topics: moodcam/${mqttConfig.deviceId}/session · ai/${mqttConfig.deviceId}/stroke_plan · robot/${mqttConfig.deviceId}/command`}
       </footer>
 
       <SettingsModal

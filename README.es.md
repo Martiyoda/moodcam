@@ -276,7 +276,7 @@ Esto minimiza el tráfico asegurando que los suscriptores siempre tengan datos a
 | `user/artist` | 0 | No | Pintor elegido por el usuario y resumen emocional usado |
 | `ai/stroke_plan` | 1 | No | Plan artístico completo: emociones, pintor, paleta, formas, movilidad y trazos |
 | `robot/command` | 1 | No | Secuencia completa: pintura, agua, limpieza, trazos y reposo |
-| `robot/status` | 0 | No | Estado publicado por el ESP32, al que Moodcam se suscribe |
+| `robot/{deviceId}/status` | 0 | No | Estado publicado por el ESP32, al que Moodcam se suscribe |
 | `moodcam/status` | 1 | Sí | Estado online/offline de la app. Usa MQTT Last Will and Testament (LWT) |
 
 Los topics son configurables desde el panel de ajustes. Por defecto se usa `wss://broker.hivemq.com:8884/mqtt`.

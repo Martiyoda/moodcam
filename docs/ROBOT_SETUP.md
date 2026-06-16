@@ -30,9 +30,30 @@ Los grados guardados por el firmware son angulos ordenados. No son una medicion 
 
 ## Topics MQTT
 
-- Comandos: `robot/test` mediante `TOPIC_ROBOT_COMMAND`.
-- Estados: `robot/status`.
-- Errores: `robot/error`.
+- Comandos: `robot/{deviceId}/command` mediante `TOPIC_ROBOT_COMMAND`.
+- Estados: `robot/{deviceId}/status`.
+- Errores: `system/{deviceId}/error`.
+
+## Identificadores MQTT
+
+- `MQTT_DEVICE_ID` identifica el robot dentro de los topics funcionales compartidos con la web y el AI Bridge, por ejemplo `robot/{deviceId}/command`.
+- `MQTT_CLIENT_ID` identifica solo la conexion ante el broker MQTT. No decide ningun topic funcional y debe ser unico por cliente conectado.
+- La convencion del proyecto es derivar el client id como `emotion-{rol}-{deviceId}`. La web y herramientas puntuales anaden un sufijo aleatorio para permitir varias pestanas o ejecuciones simultaneas.
+
+| Cliente | Client id |
+| --- | --- |
+| ESP32 real | `emotion-esp32-{deviceId}` |
+| AI Bridge | `emotion-ai-bridge-{deviceId}` |
+| Web | `emotion-web-{deviceId}-{random}` |
+| Simulador ESP32 | `emotion-simulator-{deviceId}` |
+| Smoke tests y publicadores manuales | `emotion-{rol}-{deviceId}-{random}` |
+
+En el firmware, `MQTT_CLIENT_ID` se deriva de `MQTT_DEVICE_ID`:
+
+```cpp
+#define MQTT_DEVICE_ID "device1"
+#define MQTT_CLIENT_ID "emotion-esp32-" MQTT_DEVICE_ID
+```
 
 ## Inicio obligatorio
 
@@ -71,7 +92,7 @@ Solo se admiten `-5`, `-1`, `1` y `5`. Si el resultado queda fuera de 80-110, se
 - En el primer uso de una articulacion se publica `servo_attaching` antes del `attach()`, indicando servo, GPIO y angulo logico asumido.
 - Los servos utilizados permanecen adjuntos para sostener el brazo.
 
-Mientras existe movimiento solo se aceptan `stop` y `get_joint_state`. Cualquier otro comando devuelve `robot_busy` en `robot/error`.
+Mientras existe movimiento solo se aceptan `stop` y `get_joint_state`. Cualquier otro comando devuelve `robot_busy` en `system/{deviceId}/error`.
 
 ## Consultar estado
 

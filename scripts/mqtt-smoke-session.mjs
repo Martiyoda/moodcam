@@ -5,6 +5,7 @@ import {
   TOPIC_KEYS,
   buildSessionStartPayload,
   buildSessionSummaryPayload,
+  createMqttClientId,
   createSessionId,
   createTopicMap,
   normalizeDeviceId,
@@ -27,7 +28,7 @@ const client = mqtt.connect(mqttUrl, {
   clean: true,
   reconnectPeriod: 0,
   connectTimeout: 10_000,
-  clientId: `moodcam-smoke-${deviceId}-${Math.random().toString(16).slice(2)}`,
+  clientId: createMqttClientId('smoke', deviceId, Math.random().toString(16).slice(2)),
   username: process.env.MQTT_USERNAME || undefined,
   password: process.env.MQTT_PASSWORD || undefined,
 })

@@ -45,3 +45,5 @@ MQTT_PASSWORD=
 ```
 
 Sin `OPENAI_API_KEY`, el bridge sigue funcionando con fallback local.
+
+El client id MQTT del bridge se deriva del device id como `emotion-ai-bridge-{deviceId}`. Esto hace visible la conexion en el broker y evita dos bridges activos para el mismo robot.
