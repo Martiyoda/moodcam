@@ -1,0 +1,61 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import {
+  ARM_CALIBRATION_TOPICS,
+  INITIAL_ATTACHED_STATE,
+  INITIAL_JOINT_STATE,
+  buildJogCommand,
+  buildSetAngleCommand,
+  buildStartCalibrationCommand,
+  jointStateFromPayload,
+  parseDetail,
+  updateAttachedState,
+} from './armCalibration.js'
+
+test('usa los topics exactos del firmware', () => {
+  assert.deepEqual(ARM_CALIBRATION_TOPICS, {
+    command: 'robot/test',
+    status: 'robot/status',
+    error: 'robot/error',
+  })
+})
+
+test('construye únicamente comandos de calibración permitidos', () => {
+  assert.deepEqual(buildStartCalibrationCommand(), { type: 'start_calibration', assume_home: true })
+  assert.deepEqual(buildJogCommand('base', 1), { type: 'jog', servo: 'base', delta: 1 })
+  assert.deepEqual(buildSetAngleCommand('shoulder', 95, 500), {
+    type: 'set_angle', servo: 'shoulder', angle: 95, duration_ms: 500,
+  })
+  assert.throws(() => buildJogCommand('brush', 1))
+  assert.throws(() => buildJogCommand('base', 2))
+})
+
+test('rechaza ángulos y duraciones fuera de límites', () => {
+  assert.throws(() => buildSetAngleCommand('base', 79, 500))
+  assert.throws(() => buildSetAngleCommand('base', 111, 500))
+  assert.throws(() => buildSetAngleCommand('base', 90, 199))
+  assert.throws(() => buildSetAngleCommand('base', 90, 5001))
+})
+
+test('interpreta joint_state y estados attached', () => {
+  const state = jointStateFromPayload({
+    status: 'joint_state', base: 91, shoulder: 92, elbow: 93, wrist: 94,
+    position_known: true, moving: true, angles_are_commanded: true,
+  }, INITIAL_JOINT_STATE)
+  assert.equal(state.base, 91)
+  assert.equal(state.positionKnown, true)
+  assert.equal(state.moving, true)
+
+  const attached = updateAttachedState({ status: 'servo_attaching', detail: 'servo=elbow gpio=33' }, INITIAL_ATTACHED_STATE)
+  assert.equal(attached.elbow, true)
+  assert.deepEqual(updateAttachedState({ status: 'servos_released' }, attached), {
+    base: false, shoulder: false, elbow: false, wrist: false,
+  })
+})
+
+test('extrae metadatos del detail del firmware', () => {
+  assert.deepEqual(parseDetail('servo=base gpio=26 previous=90 target=91'), {
+    servo: 'base', gpio: '26', previous: '90', target: '91',
+  })
+})

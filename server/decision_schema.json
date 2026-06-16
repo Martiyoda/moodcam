@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://e-motion.local/schemas/robot-decision.schema.json",
+  "title": "E-motion validated stroke decision",
+  "description": "Decisión propuesta antes de validarse contra una receta aprobada de /strokes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stroke_id",
+    "speed",
+    "intensity",
+    "duration_ms",
+    "pressure",
+    "selected_colors"
+  ],
+  "properties": {
+    "stroke_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "speed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "intensity": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "pressure": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "selected_colors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "red", "rojo",
+          "yellow", "amarillo",
+          "orange", "naranja",
+          "blue", "azul",
+          "violet", "violeta", "morado", "purple",
+          "black", "negro"
+        ]
+      }
+    }
+  }
+}

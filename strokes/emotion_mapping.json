@@ -1,0 +1,165 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Parámetros artísticos generales por emoción para seleccionar y adaptar recetas de trazo seguras. Este archivo no contiene coordenadas ni comandos ejecutables.",
+  "units": {
+    "speed": "Escala normalizada de intención de velocidad, de 0 a 100.",
+    "intensity": "Escala normalizada de energía visual, de 0 a 100.",
+    "pressure": "Escala normalizada de intención de presión, de 0 a 100. No debe convertirse en presión física hasta calibrar el pincel.",
+    "duration_ms": "Duración orientativa de una primitiva o segmento de trazo, no de una obra completa."
+  },
+  "available_palette": [
+    "red",
+    "yellow",
+    "orange",
+    "blue",
+    "violet",
+    "black"
+  ],
+  "global_safety": {
+    "requires_calibration_before_execution": true,
+    "pressure_is_conceptual_until_calibrated": true,
+    "forbid_unvalidated_coordinates": true,
+    "forbid_abrupt_direction_changes_at_high_speed": true,
+    "require_controlled_acceleration": true,
+    "require_canvas_limits": true,
+    "require_dry_run_before_paint": true
+  },
+  "emotions": {
+    "happy": {
+      "label": "alegría",
+      "speed": 72,
+      "intensity": 78,
+      "pressure": 38,
+      "duration_ms": 900,
+      "movement_type": [
+        "open_arc",
+        "ascending_curve",
+        "wide_circle",
+        "rhythmic_short_marks"
+      ],
+      "recommended_palette": [
+        "yellow",
+        "orange",
+        "red",
+        "blue"
+      ],
+      "artistic_explanation": "La alegría se representa con recorridos abiertos, ascendentes y rítmicos. Los colores cálidos dominan y el azul puede aportar contraste sin reducir la luminosidad."
+    },
+    "sad": {
+      "label": "tristeza",
+      "speed": 28,
+      "intensity": 36,
+      "pressure": 34,
+      "duration_ms": 1800,
+      "movement_type": [
+        "slow_descending_curve",
+        "long_horizontal_line",
+        "spaced_vertical_mark",
+        "soft_layer"
+      ],
+      "recommended_palette": [
+        "blue",
+        "violet",
+        "black"
+      ],
+      "artistic_explanation": "La tristeza se traduce en movimientos lentos, separados y descendentes. La baja densidad y los colores fríos crean profundidad sin exigir presión fuerte."
+    },
+    "angry": {
+      "label": "rabia",
+      "speed": 78,
+      "intensity": 92,
+      "pressure": 58,
+      "duration_ms": 650,
+      "movement_type": [
+        "controlled_diagonal",
+        "segmented_zigzag",
+        "broken_line",
+        "short_forceful_mark"
+      ],
+      "recommended_palette": [
+        "red",
+        "orange",
+        "black"
+      ],
+      "artistic_explanation": "La rabia utiliza contraste alto, diagonales y segmentos tensos. La energía visual es elevada, pero cada cambio de dirección debe reducir velocidad y usar aceleración controlada."
+    },
+    "calm": {
+      "label": "calma",
+      "speed": 34,
+      "intensity": 30,
+      "pressure": 30,
+      "duration_ms": 2100,
+      "movement_type": [
+        "smooth_horizontal_curve",
+        "soft_arc",
+        "parallel_line",
+        "slow_color_field"
+      ],
+      "recommended_palette": [
+        "blue",
+        "violet",
+        "yellow"
+      ],
+      "artistic_explanation": "La calma se expresa mediante recorridos suaves, continuos y previsibles. La velocidad y presión conceptual son bajas para favorecer equilibrio y espacios respirados."
+    },
+    "fear": {
+      "label": "miedo",
+      "speed": 52,
+      "intensity": 64,
+      "pressure": 32,
+      "duration_ms": 700,
+      "movement_type": [
+        "short_irregular_mark",
+        "controlled_small_zigzag",
+        "interrupted_line",
+        "clustered_point"
+      ],
+      "recommended_palette": [
+        "violet",
+        "blue",
+        "black"
+      ],
+      "artistic_explanation": "El miedo genera tensión mediante trazos cortos, interrupciones y pequeñas irregularidades. Se limita la amplitud y se evitan movimientos bruscos largos."
+    },
+    "surprise": {
+      "label": "sorpresa",
+      "speed": 74,
+      "intensity": 82,
+      "pressure": 34,
+      "duration_ms": 750,
+      "movement_type": [
+        "radial_line",
+        "unexpected_arc",
+        "alternating_short_long_mark",
+        "offset_circle"
+      ],
+      "recommended_palette": [
+        "yellow",
+        "violet",
+        "orange",
+        "blue"
+      ],
+      "artistic_explanation": "La sorpresa se representa con contrastes, cambios de escala y direcciones radiales. Las variaciones deben seleccionarse entre primitivas previamente validadas."
+    },
+    "neutral": {
+      "label": "neutral",
+      "speed": 48,
+      "intensity": 48,
+      "pressure": 34,
+      "duration_ms": 1300,
+      "movement_type": [
+        "balanced_curve",
+        "medium_line",
+        "regular_arc",
+        "evenly_spaced_mark"
+      ],
+      "recommended_palette": [
+        "blue",
+        "yellow",
+        "violet",
+        "black"
+      ],
+      "artistic_explanation": "El estado neutral mantiene parámetros equilibrados, ritmos regulares y contraste moderado. Sirve como perfil seguro cuando la detección emocional no es concluyente."
+    }
+  }
+}
