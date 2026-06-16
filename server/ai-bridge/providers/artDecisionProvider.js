@@ -1,4 +1,4 @@
-import { generateArtPlan, getArtistById } from '../../../src/lib/artEngine.js'
+import { generateArtPlan, getArtistById, getEmotionLabel } from '../../../src/lib/artEngine.js'
 import { resolveSessionEmotions } from './emotionProvider.js'
 import { resolveVoiceProvider } from './voiceProvider.js'
 
@@ -169,14 +169,37 @@ function extractOutputText(response) {
 }
 
 function stampPlan(plan, sessionSummary, source) {
+  const summary = buildArtisticSummary(plan, source)
+
   return {
     ...plan,
     plan_id: plan.id,
     session_id: sessionSummary?.session_id,
     device_id: sessionSummary?.device_id,
     decision_source: source,
+    summary,
+    artistic_summary: summary,
     validated_by: 'artEngine',
   }
+}
+
+function buildArtisticSummary(plan, source) {
+  const primary = getEmotionLabel(plan.main_emotion)
+  const secondary = getEmotionLabel(plan.secondary_emotion)
+  const colors = (plan.palette || []).slice(0, 3).map((color) => readableColor(color.name)).join(', ')
+  const strokeCount = Array.isArray(plan.strokes) ? plan.strokes.length : 0
+  const artistName = plan.artist_name || 'el pintor seleccionado'
+  const sourceLabel = source === 'openai' ? 'AI Bridge' : 'fallback local'
+
+  return {
+    title: `${primary} en estilo ${artistName}`,
+    text: `${sourceLabel} interpreta ${primary.toLowerCase()} con un matiz de ${secondary.toLowerCase()} y lo traduce al lenguaje de ${artistName}. La propuesta usa ${colors || 'una paleta emocional'} y ${strokeCount} trazos para convertir la lectura de la sesión en una composición A4.`,
+    movement: `El brazo trabajará con velocidad ${plan.speed}, presión ${plan.pressure} y ${plan.movement_strategy}.`,
+  }
+}
+
+function readableColor(value) {
+  return String(value || '').replaceAll('_', ' ')
 }
 
 function normalizeDecision(decision) {

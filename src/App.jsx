@@ -9,9 +9,7 @@ import PainterSelector from './components/PainterSelector'
 import ArtPlanPanel from './components/ArtPlanPanel'
 import ConversationPanel from './components/ConversationPanel'
 import VoiceEmotionPanel from './components/VoiceEmotionPanel'
-import RobotCalibrationPanel from './components/RobotCalibrationPanel'
 import DemoReadinessPanel from './components/DemoReadinessPanel'
-import LiveExperienceView from './components/LiveExperienceView'
 import { calculateEmotionSummary, generateArtPlan, getArtistById } from './lib/artEngine'
 import { DEFAULT_CONVERSATION_MODE, getConversationMode } from './lib/conversationModes'
 import { calibrationTopicsFromMap, createSessionId } from './lib/mqttContract'
@@ -102,7 +100,6 @@ function App() {
   const selectedArtistInfo = useMemo(() => getArtistById(selectedArtist), [selectedArtist])
   const selectedPainterProfile = useMemo(() => getPainterProfile(selectedArtist), [selectedArtist])
   const conversationMode = useMemo(() => getConversationMode(conversationModeId), [conversationModeId])
-  const calibrationModeActive = currentStep === 4
   const calibrationLocked = armCalibrationState.moving
   const liveFaceSummary = useMemo(() => calculateEmotionSummary(faceEmotionSamples), [faceEmotionSamples])
   const displayedFaceSummary = faceSummary.length ? faceSummary : liveFaceSummary
@@ -366,30 +363,19 @@ function App() {
   const remainingSeconds = Math.ceil(remainingMs / 1000)
   const calibrationTopics = calibrationTopicsFromMap(mqttConfig.topics)
   const robotStatusPayload = lastRobotStatus?.payload
-  const robotCommandSent = lastPublished?.payload?.type === 'paint_sequence'
   const canOpenStep = useCallback((step) => {
     if (step === 1) return true
-    if (step === 2) return Boolean(selectedArtist)
-    if (step === 3) return combinedEmotionSummary.length > 0
-    if (step === 4) return combinedEmotionSummary.length > 0 && connectionStatus === 'connected'
-    if (step === 5) return Boolean(artPlan) && connectionStatus === 'connected' && !armCalibrationState.moving
-    if (step === 6) return Boolean(artPlan) && robotCommandSent && Boolean(lastRobotStatus)
+    if (step === 2) return Boolean(selectedArtist) && !armCalibrationState.moving
+    if (step === 3) return combinedEmotionSummary.length > 0 && Boolean(artPlan) && !armCalibrationState.moving
     return false
-  }, [armCalibrationState.moving, artPlan, combinedEmotionSummary.length, connectionStatus, lastRobotStatus, robotCommandSent, selectedArtist])
+  }, [armCalibrationState.moving, artPlan, combinedEmotionSummary.length, selectedArtist])
   const goToStep = useCallback((step) => {
     if (!canOpenStep(step)) {
       setActionMessage(blockedStepMessage(step))
       return
     }
-    if (step === 4 && sessionActive) {
-      stopVoiceDetection()
-      setSessionActive(false)
-      setSessionStartedAt(null)
-      setRemainingMs(SESSION_MS)
-      setActionMessage('Captura detenida sin enviar al AI Bridge. Calibración angular activa.')
-    }
     setCurrentStep(step)
-  }, [canOpenStep, sessionActive, stopVoiceDetection])
+  }, [canOpenStep])
   const activeStep = sessionActive ? 2 : currentStep
 
   return (
@@ -413,7 +399,7 @@ function App() {
         </a>
         <div className="text-center">
           <div className="flex items-center justify-center gap-3">
-            <img src="/e-motion-wordmark.png" alt="E-motion" className="h-12 w-auto max-w-[210px] rounded-md object-contain shadow-md" />
+            <img src="/e-motion-wordmark.png" alt="E-motion" className="h-12 w-auto max-w-52.5 rounded-md object-contain shadow-md" />
           </div>
           <p className="text-xs text-zinc-500 mt-1">captura emocional · AI Bridge · robot A4</p>
         </div>
@@ -447,12 +433,13 @@ function App() {
         <DemoReadinessPanel
           mqttStatus={connectionStatus}
           aiPlan={lastAiPlan}
+          hasEmotionSummary={combinedEmotionSummary.length > 0}
           robotStatus={lastCalibrationStatus || lastRobotStatus}
           voiceStatus={voiceStatus}
           voiceEnabled={useVoiceCapture}
           painter={selectedPainterProfile}
           sessionActive={sessionActive}
-          calibrationActive={calibrationModeActive}
+          calibrationActive={false}
           calibrationLocked={calibrationLocked}
           calibrationMoving={armCalibrationState.moving}
         />
@@ -512,79 +499,31 @@ function App() {
                     onReset={handleResetExperience}
                   />
                 </div>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
+                  <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emoción en vivo</h2>
+                  <EmotionDisplay emotions={emotions} dominant={dominant} age={age} gender={gender} />
+                </div>
               </div>
             </div>
             <ScreenActions>
               <button onClick={() => setCurrentStep(1)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-              <button onClick={() => goToStep(3)} disabled={!canOpenStep(3)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Ver emociones</button>
+              <button onClick={() => goToStep(3)} disabled={!canOpenStep(3)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Ver resultado</button>
             </ScreenActions>
           </Screen>
         )}
 
         {currentStep === 3 && (
-          <Screen title="3. Ver emociones detectadas" description="Aquí se comparan rostro, voz y resultado combinado antes de generar el dibujo.">
+          <Screen title="3. Resultado artístico y ESP32" description="Revisa el resumen fijado de la sesión, el plan del AI Bridge y envía la secuencia al brazo.">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
-                <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Rostro</h2>
-                <EmotionDisplay emotions={emotions} dominant={dominant} age={age} gender={gender} />
-              </div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
                 <VoiceEmotionPanel latestSample={latestVoiceSample} summary={voiceSummary} combinedSummary={combinedEmotionSummary} faceSummary={displayedFaceSummary} />
+              </div>
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+                <ArtPlanPanel plan={artPlan} planSource={planSource} mqttEnabled={mqttConfig.enabled} mqttStatus={connectionStatus} robotStatus={robotStatusPayload} onSend={handleSendPlan} disabled={calibrationLocked} />
               </div>
             </div>
             <ScreenActions>
               <button onClick={() => setCurrentStep(2)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-              <button onClick={() => goToStep(4)} disabled={!canOpenStep(4)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Calibrar A4</button>
-            </ScreenActions>
-          </Screen>
-        )}
-
-        {currentStep === 4 && (
-          <Screen title="4. Calibración del brazo" description="Mueve una articulación cada vez y consulta su ángulo ordenado sin escribir mensajes MQTT manualmente.">
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-              <RobotCalibrationPanel
-                mqttStatus={connectionStatus}
-                lastStatus={lastCalibrationStatus}
-                lastError={lastCalibrationError}
-                lastCommand={lastCalibrationCommand}
-                topics={calibrationTopics}
-                onSend={publishCalibrationCommand}
-                onCalibrationStateChange={handleCalibrationStateChange}
-              />
-            </div>
-            <ScreenActions>
-              <button onClick={() => setCurrentStep(3)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-              <button onClick={() => goToStep(5)} disabled={!canOpenStep(5)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Continuar</button>
-            </ScreenActions>
-          </Screen>
-        )}
-
-        {currentStep === 5 && (
-          <Screen title="5. Enviar a ESP32" description="Revisa el plan recibido desde el AI Bridge o el fallback local y reenvía la secuencia si hace falta.">
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-              <ArtPlanPanel plan={artPlan} planSource={planSource} mqttEnabled={mqttConfig.enabled} mqttStatus={connectionStatus} robotStatus={robotStatusPayload} onSend={handleSendPlan} disabled={calibrationLocked} />
-            </div>
-            <ScreenActions>
-              <button onClick={() => setCurrentStep(4)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-              <button onClick={() => goToStep(6)} disabled={!canOpenStep(6)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Abrir experiencia</button>
-            </ScreenActions>
-          </Screen>
-        )}
-
-        {currentStep === 6 && (
-          <Screen title="Experiencia en directo" description="Vista final para el usuario: cámara, emoción, pintor y actividad del brazo sin controles técnicos.">
-            <LiveExperienceView
-              videoRef={videoRef}
-              canvasRef={canvasRef}
-              cameraActive={cameraActive}
-              artist={selectedArtistInfo}
-              emotionSummary={combinedEmotionSummary}
-              plan={artPlan}
-              robotStatus={robotStatusPayload}
-              lastPublished={lastPublished}
-            />
-            <ScreenActions>
-              <button onClick={() => setCurrentStep(5)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Volver al envío</button>
             </ScreenActions>
           </Screen>
         )}
@@ -617,16 +556,25 @@ function App() {
         mqttError={lastError}
         useVoiceCapture={useVoiceCapture}
         onUseVoiceCaptureChange={setUseVoiceCapture}
+        robotCalibrationProps={{
+          mqttStatus: connectionStatus,
+          lastStatus: lastCalibrationStatus,
+          lastError: lastCalibrationError,
+          lastCommand: lastCalibrationCommand,
+          topics: calibrationTopics,
+          onSend: publishCalibrationCommand,
+          onCalibrationStateChange: handleCalibrationStateChange,
+        }}
       />
     </div>
   )
 }
 
 function StepStrip({ active, currentStep, canOpenStep, onSelect }) {
-  const steps = ['Pintor', 'Captura', 'Emociones', 'Calibración', 'ESP32', 'Experiencia']
+  const steps = ['Pintor', 'Captura', 'ESP32']
 
   return (
-    <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
+    <div className="grid grid-cols-3 gap-2">
       {steps.map((step, index) => {
         const number = index + 1
         const current = number === active
@@ -683,10 +631,8 @@ function formatSystemError(payload) {
 }
 
 function blockedStepMessage(step) {
-  if (step === 3) return 'Completa una captura emocional antes de revisar el resultado.'
-  if (step === 4) return 'Conecta MQTT y completa la captura antes de calibrar el brazo.'
-  if (step === 5) return 'Necesitas un plan artístico y MQTT conectado antes de enviar al ESP32.'
-  if (step === 6) return 'La experiencia final se habilita cuando el plan se ha enviado y el robot ha publicado estado.'
+  if (step === 2) return 'El brazo se está moviendo. Espera a que la calibración termine antes de capturar.'
+  if (step === 3) return 'Completa una captura emocional para recibir el plan artístico antes de enviar al ESP32.'
   return 'Completa el paso anterior antes de continuar.'
 }
 

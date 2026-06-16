@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import RobotCalibrationPanel from './RobotCalibrationPanel'
 
 const SECTIONS = [
   {
@@ -129,7 +130,7 @@ const MQTT_STATUS_MAP = {
   error: { label: 'Error', color: 'bg-red-500' },
 }
 
-export default function SettingsModal({ isOpen, onClose, config, onConfigChange, onReset, mqttConfig, onMqttConfigChange, onMqttReset, mqttStatus, mqttError, useVoiceCapture, onUseVoiceCaptureChange }) {
+export default function SettingsModal({ isOpen, onClose, config, onConfigChange, onReset, mqttConfig, onMqttConfigChange, onMqttReset, mqttStatus, mqttError, useVoiceCapture, onUseVoiceCaptureChange, robotCalibrationProps }) {
   const [expandedSection, setExpandedSection] = useState('emotion')
 
   if (!isOpen) return null
@@ -145,7 +146,7 @@ export default function SettingsModal({ isOpen, onClose, config, onConfigChange,
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-lg max-h-[85vh] bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative w-full max-w-5xl max-h-[85vh] bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -269,7 +270,7 @@ export default function SettingsModal({ isOpen, onClose, config, onConfigChange,
                   <div className="flex items-center gap-2 p-2 bg-gray-800/50 rounded-lg">
                     <span className={`w-2.5 h-2.5 rounded-full ${MQTT_STATUS_MAP[mqttStatus]?.color || 'bg-gray-500'}`} />
                     <span className="text-xs text-gray-300">{MQTT_STATUS_MAP[mqttStatus]?.label || 'Desconectado'}</span>
-                    {mqttError && <span className="text-xs text-red-400 ml-auto truncate max-w-[200px]">{mqttError}</span>}
+                    {mqttError && <span className="text-xs text-red-400 ml-auto truncate max-w-50">{mqttError}</span>}
                   </div>
 
                   {/* Toggle activar */}
@@ -409,6 +410,31 @@ export default function SettingsModal({ isOpen, onClose, config, onConfigChange,
                   >
                     🔄 Restaurar defaults MQTT
                   </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {robotCalibrationProps && (
+            <div className="border border-gray-800 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setExpandedSection(expandedSection === 'robot' ? null : 'robot')}
+                className="w-full flex items-center justify-between p-3 hover:bg-gray-800/50 transition-colors"
+              >
+                <div className="text-left">
+                  <span className="text-sm font-semibold text-white">Robot y calibración</span>
+                  {expandedSection !== 'robot' && (
+                    <span className="block text-xs text-gray-500 mt-0.5">Preparación técnica del brazo antes de la experiencia.</span>
+                  )}
+                </div>
+                <span className={`text-gray-500 transition-transform duration-200 ${expandedSection === 'robot' ? 'rotate-180' : ''}`}>
+                  ▾
+                </span>
+              </button>
+
+              {expandedSection === 'robot' && (
+                <div className="border-t border-gray-800/50 p-3">
+                  <RobotCalibrationPanel {...robotCalibrationProps} />
                 </div>
               )}
             </div>

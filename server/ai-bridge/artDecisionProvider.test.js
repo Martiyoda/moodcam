@@ -26,6 +26,8 @@ test('usa fallback local cuando OpenAI no esta configurado', async () => {
   assert.equal(result.source, 'local_fallback')
   assert.equal(result.plan.session_id, 's1')
   assert.equal(result.plan.validated_by, 'artEngine')
+  assert.ok(result.plan.summary.text.includes('Kandinsky'))
+  assert.ok(result.plan.artistic_summary.text.includes('Kandinsky'))
   assert.ok(result.plan.robot_commands.some((command) => command.type === 'stroke'))
 })
 
@@ -70,6 +72,8 @@ test('usa decision OpenAI simulada y valida el plan antes de publicar', async ()
   assert.equal(result.plan.main_emotion, 'angry')
   assert.equal(result.plan.movement_level, 100)
   assert.ok(result.plan.ai_directive.includes('Gesto energico'))
+  assert.ok(result.plan.summary.title.includes('Pollock'))
+  assert.ok(result.plan.artistic_summary.title.includes('Pollock'))
   assert.ok(result.plan.robot_commands.every((command) => command.type))
 })
 

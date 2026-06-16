@@ -1,6 +1,7 @@
 export default function DemoReadinessPanel({
   mqttStatus,
   aiPlan,
+  hasEmotionSummary,
   robotStatus,
   voiceStatus,
   voiceEnabled,
@@ -28,8 +29,8 @@ export default function DemoReadinessPanel({
     },
     {
       label: 'AI Bridge',
-      value: calibrationLocked ? 'bloqueado por movimiento' : aiPlan ? `plan ${aiPlan.payload?.plan_id || aiPlan.payload?.id || 'recibido'}` : 'esperando plan',
-      state: calibrationLocked ? 'idle' : aiPlan ? 'ok' : 'pending',
+      value: aiBridgeLabel({ calibrationLocked, aiPlan, hasEmotionSummary }),
+      state: calibrationLocked ? 'idle' : aiPlan ? 'ok' : hasEmotionSummary ? 'pending' : 'idle',
     },
     {
       label: 'ESP32',
@@ -62,6 +63,13 @@ export default function DemoReadinessPanel({
       </div>
     </section>
   )
+}
+
+function aiBridgeLabel({ calibrationLocked, aiPlan, hasEmotionSummary }) {
+  if (calibrationLocked) return 'bloqueado por movimiento'
+  if (aiPlan) return `plan ${aiPlan.payload?.plan_id || aiPlan.payload?.id || 'recibido'}`
+  if (hasEmotionSummary) return 'esperando plan'
+  return 'esperando resumen'
 }
 
 function voiceStatusLabel(status, sessionActive) {

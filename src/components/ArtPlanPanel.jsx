@@ -13,6 +13,7 @@ export default function ArtPlanPanel({ plan, planSource, mqttEnabled, mqttStatus
   const paintPoints = strokeCommands.reduce((total, command) => (
     total + command.points.filter((point) => point.brush === 1).length
   ), 0)
+  const summary = plan.summary || plan.artistic_summary || buildFallbackSummary(plan, planSource, strokeCommands.length)
 
   return (
     <div className="space-y-4">
@@ -33,8 +34,15 @@ export default function ArtPlanPanel({ plan, planSource, mqttEnabled, mqttStatus
           disabled={disabled || !mqttEnabled || mqttStatus !== 'connected'}
           className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-gray-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-400 transition-colors"
         >
-          {disabled ? 'Bloqueado por calibración' : 'Reenviar robot'}
+          {disabled ? 'Bloqueado por calibración' : 'Enviar al robot'}
         </button>
+      </div>
+
+      <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-4">
+        <span className="block text-[10px] uppercase tracking-wider text-amber-200/70">Resumen artístico</span>
+        <h3 className="mt-2 text-lg font-bold text-white">{summary.title}</h3>
+        <p className="mt-2 text-sm leading-relaxed text-amber-50/90">{summary.text}</p>
+        <p className="mt-2 text-xs leading-relaxed text-amber-100/70">{summary.movement}</p>
       </div>
 
       <StrokePreview plan={plan} />
@@ -82,7 +90,7 @@ function Metric({ label, value }) {
 
 function StrokePreview({ plan }) {
   return (
-    <div className="relative aspect-[11/8] rounded-lg overflow-hidden border border-gray-800 bg-stone-100">
+    <div className="relative aspect-11/8 rounded-lg overflow-hidden border border-gray-800 bg-stone-100">
       <svg viewBox={`0 0 ${plan.canvas.width} ${plan.canvas.height}`} className="absolute inset-0 w-full h-full">
         <rect width={plan.canvas.width} height={plan.canvas.height} fill="#f8f2e7" />
         {plan.strokes.map((stroke) => {
@@ -113,4 +121,15 @@ function formatRobotStatus(robotStatus) {
   if (typeof robotStatus === 'string') return robotStatus
   if (robotStatus.status) return robotStatus.status
   return JSON.stringify(robotStatus)
+}
+
+function buildFallbackSummary(plan, planSource, strokeCount) {
+  const colors = (plan.palette || []).slice(0, 3).map((color) => color.name.replaceAll('_', ' ')).join(', ')
+  const sourceLabel = planSource === 'ai_bridge' ? 'AI Bridge' : 'fallback local'
+
+  return {
+    title: `${getEmotionLabel(plan.main_emotion)} en estilo ${plan.artist_name}`,
+    text: `${sourceLabel} propone una respuesta para ${plan.artist_name} basada en ${getEmotionLabel(plan.main_emotion).toLowerCase()} y ${getEmotionLabel(plan.secondary_emotion).toLowerCase()}, con ${strokeCount} trazos y una paleta de ${colors || 'colores emocionales'}.`,
+    movement: `El brazo usará velocidad ${plan.speed}, presión ${plan.pressure} y densidad ${plan.density}.`,
+  }
 }

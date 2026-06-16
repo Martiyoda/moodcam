@@ -71,30 +71,30 @@ En la web:
 1. Abrir `http://127.0.0.1:5173`.
 2. Abrir configuracion.
 3. En `Captura`, decidir si `Usar voz para calcular emociones` esta activado. Para demos fisicas estables se recomienda empezar con voz desactivada.
-4. Activar MQTT y confirmar:
+4. En `Robot y calibracion`, preparar el brazo si se va a usar hardware real.
+5. Activar MQTT y confirmar:
    - broker `wss://broker.hivemq.com:8884/mqtt` o HiveMQ Cloud privado.
    - device id igual al worker, por ejemplo `device1`.
-5. Elegir pintor.
-6. Iniciar captura.
-7. Si la voz esta activada, hablar durante la conversacion. Si no, mantener rostro visible para la camara.
-8. Finalizar o esperar 60 segundos.
-9. Confirmar `Plan IA recibido` y `Robot status`.
+6. Elegir pintor.
+7. Iniciar captura.
+8. Si la voz esta activada, hablar durante la conversacion. Si no, mantener rostro visible para la camara.
+9. Finalizar o esperar 60 segundos.
+10. Confirmar `Plan IA recibido`, resumen artistico y `Robot status`.
 
 ## Flujo guiado y experiencia final
 
-La web bloquea los pasos posteriores si faltan datos del paso anterior. Esto evita abrir la demo final sin sistema preparado.
+La web bloquea los pasos posteriores si faltan datos del paso anterior. Esto evita llegar al envio al brazo sin pintor, captura y plan artistico.
 
 Condiciones esperadas:
 
 - `Captura`: requiere pintor seleccionado.
-- `Emociones`: requiere una sesion finalizada con resumen emocional.
-- `Calibracion`: requiere resumen emocional y MQTT conectado.
-- `ESP32`: requiere plan artistico y MQTT conectado.
-- `Experiencia`: requiere plan enviado al robot y un estado reciente publicado por ESP32 o simulador.
+- `ESP32`: requiere una sesion finalizada con resumen emocional y plan artistico. Si AI Bridge no responde, la web puede mostrar fallback local.
 
-La pantalla `Experiencia en directo` esta pensada para usuario final. Debe mostrar camara, emocion detectada, pintor seleccionado, preview del plan, paleta y estado del robot sin logs MQTT ni controles de calibracion.
+El paso `ESP32` es el cierre de experiencia para usuario final: muestra resumen emocional fijado, resumen artistico del AI Bridge, preview del plan, paleta, boton de envio al robot y estado del ESP32 sin abrir una pantalla adicional.
 
 ## Calibracion web
+
+La calibracion es una preparacion tecnica y vive en `Configuracion` -> `Robot y calibracion`, fuera del flujo principal de usuario.
 
 El panel de calibracion muestra un orden recomendado:
 
