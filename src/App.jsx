@@ -4,7 +4,7 @@ import useMqtt from './hooks/useMqtt'
 import useVoiceDetector from './hooks/useVoiceDetector'
 import CameraView from './components/CameraView'
 import EmotionDisplay from './components/EmotionDisplay'
-import SettingsModal from './components/SettingsModal'
+import SettingsPage from './components/SettingsPage'
 import PainterSelector from './components/PainterSelector'
 import ArtPlanPanel from './components/ArtPlanPanel'
 import ConversationPanel from './components/ConversationPanel'
@@ -75,7 +75,7 @@ function App() {
     buildFusion: buildVoiceFusion,
   } = useVoiceDetector()
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [showSettingsPage, setShowSettingsPage] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
   const [sessionActive, setSessionActive] = useState(false)
   const [sessionStartedAt, setSessionStartedAt] = useState(null)
@@ -415,7 +415,7 @@ function App() {
             />
           )}
           <button
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => setShowSettingsPage(true)}
             className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
             title="Configuración"
           >
@@ -428,8 +428,33 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-6xl mx-auto p-4 space-y-5">
-        <StepStrip active={activeStep} currentStep={currentStep} canOpenStep={canOpenStep} onSelect={goToStep} />
+      <main className={`flex-1 w-full mx-auto p-4 space-y-5 ${showSettingsPage ? 'max-w-7xl' : 'max-w-6xl'}`}>
+        {showSettingsPage ? (
+          <SettingsPage
+            config={detectionConfig}
+            onConfigChange={updateConfig}
+            onReset={resetConfig}
+            mqttConfig={mqttConfig}
+            onMqttConfigChange={updateMqttConfig}
+            onMqttReset={resetMqttConfig}
+            mqttStatus={connectionStatus}
+            mqttError={lastError}
+            useVoiceCapture={useVoiceCapture}
+            onUseVoiceCaptureChange={setUseVoiceCapture}
+            robotCalibrationProps={{
+              mqttStatus: connectionStatus,
+              lastStatus: lastCalibrationStatus,
+              lastError: lastCalibrationError,
+              lastCommand: lastCalibrationCommand,
+              topics: calibrationTopics,
+              onSend: publishCalibrationCommand,
+              onCalibrationStateChange: handleCalibrationStateChange,
+            }}
+            onBack={() => setShowSettingsPage(false)}
+          />
+        ) : (
+          <>
+            <StepStrip active={activeStep} currentStep={currentStep} canOpenStep={canOpenStep} onSelect={goToStep} />
         <DemoReadinessPanel
           mqttStatus={connectionStatus}
           aiPlan={lastAiPlan}
@@ -537,35 +562,13 @@ function App() {
             {lastError && <p className="text-red-300">MQTT: {lastError}</p>}
           </div>
         )}
+          </>
+        )}
       </main>
 
       <footer className="py-3 text-center text-xs text-zinc-600 border-t border-zinc-800">
         {`Topics: moodcam/${mqttConfig.deviceId}/session · ai/${mqttConfig.deviceId}/stroke_plan · robot/${mqttConfig.deviceId}/command`}
       </footer>
-
-      <SettingsModal
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        config={detectionConfig}
-        onConfigChange={updateConfig}
-        onReset={resetConfig}
-        mqttConfig={mqttConfig}
-        onMqttConfigChange={updateMqttConfig}
-        onMqttReset={resetMqttConfig}
-        mqttStatus={connectionStatus}
-        mqttError={lastError}
-        useVoiceCapture={useVoiceCapture}
-        onUseVoiceCaptureChange={setUseVoiceCapture}
-        robotCalibrationProps={{
-          mqttStatus: connectionStatus,
-          lastStatus: lastCalibrationStatus,
-          lastError: lastCalibrationError,
-          lastCommand: lastCalibrationCommand,
-          topics: calibrationTopics,
-          onSend: publishCalibrationCommand,
-          onCalibrationStateChange: handleCalibrationStateChange,
-        }}
-      />
     </div>
   )
 }
