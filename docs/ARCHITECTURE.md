@@ -44,6 +44,7 @@ La configuracion de pines, modos y limites esta en `arduino/main/src/robot_confi
 
 - `docs/RUN_LOCAL_AND_DEPLOY.md`: como arrancar el sistema.
 - `docs/ROBOT_SETUP.md`: calibracion y seguridad del brazo.
+- `docs/FUTURE_HEYGEN_AVATAR.md`: propuesta futura para avatar guiado, fuera del flujo operativo actual.
 - `docs/runbooks/README.md`: procedimientos paso a paso.
 - `docs/research/README.md`: notas de voz, pintores y contenido creativo.
 - `docs/mvp-ai-bridge.md`: topics MQTT y contrato del AI Bridge.
