@@ -4,7 +4,7 @@ export default function ArtPlanPanel({ plan, planSource, mqttEnabled, mqttStatus
   if (!plan) {
     return (
       <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-4 text-sm text-gray-500">
-        Termina la observación y elige un pintor para generar el plan de dibujo.
+        Termina la lectura emocional y elige un estilo para generar la obra.
       </div>
     )
   }
@@ -19,7 +19,7 @@ export default function ArtPlanPanel({ plan, planSource, mqttEnabled, mqttStatus
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Plan IA</h2>
+          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Obra propuesta</h2>
           <p className="text-xs text-gray-500 mt-1">
             {plan.artist_name}: {getEmotionLabel(plan.main_emotion)} + {getEmotionLabel(plan.secondary_emotion)}
           </p>
@@ -34,7 +34,7 @@ export default function ArtPlanPanel({ plan, planSource, mqttEnabled, mqttStatus
           disabled={disabled || !mqttEnabled || mqttStatus !== 'connected'}
           className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-gray-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-400 transition-colors"
         >
-          {disabled ? 'Bloqueado por calibración' : 'Enviar al robot'}
+          {disabled ? 'Brazo calibrando' : 'Pintar la obra'}
         </button>
       </div>
 

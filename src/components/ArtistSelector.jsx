@@ -4,7 +4,7 @@ export default function ArtistSelector({ selectedArtist, onSelect }) {
   return (
     <div className="space-y-3">
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">1. Elegir pintor</h2>
+        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">1. Elige el estilo</h2>
         <p className="text-xs text-gray-500 mt-1">
           Es la primera selección: define el estilo, los trazos y la forma en que pintará el brazo.
         </p>

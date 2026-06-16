@@ -70,7 +70,7 @@ En la web:
 
 1. Abrir `http://127.0.0.1:5173`.
 2. Abrir configuracion.
-3. En `Captura`, decidir si `Usar voz para calcular emociones` esta activado. Para demos fisicas estables se recomienda empezar con voz desactivada.
+3. En `Emoción`, decidir si `Usar voz para calcular emociones` esta activado. Para demos fisicas estables se recomienda empezar con voz desactivada.
 4. En `Robot y calibracion`, preparar el brazo si se va a usar hardware real.
 5. Activar MQTT y confirmar:
    - broker `wss://broker.hivemq.com:8884/mqtt` o HiveMQ Cloud privado.
@@ -79,7 +79,7 @@ En la web:
 7. Iniciar captura.
 8. Si la voz esta activada, hablar durante la conversacion. Si no, mantener rostro visible para la camara.
 9. Finalizar o esperar 60 segundos.
-10. Confirmar `Plan IA recibido`, resumen artistico y `Robot status`.
+10. Confirmar propuesta artistica recibida, resumen artistico y `Robot status`.
 
 ## Flujo guiado y experiencia final
 
@@ -87,10 +87,10 @@ La web bloquea los pasos posteriores si faltan datos del paso anterior. Esto evi
 
 Condiciones esperadas:
 
-- `Captura`: requiere pintor seleccionado.
-- `ESP32`: requiere una sesion finalizada con resumen emocional y plan artistico. Si AI Bridge no responde, la web puede mostrar fallback local.
+- `Emoción`: requiere estilo seleccionado.
+- `Obra`: requiere una sesion finalizada con resumen emocional y plan artistico. Si AI Bridge no responde, la web puede mostrar fallback local.
 
-El paso `ESP32` es el cierre de experiencia para usuario final: muestra resumen emocional fijado, resumen artistico del AI Bridge, preview del plan, paleta, boton de envio al robot y estado del ESP32 sin abrir una pantalla adicional.
+El paso `Obra` es el cierre de experiencia para usuario final: muestra resumen emocional fijado, resumen artistico del AI Bridge, preview del plan, paleta, boton para pintar con el brazo y estado del robot sin abrir una pantalla adicional.
 
 ## Calibracion web
 

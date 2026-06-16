@@ -18,7 +18,7 @@ export default function DemoReadinessPanel({
       state: mqttStatus === 'connected' ? 'ok' : mqttStatus === 'connecting' ? 'pending' : 'idle',
     },
     {
-      label: 'Pintor',
+      label: 'Estilo',
       value: painter?.name || 'sin seleccionar',
       state: painter ? 'ok' : 'idle',
     },
@@ -33,7 +33,7 @@ export default function DemoReadinessPanel({
       state: calibrationLocked ? 'idle' : aiPlan ? 'ok' : hasEmotionSummary ? 'pending' : 'idle',
     },
     {
-      label: 'ESP32',
+      label: 'Brazo',
       value: calibrationActive ? (calibrationMoving ? 'calibrando' : robotStatus?.payload?.status || 'sin respuesta') : robotStatus?.payload?.status || 'sin status',
       state: robotStatus ? 'ok' : 'pending',
     },
@@ -44,7 +44,7 @@ export default function DemoReadinessPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Estado del sistema</h2>
-          <p className="mt-1 text-xs text-zinc-500">{calibrationActive ? 'Calibración directa: web a HiveMQ y ESP32. AI Bridge aislado.' : 'Ruta esperada: web a HiveMQ, AI Bridge y ESP32/simulador.'}</p>
+          <p className="mt-1 text-xs text-zinc-500">{calibrationActive ? 'Calibración directa del brazo. AI Bridge aislado.' : 'Ruta esperada: emoción, plan artístico y brazo/simulador.'}</p>
         </div>
         <span className="rounded-md border border-cyan-300/30 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-100">
           device sync

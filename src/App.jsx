@@ -207,7 +207,7 @@ function App() {
     }
 
     setActionMessage(nextCombinedSummary.length > 0
-      ? 'Sesión enviada al AI Bridge. Esperando plan IA por HiveMQ.'
+      ? 'Lectura emocional enviada. Preparando la propuesta artística.'
       : `No hay suficientes datos de emoción. Repite la captura con cámara${useVoiceCapture ? ' y micrófono' : ''} activos.`)
     if (nextCombinedSummary.length > 0) setCurrentStep(3)
   }, [
@@ -336,8 +336,8 @@ function App() {
       ].every(Boolean)
 
     setActionMessage(sent
-      ? `${planSource === 'ai_bridge' ? 'Plan IA reenviado' : 'Fallback local enviado'} por MQTT: ${artPlan.robot_commands.length} comandos.`
-      : 'Activa MQTT y espera a que el estado sea conectado antes de enviar al robot.')
+      ? `${planSource === 'ai_bridge' ? 'Obra enviada al brazo' : 'Obra local enviada al brazo'}: ${artPlan.robot_commands.length} comandos.`
+      : 'Activa MQTT y espera a que el estado sea conectado antes de pintar con el brazo.')
   }, [
     artPlan,
     combinedEmotionSummary,
@@ -401,7 +401,7 @@ function App() {
           <div className="flex items-center justify-center gap-3">
             <img src="/e-motion-wordmark.png" alt="E-motion" className="h-12 w-auto max-w-52.5 rounded-md object-contain shadow-md" />
           </div>
-          <p className="text-xs text-zinc-500 mt-1">captura emocional · AI Bridge · robot A4</p>
+          <p className="text-xs text-zinc-500 mt-1">emoción · arte generativo · pintura A4</p>
         </div>
         <div className="flex items-center gap-1">
           {mqttConfig.enabled && (
@@ -445,18 +445,18 @@ function App() {
         />
 
         {currentStep === 1 && (
-          <Screen title="1. Elegir pintor" description="Primero se selecciona el artista que definirá cómo se moverá y pintará el brazo.">
+          <Screen title="1. Elige el estilo" description="Selecciona el artista que dará forma visual a la obra final.">
             <PainterSelector selectedArtist={selectedArtist} onSelect={setSelectedArtist} />
             <ScreenActions>
               <button onClick={() => setCurrentStep(2)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 hover:bg-amber-300 transition-colors">
-                Continuar a captura
+                Continuar a emoción
               </button>
             </ScreenActions>
           </Screen>
         )}
 
         {currentStep === 2 && (
-          <Screen title={`2. Capturar emoción con ${selectedArtistInfo.name}`} description={`Moodcam toma muestras faciales${useVoiceCapture ? ' y de voz' : ''} y publica la sesión para que el AI Bridge decida el plan.`}>
+          <Screen title={`2. Lee tu emoción con ${selectedArtistInfo.name}`} description={`Moodcam observa el rostro${useVoiceCapture ? ' y la voz' : ''} para transformar la sesión en una propuesta artística.`}>
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] gap-5">
               <div className="space-y-4">
                 <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
@@ -507,13 +507,13 @@ function App() {
             </div>
             <ScreenActions>
               <button onClick={() => setCurrentStep(1)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-              <button onClick={() => goToStep(3)} disabled={!canOpenStep(3)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Ver resultado</button>
+              <button onClick={() => goToStep(3)} disabled={!canOpenStep(3)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Ver mi obra</button>
             </ScreenActions>
           </Screen>
         )}
 
         {currentStep === 3 && (
-          <Screen title="3. Resultado artístico y ESP32" description="Revisa el resumen fijado de la sesión, el plan del AI Bridge y envía la secuencia al brazo.">
+          <Screen title="3. Tu obra en movimiento" description="Revisa la lectura emocional, el resumen artístico y deja que el brazo pinte la obra.">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
                 <VoiceEmotionPanel latestSample={latestVoiceSample} summary={voiceSummary} combinedSummary={combinedEmotionSummary} faceSummary={displayedFaceSummary} />
@@ -531,7 +531,7 @@ function App() {
         {(actionMessage || lastPublished || lastError || lastSystemError || lastAiPlan) && (
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-400 space-y-1">
             {actionMessage && <p>{actionMessage}</p>}
-            {lastAiPlan && <p>Plan IA recibido: {lastAiPlan.payload?.id || lastAiPlan.payload?.plan_id || 'sin id'}</p>}
+            {lastAiPlan && <p>Propuesta artística recibida: {lastAiPlan.payload?.id || lastAiPlan.payload?.plan_id || 'sin id'}</p>}
             {lastPublished && <p>Último MQTT: {lastPublished.topic}</p>}
             {lastSystemError && <p className="text-amber-300">Sistema: {formatSystemError(lastSystemError.payload)}</p>}
             {lastError && <p className="text-red-300">MQTT: {lastError}</p>}
@@ -571,7 +571,7 @@ function App() {
 }
 
 function StepStrip({ active, currentStep, canOpenStep, onSelect }) {
-  const steps = ['Pintor', 'Captura', 'ESP32']
+  const steps = ['Estilo', 'Emoción', 'Obra']
 
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -632,7 +632,7 @@ function formatSystemError(payload) {
 
 function blockedStepMessage(step) {
   if (step === 2) return 'El brazo se está moviendo. Espera a que la calibración termine antes de capturar.'
-  if (step === 3) return 'Completa una captura emocional para recibir el plan artístico antes de enviar al ESP32.'
+  if (step === 3) return 'Completa la lectura emocional para crear la propuesta artística antes de pintar.'
   return 'Completa el paso anterior antes de continuar.'
 }
 

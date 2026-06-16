@@ -20,7 +20,7 @@ export default function ConversationPanel({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">2. Captura con {artist.name}</h2>
+          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">2. Lee tu emoción con {artist.name}</h2>
           <p className="text-xs text-gray-500 mt-1">{modeDescription}</p>
         </div>
         <StatusBadge status={status} mode={mode} voiceEnabled={voiceEnabled} />
@@ -32,7 +32,7 @@ export default function ConversationPanel({
           <span className="text-2xl font-semibold text-white">{sessionActive ? `${remainingSeconds}s` : '60s'}</span>
         </div>
         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-cyan-300 via-amber-300 to-rose-400 transition-all duration-300" style={{ width: `${progress}%` }} />
+          <div className="h-full bg-linear-to-r from-cyan-300 via-amber-300 to-rose-400 transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
         <div className="flex flex-wrap gap-2">
           <button
