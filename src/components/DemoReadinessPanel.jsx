@@ -7,6 +7,7 @@ export default function DemoReadinessPanel({
   painter,
   sessionActive,
   calibrationActive,
+  calibrationLocked,
   calibrationMoving,
 }) {
   const checks = [
@@ -27,8 +28,8 @@ export default function DemoReadinessPanel({
     },
     {
       label: 'AI Bridge',
-      value: calibrationActive ? 'bloqueado por calibración' : aiPlan ? `plan ${aiPlan.payload?.plan_id || aiPlan.payload?.id || 'recibido'}` : 'esperando plan',
-      state: calibrationActive ? 'idle' : aiPlan ? 'ok' : 'pending',
+      value: calibrationLocked ? 'bloqueado por movimiento' : aiPlan ? `plan ${aiPlan.payload?.plan_id || aiPlan.payload?.id || 'recibido'}` : 'esperando plan',
+      state: calibrationLocked ? 'idle' : aiPlan ? 'ok' : 'pending',
     },
     {
       label: 'ESP32',

@@ -141,8 +141,8 @@ export default function RobotCalibrationPanel({
             Control angular directo. HiveMQ transporta los comandos automáticamente; no necesitas abrir su cliente web.
           </p>
         </div>
-        <div className="rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-          AI Bridge y movimientos artísticos bloqueados
+        <div className={`rounded-md border px-3 py-2 text-xs ${jointState.moving ? 'border-amber-400/30 bg-amber-400/10 text-amber-100' : jointState.positionKnown ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>
+          {jointState.moving ? 'Movimientos artísticos bloqueados durante el movimiento' : jointState.positionKnown ? 'Brazo listo para continuar' : 'Calibración pendiente'}
         </div>
       </div>
 

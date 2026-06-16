@@ -102,7 +102,8 @@ function App() {
   const selectedArtistInfo = useMemo(() => getArtistById(selectedArtist), [selectedArtist])
   const selectedPainterProfile = useMemo(() => getPainterProfile(selectedArtist), [selectedArtist])
   const conversationMode = useMemo(() => getConversationMode(conversationModeId), [conversationModeId])
-  const calibrationLocked = currentStep === 4 || armCalibrationState.active
+  const calibrationModeActive = currentStep === 4
+  const calibrationLocked = armCalibrationState.moving
   const liveFaceSummary = useMemo(() => calculateEmotionSummary(faceEmotionSamples), [faceEmotionSamples])
   const displayedFaceSummary = faceSummary.length ? faceSummary : liveFaceSummary
   const fallbackArtPlan = useMemo(() => {
@@ -371,10 +372,10 @@ function App() {
     if (step === 2) return Boolean(selectedArtist)
     if (step === 3) return combinedEmotionSummary.length > 0
     if (step === 4) return combinedEmotionSummary.length > 0 && connectionStatus === 'connected'
-    if (step === 5) return Boolean(artPlan) && connectionStatus === 'connected' && !calibrationLocked
+    if (step === 5) return Boolean(artPlan) && connectionStatus === 'connected' && !armCalibrationState.moving
     if (step === 6) return Boolean(artPlan) && robotCommandSent && Boolean(lastRobotStatus)
     return false
-  }, [artPlan, calibrationLocked, combinedEmotionSummary.length, connectionStatus, lastRobotStatus, robotCommandSent, selectedArtist])
+  }, [armCalibrationState.moving, artPlan, combinedEmotionSummary.length, connectionStatus, lastRobotStatus, robotCommandSent, selectedArtist])
   const goToStep = useCallback((step) => {
     if (!canOpenStep(step)) {
       setActionMessage(blockedStepMessage(step))
@@ -451,7 +452,8 @@ function App() {
           voiceEnabled={useVoiceCapture}
           painter={selectedPainterProfile}
           sessionActive={sessionActive}
-          calibrationActive={calibrationLocked}
+          calibrationActive={calibrationModeActive}
+          calibrationLocked={calibrationLocked}
           calibrationMoving={armCalibrationState.moving}
         />
 
