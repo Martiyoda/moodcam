@@ -6,15 +6,20 @@ export default function ConversationPanel({
   mode,
   voiceEnabled,
   remainingSeconds,
+  captureDurationSeconds,
+  progress,
   sessionActive,
-  onFinish,
+  captureComplete,
   onReset,
 }) {
-  const progress = sessionActive ? Math.max(0, Math.min(100, ((60 - remainingSeconds) / 60) * 100)) : 0
+  const progressValue = Math.max(0, Math.min(100, progress || 0))
+  const progressStyle = sessionActive
+    ? { animation: `capture-progress-fill ${captureDurationSeconds}s linear forwards` }
+    : { transform: `scaleX(${progressValue / 100})` }
   const modeLabel = voiceEnabled ? mode?.label || 'Sesión visual' : 'Sesión sólo rostro'
   const modeDescription = voiceEnabled
-    ? mode?.description || 'Moodcam mide la emoción visual durante 60 segundos.'
-    : 'Moodcam usa únicamente la cámara para estimar la emoción durante 60 segundos.'
+    ? mode?.description || `Moodcam mide la emoción visual durante ${captureDurationSeconds} segundos.`
+    : `Moodcam usa únicamente la cámara para estimar la emoción durante ${captureDurationSeconds} segundos.`
 
   return (
     <div className="space-y-4">
@@ -29,19 +34,15 @@ export default function ConversationPanel({
       <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-4 space-y-3">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>{modeLabel}</span>
-          <span className="text-2xl font-semibold text-white">{sessionActive ? `${remainingSeconds}s` : '60s'}</span>
+          <span className="text-2xl font-semibold text-white">{captureComplete ? '0s' : sessionActive ? `${remainingSeconds}s` : `${captureDurationSeconds}s`}</span>
         </div>
         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-          <div className="h-full bg-linear-to-r from-cyan-300 via-amber-300 to-rose-400 transition-all duration-300" style={{ width: `${progress}%` }} />
+          <div
+            className="h-full w-full origin-left bg-linear-to-r from-cyan-300 via-amber-300 to-rose-400"
+            style={progressStyle}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={onFinish}
-            disabled={!sessionActive}
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-700 transition-colors"
-          >
-            Finalizar
-          </button>
           <button
             onClick={onReset}
             className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-800 text-gray-400 hover:text-white hover:border-gray-700 transition-colors"
@@ -57,22 +58,24 @@ export default function ConversationPanel({
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-3 max-h-56 overflow-y-auto space-y-2">
-        {!voiceEnabled ? (
-          <p className="text-sm text-gray-500">Voz desactivada. La emoción se calculará sólo con la cámara.</p>
-        ) : transcript.length === 0 ? (
-          <p className="text-sm text-gray-500">El transcript aparecerá aquí si el navegador permite speech-to-text. Si no, Moodcam seguirá midiendo energía, pausas y rostro.</p>
-        ) : (
-          transcript.map((item) => (
-            <div key={item.id} className="text-sm">
-              <span className={item.speaker === 'user' ? 'text-cyan-300' : 'text-amber-300'}>
-                {item.speaker === 'user' ? 'Usuario' : artist.name}:
-              </span>
-              <span className="text-gray-300 ml-2">{item.text}</span>
-            </div>
-          ))
-        )}
-      </div>
+      {!captureComplete && (
+        <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-3 max-h-56 overflow-y-auto space-y-2">
+          {!voiceEnabled ? (
+            <p className="text-sm text-gray-500">Voz desactivada. La emoción se calculará sólo con la cámara.</p>
+          ) : transcript.length === 0 ? (
+            <p className="text-sm text-gray-500">El transcript aparecerá aquí si el navegador permite speech-to-text. Si no, Moodcam seguirá midiendo energía, pausas y rostro.</p>
+          ) : (
+            transcript.map((item) => (
+              <div key={item.id} className="text-sm">
+                <span className={item.speaker === 'user' ? 'text-cyan-300' : 'text-amber-300'}>
+                  {item.speaker === 'user' ? 'Usuario' : artist.name}:
+                </span>
+                <span className="text-gray-300 ml-2">{item.text}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }

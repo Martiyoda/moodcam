@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+@keyframes capture-progress-fill {
+    from {
+        transform: scaleX(0);
+    }
+
+    to {
+        transform: scaleX(1);
+    }
+}

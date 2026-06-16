@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Human } from '@vladmandic/human'
 
 export const DEFAULT_CONFIG = {
+    session: {
+        captureSeconds: 30,
+    },
     face: {
         detector: { minConfidence: 0.5, maxDetected: 1, rotation: false, iouThreshold: 0.1, skipFrames: 99, skipTime: 2500 },
         mesh: { enabled: true },

@@ -1,11 +1,11 @@
-export default function VoiceEmotionPanel({ latestSample, summary, combinedSummary, faceSummary }) {
+export default function VoiceEmotionPanel({ latestSample, summary, combinedSummary, faceSummary, title = '3. Voz + emociones', description = 'Estimación aproximada: texto, tono básico y rostro. No es diagnóstico.' }) {
   const intensity = latestSample?.intensity || summary.average_intensity || 0
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">3. Voz + emociones</h2>
-        <p className="text-xs text-gray-500 mt-1">Estimación aproximada: texto, tono básico y rostro. No es diagnóstico.</p>
+        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">{title}</h2>
+        <p className="text-xs text-gray-500 mt-1">{description}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

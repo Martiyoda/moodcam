@@ -19,8 +19,10 @@ import {
   combineEmotionSummaries,
 } from './lib/voiceEngine'
 
-const SESSION_MS = 60_000
+const DEFAULT_SESSION_MS = 30_000
 const FACE_SAMPLE_INTERVAL_MS = 650
+const AI_PLAN_WAIT_MS = 8_000
+const VOICE_CAPTURE_ENABLED = true
 
 function App() {
   const {
@@ -79,7 +81,7 @@ function App() {
   const [currentStep, setCurrentStep] = useState(1)
   const [sessionActive, setSessionActive] = useState(false)
   const [sessionStartedAt, setSessionStartedAt] = useState(null)
-  const [remainingMs, setRemainingMs] = useState(SESSION_MS)
+  const [remainingMs, setRemainingMs] = useState(DEFAULT_SESSION_MS)
   const [faceEmotionSamples, setFaceEmotionSamples] = useState([])
   const [faceSummary, setFaceSummary] = useState([])
   const [combinedEmotionSummary, setCombinedEmotionSummary] = useState([])
@@ -90,17 +92,22 @@ function App() {
   const [sessionId, setSessionId] = useState(null)
   const [conversationModeId] = useState(DEFAULT_CONVERSATION_MODE)
   const [armCalibrationState, setArmCalibrationState] = useState({ active: false, moving: false })
-  const [useVoiceCapture, setUseVoiceCapture] = useState(false)
+  const [aiPlanWaitExpired, setAiPlanWaitExpired] = useState(false)
+  const [artworkRequested, setArtworkRequested] = useState(false)
 
   const faceSamplesRef = useRef([])
   const voiceSamplesRef = useRef([])
   const transcriptRef = useRef([])
+  const emotionsRef = useRef(null)
+  const voiceSummaryRef = useRef(voiceSummary)
   const lastFaceSampleRef = useRef(0)
 
   const selectedArtistInfo = useMemo(() => getArtistById(selectedArtist), [selectedArtist])
   const selectedPainterProfile = useMemo(() => getPainterProfile(selectedArtist), [selectedArtist])
   const conversationMode = useMemo(() => getConversationMode(conversationModeId), [conversationModeId])
   const calibrationLocked = armCalibrationState.moving
+  const captureDurationSeconds = Math.max(1, Number(detectionConfig.session?.captureSeconds) || 30)
+  const captureDurationMs = captureDurationSeconds * 1000
   const liveFaceSummary = useMemo(() => calculateEmotionSummary(faceEmotionSamples), [faceEmotionSamples])
   const displayedFaceSummary = faceSummary.length ? faceSummary : liveFaceSummary
   const fallbackArtPlan = useMemo(() => {
@@ -110,12 +117,14 @@ function App() {
       artistId: selectedArtist,
       mobility,
       calibration: robotCalibration,
-      colorPreferences: useVoiceCapture ? voiceSummary.color_preferences : [],
-      voiceSummary: useVoiceCapture ? voiceSummary : null,
+      colorPreferences: VOICE_CAPTURE_ENABLED ? voiceSummary.color_preferences : [],
+      voiceSummary: VOICE_CAPTURE_ENABLED ? voiceSummary : null,
     })
-  }, [combinedEmotionSummary, mobility, robotCalibration, selectedArtist, useVoiceCapture, voiceSummary])
-  const aiArtPlan = lastAiPlan?.payload?.robot_commands ? lastAiPlan.payload : null
-  const artPlan = aiArtPlan || fallbackArtPlan
+  }, [combinedEmotionSummary, mobility, robotCalibration, selectedArtist, voiceSummary])
+  const aiArtPlan = lastAiPlan?.payload?.robot_commands && lastAiPlan.payload.session_id === sessionId ? lastAiPlan.payload : null
+  const shouldWaitForAiPlan = artworkRequested && mqttConfig.enabled && connectionStatus === 'connected' && combinedEmotionSummary.length > 0 && !aiArtPlan
+  const waitingForAiPlan = shouldWaitForAiPlan && !aiPlanWaitExpired
+  const artPlan = aiArtPlan || (waitingForAiPlan ? null : fallbackArtPlan)
   const planSource = aiArtPlan ? 'ai_bridge' : 'local_fallback'
 
   useEffect(() => {
@@ -129,6 +138,19 @@ function App() {
   useEffect(() => {
     transcriptRef.current = transcript
   }, [transcript])
+
+  useEffect(() => {
+    emotionsRef.current = emotions
+  }, [emotions])
+
+  useEffect(() => {
+    voiceSummaryRef.current = voiceSummary
+  }, [voiceSummary])
+
+  useEffect(() => {
+    if (sessionActive || combinedEmotionSummary.length > 0) return
+    setRemainingMs(captureDurationMs)
+  }, [captureDurationMs, combinedEmotionSummary.length, sessionActive])
 
   useEffect(() => {
     if (calibrationLocked) return
@@ -166,23 +188,24 @@ function App() {
 
   const finishSession = useCallback(() => {
     const nextFaceSummary = calculateEmotionSummary(faceSamplesRef.current)
-    const fusedEmotion = useVoiceCapture ? buildVoiceFusion(emotions) : null
-    const nextVoiceSummary = useVoiceCapture
+    const currentVoiceSummary = voiceSummaryRef.current
+    const fusedEmotion = VOICE_CAPTURE_ENABLED ? buildVoiceFusion(emotionsRef.current) : null
+    const nextVoiceSummary = VOICE_CAPTURE_ENABLED
       ? {
-        ...voiceSummary,
+        ...currentVoiceSummary,
         main_emotions: fusedEmotion.art_summary,
         fused_emotion: fusedEmotion,
       }
       : {
-        ...voiceSummary,
+        ...currentVoiceSummary,
         main_emotions: [],
         simple_emotion: 'disabled',
         label: 'voz desactivada',
         confidence: 0,
       }
-    const nextCombinedSummary = useVoiceCapture && fusedEmotion.art_summary?.length
+    const nextCombinedSummary = VOICE_CAPTURE_ENABLED && fusedEmotion.art_summary?.length
       ? fusedEmotion.art_summary
-      : useVoiceCapture
+      : VOICE_CAPTURE_ENABLED
         ? combineEmotionSummaries(nextFaceSummary, nextVoiceSummary)
         : nextFaceSummary
 
@@ -202,39 +225,52 @@ function App() {
         transcript: transcriptRef.current,
         calibration: robotCalibration,
         mobility,
-        conversationMode: useVoiceCapture ? conversationMode.id : 'face_only',
+        conversationMode: VOICE_CAPTURE_ENABLED ? conversationMode.id : 'face_only',
       })
     }
 
     setActionMessage(nextCombinedSummary.length > 0
       ? 'Lectura emocional enviada. Preparando la propuesta artística.'
-      : `No hay suficientes datos de emoción. Repite la captura con cámara${useVoiceCapture ? ' y micrófono' : ''} activos.`)
-    if (nextCombinedSummary.length > 0) setCurrentStep(3)
+      : `No hay suficientes datos de emoción. Repite la captura con cámara${VOICE_CAPTURE_ENABLED ? ' y micrófono' : ''} activos.`)
   }, [
     buildVoiceFusion,
     conversationMode.id,
-    emotions,
     mobility,
     publishSessionSummary,
     robotCalibration,
     selectedArtistInfo,
     sessionId,
     stopVoiceDetection,
-    useVoiceCapture,
-    voiceSummary,
   ])
 
   useEffect(() => {
     if (!sessionActive || !sessionStartedAt) return undefined
 
     const timer = window.setInterval(() => {
-      const remaining = Math.max(0, SESSION_MS - (Date.now() - sessionStartedAt))
+      const remaining = Math.max(0, captureDurationMs - (Date.now() - sessionStartedAt))
       setRemainingMs(remaining)
       if (remaining <= 0) finishSession()
     }, 250)
 
     return () => window.clearInterval(timer)
-  }, [finishSession, sessionActive, sessionStartedAt])
+  }, [captureDurationMs, finishSession, sessionActive, sessionStartedAt])
+
+  useEffect(() => {
+    if (!artworkRequested || waitingForAiPlan || currentStep !== 2 || combinedEmotionSummary.length === 0 || !artPlan) return
+    setCurrentStep(3)
+    setArtworkRequested(false)
+  }, [artPlan, artworkRequested, combinedEmotionSummary.length, currentStep, waitingForAiPlan])
+
+  useEffect(() => {
+    if (!shouldWaitForAiPlan || aiPlanWaitExpired) return undefined
+
+    const timer = window.setTimeout(() => {
+      setAiPlanWaitExpired(true)
+      setActionMessage('AI Bridge no respondió a tiempo. Mostrando fallback local.')
+    }, AI_PLAN_WAIT_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [aiPlanWaitExpired, shouldWaitForAiPlan])
 
   const handleStartSession = useCallback(async () => {
     if (calibrationLocked) {
@@ -245,6 +281,8 @@ function App() {
     setFaceEmotionSamples([])
     setFaceSummary([])
     setCombinedEmotionSummary([])
+    setAiPlanWaitExpired(false)
+    setArtworkRequested(false)
     lastFaceSampleRef.current = 0
     faceSamplesRef.current = []
     resetVoiceDetection()
@@ -255,7 +293,7 @@ function App() {
     if (!ready) ready = await startCamera()
     if (!ready) return
 
-    if (useVoiceCapture && conversationMode.id === 'voice_detector') {
+    if (VOICE_CAPTURE_ENABLED && conversationMode.id === 'voice_detector') {
       const started = await startVoiceDetection()
       if (!started) {
         setActionMessage('No se pudo activar el micrófono. La sesión puede continuar solo con rostro si lo deseas.')
@@ -267,16 +305,17 @@ function App() {
       artist: selectedArtistInfo,
       mobility,
       calibration: robotCalibration,
-      conversationMode: useVoiceCapture ? conversationMode.id : 'face_only',
+      conversationMode: VOICE_CAPTURE_ENABLED ? conversationMode.id : 'face_only',
     })
 
-    setRemainingMs(SESSION_MS)
+    setRemainingMs(captureDurationMs)
     setSessionStartedAt(Date.now())
     setSessionActive(true)
     setCurrentStep(2)
   }, [
     cameraActive,
     conversationMode.id,
+    captureDurationMs,
     mobility,
     mqttConfig.deviceId,
     publishSessionStart,
@@ -286,7 +325,6 @@ function App() {
     startVoiceDetection,
     calibrationLocked,
     resetVoiceDetection,
-    useVoiceCapture,
   ])
 
   const handleResetExperience = useCallback(() => {
@@ -297,13 +335,15 @@ function App() {
     lastFaceSampleRef.current = 0
     setSessionActive(false)
     setSessionStartedAt(null)
-    setRemainingMs(SESSION_MS)
+    setRemainingMs(captureDurationMs)
     setFaceEmotionSamples([])
     setFaceSummary([])
     setCombinedEmotionSummary([])
+    setAiPlanWaitExpired(false)
+    setArtworkRequested(false)
     setActionMessage(null)
     setSessionId(null)
-  }, [resetVoiceDetection])
+  }, [captureDurationMs, resetVoiceDetection])
 
   const handleStopCamera = useCallback(() => {
     handleResetExperience()
@@ -361,14 +401,23 @@ function App() {
   }, [])
 
   const remainingSeconds = Math.ceil(remainingMs / 1000)
+  const captureProgress = combinedEmotionSummary.length > 0
+    ? 100
+    : sessionActive
+      ? Math.max(0, Math.min(100, ((captureDurationMs - remainingMs) / captureDurationMs) * 100))
+      : 0
   const calibrationTopics = calibrationTopicsFromMap(mqttConfig.topics)
   const robotStatusPayload = lastRobotStatus?.payload
+  const canRequestArtwork = combinedEmotionSummary.length > 0 && !armCalibrationState.moving
   const canOpenStep = useCallback((step) => {
     if (step === 1) return true
     if (step === 2) return Boolean(selectedArtist) && !armCalibrationState.moving
-    if (step === 3) return combinedEmotionSummary.length > 0 && Boolean(artPlan) && !armCalibrationState.moving
+    if (step === 3) {
+      const canUseLocalPlan = !mqttConfig.enabled || connectionStatus !== 'connected' || aiPlanWaitExpired
+      return combinedEmotionSummary.length > 0 && (Boolean(aiArtPlan) || canUseLocalPlan) && !armCalibrationState.moving
+    }
     return false
-  }, [armCalibrationState.moving, artPlan, combinedEmotionSummary.length, selectedArtist])
+  }, [aiArtPlan, aiPlanWaitExpired, armCalibrationState.moving, combinedEmotionSummary.length, connectionStatus, mqttConfig.enabled, selectedArtist])
   const goToStep = useCallback((step) => {
     if (!canOpenStep(step)) {
       setActionMessage(blockedStepMessage(step))
@@ -376,6 +425,24 @@ function App() {
     }
     setCurrentStep(step)
   }, [canOpenStep])
+  const handleViewArtwork = useCallback(() => {
+    if (!canRequestArtwork) {
+      setActionMessage(blockedStepMessage(3))
+      return
+    }
+    const shouldWait = mqttConfig.enabled && connectionStatus === 'connected' && !aiArtPlan && !aiPlanWaitExpired
+    setArtworkRequested(true)
+    if (shouldWait) {
+      setActionMessage('Esperando el plan del AI Bridge antes de mostrar la obra.')
+      return
+    }
+    if (!artPlan) {
+      setActionMessage('Preparando el plan artístico.')
+      return
+    }
+    setCurrentStep(3)
+    setArtworkRequested(false)
+  }, [aiArtPlan, aiPlanWaitExpired, artPlan, canRequestArtwork, connectionStatus, mqttConfig.enabled])
   const activeStep = sessionActive ? 2 : currentStep
 
   return (
@@ -439,8 +506,6 @@ function App() {
             onMqttReset={resetMqttConfig}
             mqttStatus={connectionStatus}
             mqttError={lastError}
-            useVoiceCapture={useVoiceCapture}
-            onUseVoiceCaptureChange={setUseVoiceCapture}
             robotCalibrationProps={{
               mqttStatus: connectionStatus,
               lastStatus: lastCalibrationStatus,
@@ -461,7 +526,7 @@ function App() {
           hasEmotionSummary={combinedEmotionSummary.length > 0}
           robotStatus={lastCalibrationStatus || lastRobotStatus}
           voiceStatus={voiceStatus}
-          voiceEnabled={useVoiceCapture}
+          voiceEnabled={VOICE_CAPTURE_ENABLED}
           painter={selectedPainterProfile}
           sessionActive={sessionActive}
           calibrationActive={false}
@@ -481,7 +546,7 @@ function App() {
         )}
 
         {currentStep === 2 && (
-          <Screen title={`2. Lee tu emoción con ${selectedArtistInfo.name}`} description={`Moodcam observa el rostro${useVoiceCapture ? ' y la voz' : ''} para transformar la sesión en una propuesta artística.`}>
+          <Screen title={`2. Lee tu emoción con ${selectedArtistInfo.name}`} description="Moodcam observa el rostro y la voz para transformar la sesión en una propuesta artística.">
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] gap-5">
               <div className="space-y-4">
                 <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
@@ -517,22 +582,39 @@ function App() {
                     error={voiceError}
                     transcript={transcript}
                     mode={conversationMode}
-                    voiceEnabled={useVoiceCapture}
+                    voiceEnabled={VOICE_CAPTURE_ENABLED}
                     remainingSeconds={remainingSeconds}
+                    captureDurationSeconds={captureDurationSeconds}
+                    progress={captureProgress}
                     sessionActive={sessionActive}
-                    onFinish={finishSession}
+                    captureComplete={combinedEmotionSummary.length > 0}
                     onReset={handleResetExperience}
                   />
                 </div>
-                <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
-                  <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emoción en vivo</h2>
-                  <EmotionDisplay emotions={emotions} dominant={dominant} age={age} gender={gender} />
-                </div>
+                {combinedEmotionSummary.length > 0 ? (
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
+                    <VoiceEmotionPanel
+                      latestSample={latestVoiceSample}
+                      summary={voiceSummary}
+                      combinedSummary={combinedEmotionSummary}
+                      faceSummary={displayedFaceSummary}
+                      title="Resumen de emociones"
+                      description={`Lectura capturada durante ${captureDurationSeconds} segundos.`}
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
+                    <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emoción en vivo</h2>
+                    <EmotionDisplay emotions={emotions} dominant={dominant} age={age} gender={gender} />
+                  </div>
+                )}
               </div>
             </div>
             <ScreenActions>
               <button onClick={() => setCurrentStep(1)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-              <button onClick={() => goToStep(3)} disabled={!canOpenStep(3)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">Ver mi obra</button>
+              <button onClick={handleViewArtwork} disabled={!canRequestArtwork || (artworkRequested && waitingForAiPlan)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">
+                {artworkRequested && waitingForAiPlan ? 'Esperando AI Bridge...' : 'Ver mi obra'}
+              </button>
             </ScreenActions>
           </Screen>
         )}

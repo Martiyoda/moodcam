@@ -3,6 +3,14 @@ import RobotCalibrationPanel from './RobotCalibrationPanel'
 
 const SECTIONS = [
   {
+    key: 'session',
+    title: 'Sesión',
+    description: 'Controla la duración de la captura emocional.',
+    params: [
+      { key: 'session.captureSeconds', label: 'Duración de captura (s)', type: 'range', min: 10, max: 120, step: 5, description: 'Tiempo de observación antes de mostrar el resumen emocional.' },
+    ],
+  },
+  {
     key: 'detector',
     title: 'Detector Facial',
     description: 'Controla cómo se detectan los rostros en la imagen.',
@@ -132,10 +140,9 @@ function TextParam({ label, value, onChange, placeholder, type = 'text', descrip
   )
 }
 
-export default function SettingsPage({ config, onConfigChange, onReset, mqttConfig, onMqttConfigChange, onMqttReset, mqttStatus, mqttError, useVoiceCapture, onUseVoiceCaptureChange, robotCalibrationProps, onBack }) {
-  const [activeSection, setActiveSection] = useState('capture')
+export default function SettingsPage({ config, onConfigChange, onReset, mqttConfig, onMqttConfigChange, onMqttReset, mqttStatus, mqttError, robotCalibrationProps, onBack }) {
+  const [activeSection, setActiveSection] = useState('session')
   const navigationSections = [
-    { key: 'capture', title: 'Captura', description: 'Fuente de emoción usada durante la sesión.' },
     ...SECTIONS,
     mqttConfig && { key: 'mqtt', title: 'MQTT', description: 'Bridge, topics y estado del robot.' },
     robotCalibrationProps && { key: 'robot', title: 'Robot y calibración', description: 'Preparación técnica del brazo.' },
@@ -195,18 +202,6 @@ export default function SettingsPage({ config, onConfigChange, onReset, mqttConf
             <h3 className="text-lg font-bold text-white">{activeMetadata.title}</h3>
             <p className="mt-1 text-sm text-zinc-500">{activeMetadata.description}</p>
           </div>
-
-          {activeMetadata.key === 'capture' && (
-            <div className="max-w-2xl space-y-3">
-              <p className="text-sm text-gray-500">Desactiva la voz para usar sólo la cámara en el cálculo emocional.</p>
-              <ToggleParam
-                param={{ key: 'useVoiceCapture', label: 'Usar voz para calcular emociones' }}
-                value={useVoiceCapture}
-                onChange={(_, value) => onUseVoiceCaptureChange(value)}
-              />
-              <p className="text-xs text-gray-600">Si está apagado, la app no pedirá micrófono ni mezclará voz en el resumen final.</p>
-            </div>
-          )}
 
           {activeConfigSection && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
