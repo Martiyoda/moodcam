@@ -46,9 +46,6 @@ export default function DemoReadinessPanel({
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Estado del sistema</h2>
           <p className="mt-1 text-xs text-zinc-500">{calibrationActive ? 'Calibración directa del brazo. AI Bridge aislado.' : 'Ruta esperada: emoción, plan artístico y brazo/simulador.'}</p>
         </div>
-        <span className="rounded-md border border-cyan-300/30 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-100">
-          device sync
-        </span>
       </div>
       <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
         {checks.map((check) => (
