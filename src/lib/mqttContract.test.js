@@ -32,7 +32,6 @@ test('crea topics por deviceId para Moodcam, AI Bridge y robot', () => {
   assert.equal(topics.webPresence, 'system/robot-aula-1/presence/web')
   assert.equal(topics.bridgePresence, 'system/robot-aula-1/presence/ai-bridge')
   assert.equal(topics.esp32Presence, 'system/robot-aula-1/presence/esp32')
-  assert.equal(topics.simulatorPresence, 'system/robot-aula-1/presence/simulator')
   assert.deepEqual(calibrationTopicsFromMap(topics), {
     command: 'robot/robot-aula-1/command',
     status: 'robot/robot-aula-1/status',

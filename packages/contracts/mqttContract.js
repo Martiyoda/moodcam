@@ -21,7 +21,6 @@ export const TOPIC_KEYS = {
     webPresence: 'webPresence',
     bridgePresence: 'bridgePresence',
     esp32Presence: 'esp32Presence',
-    simulatorPresence: 'simulatorPresence',
 }
 
 export const TOPIC_TEMPLATES = {
@@ -36,7 +35,6 @@ export const TOPIC_TEMPLATES = {
     [TOPIC_KEYS.webPresence]: 'system/{deviceId}/presence/web',
     [TOPIC_KEYS.bridgePresence]: 'system/{deviceId}/presence/ai-bridge',
     [TOPIC_KEYS.esp32Presence]: 'system/{deviceId}/presence/esp32',
-    [TOPIC_KEYS.simulatorPresence]: 'system/{deviceId}/presence/simulator',
 }
 
 export function normalizeDeviceId(deviceId = DEFAULT_DEVICE_ID) {

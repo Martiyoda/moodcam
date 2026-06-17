@@ -13,14 +13,9 @@ const SECTIONS = [
   {
     key: 'detector',
     title: 'Detector Facial',
-    description: 'Controla cómo se detectan los rostros en la imagen.',
+    description: 'Controla cómo se detecta el rostro en la imagen.',
     params: [
       { key: 'face.detector.minConfidence', label: 'Confianza mínima', type: 'range', min: 0.1, max: 1, step: 0.05, description: 'Umbral para aceptar un rostro detectado. Más alto = menos falsos positivos.' },
-      { key: 'face.detector.maxDetected', label: 'Máx. rostros', type: 'range', min: 1, max: 5, step: 1, description: 'Número máximo de rostros a detectar simultáneamente.' },
-      { key: 'face.detector.iouThreshold', label: 'IoU Threshold', type: 'range', min: 0.01, max: 0.9, step: 0.01, description: 'Overlap mínimo entre detecciones antes de descartar duplicados (NMS).' },
-      { key: 'face.detector.rotation', label: 'Corrección de rotación', type: 'toggle', description: 'Mejora detección en ángulos extremos pero reduce rendimiento.' },
-      { key: 'face.detector.skipFrames', label: 'Skip frames', type: 'range', min: 0, max: 100, step: 1, description: 'Frames máximos reutilizando bounding boxes del caché.' },
-      { key: 'face.detector.skipTime', label: 'Skip time (ms)', type: 'range', min: 0, max: 5000, step: 100, description: 'Milisegundos máximos sin re-ejecutar el detector.' },
     ],
   },
   {
@@ -29,8 +24,6 @@ const SECTIONS = [
     description: 'Ajustes del modelo de clasificación de emociones.',
     params: [
       { key: 'face.emotion.minConfidence', label: 'Confianza mínima', type: 'range', min: 0.01, max: 0.8, step: 0.01, description: 'Umbral para incluir una emoción en los resultados. Más alto = menos ruido/flickering.' },
-      { key: 'face.emotion.skipFrames', label: 'Skip frames', type: 'range', min: 0, max: 100, step: 1, description: 'Frames que reutiliza el resultado cacheado sin re-ejecutar el modelo.' },
-      { key: 'face.emotion.skipTime', label: 'Skip time (ms)', type: 'range', min: 0, max: 5000, step: 100, description: 'Tiempo máximo sin re-ejecutar el modelo de emoción.' },
     ],
   },
   {
@@ -49,18 +42,6 @@ const SECTIONS = [
     params: [
       { key: 'filter.equalization', label: 'Ecualización', type: 'toggle', description: 'Ecualización de histograma. Mejora detección con iluminación variable.' },
       { key: 'filter.autoBrightness', label: 'Auto-brillo', type: 'toggle', description: 'Ajusta el brillo automáticamente según la escena.' },
-      { key: 'filter.sharpness', label: 'Nitidez', type: 'range', min: 0, max: 1, step: 0.05, description: 'Mejora bordes. Útil con cámaras de baja calidad.' },
-      { key: 'filter.brightness', label: 'Brillo', type: 'range', min: -1, max: 1, step: 0.05, description: 'Ajuste manual de brillo.' },
-      { key: 'filter.contrast', label: 'Contraste', type: 'range', min: -1, max: 1, step: 0.05, description: 'Ajuste manual de contraste.' },
-      { key: 'filter.blur', label: 'Desenfoque', type: 'range', min: 0, max: 15, step: 1, description: 'Radio de desenfoque en px. Reduce ruido en imágenes ruidosas.' },
-    ],
-  },
-  {
-    key: 'cache',
-    title: 'Caché y Rendimiento',
-    description: 'Controla el sistema de caché de frames que habilita el skip de modelos.',
-    params: [
-      { key: 'cacheSensitivity', label: 'Sensibilidad de caché', type: 'range', min: 0, max: 1, step: 0.05, description: 'Cuánto debe cambiar la escena para invalidar el caché. 0 = desactivado, 1 = muy permisivo.' },
     ],
   },
 ]
@@ -242,31 +223,11 @@ export default function SettingsPage({ config, onConfigChange, onReset, mqttConf
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <TextParam label="URL del broker" value={mqttConfig.brokerUrl} onChange={(value) => onMqttConfigChange('brokerUrl', value)} placeholder="wss://broker.example.com:8884/mqtt" description="URL WebSocket del broker MQTT. Debe usar wss:// si la app se sirve por HTTPS." />
                 <TextParam label="Device ID" value={mqttConfig.deviceId} onChange={(value) => onMqttConfigChange('deviceId', value)} placeholder="device1" description="Identificador compartido por Moodcam, AI Bridge y ESP32." />
-                <TextParam label="Usuario" value={mqttConfig.username} onChange={(value) => onMqttConfigChange('username', value)} placeholder="(opcional)" description="Usuario para autenticación (dejar vacío si no se requiere)." />
-                <TextParam label="Contraseña" value={mqttConfig.password} onChange={(value) => onMqttConfigChange('password', value)} placeholder="(opcional)" type="password" description="Contraseña para autenticación (dejar vacío si no se requiere)." />
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <TextParam label="Inicio sesión" value={mqttConfig.topics?.sessionStart} onChange={(value) => onMqttConfigChange('topics.sessionStart', value)} placeholder="moodcam/device1/session/start" description="Moodcam anuncia pintor, movilidad y calibración." />
-                <TextParam label="Emoción facial" value={mqttConfig.topics?.faceEmotion} onChange={(value) => onMqttConfigChange('topics.faceEmotion', value)} placeholder="moodcam/device1/emotion/face" description="Lecturas instantáneas de rostro para el bridge." />
-                <TextParam label="Topic resumen" value={mqttConfig.topics?.sessionSummary} onChange={(value) => onMqttConfigChange('topics.sessionSummary', value)} placeholder="moodcam/device1/session/summary" description="Resumen final que dispara la decisión IA." />
-                <TextParam label="Topic plan IA" value={mqttConfig.topics?.strokePlan} onChange={(value) => onMqttConfigChange('topics.strokePlan', value)} placeholder="ai/device1/stroke_plan" description="Plan validado publicado por el AI Bridge." />
-                <TextParam label="Topic comandos" value={mqttConfig.topics?.robotCommand} onChange={(value) => onMqttConfigChange('topics.robotCommand', value)} placeholder="robot/device1/command" description="Secuencia de puntos para ESP32." />
-                <TextParam label="Topic estado robot" value={mqttConfig.topics?.robotStatus} onChange={(value) => onMqttConfigChange('topics.robotStatus', value)} placeholder="robot/device1/status" description="Respuestas del ESP32." />
-                <TextParam label="Topic errores" value={mqttConfig.topics?.systemError} onChange={(value) => onMqttConfigChange('topics.systemError', value)} placeholder="system/device1/error" description="Errores de ESP32, sistema o fallback del AI Bridge." />
-                <TextParam label="Topic estado Moodcam" value={mqttConfig.topics?.moodcamStatus} onChange={(value) => onMqttConfigChange('topics.moodcamStatus', value)} placeholder="moodcam/device1/status" description="Online/offline de la app." />
-                <TextParam label="Presencia web" value={mqttConfig.topics?.webPresence} onChange={(value) => onMqttConfigChange('topics.webPresence', value)} placeholder="system/device1/presence/web" description="Latido periodico de la Web App." />
-                <TextParam label="Presencia bridge" value={mqttConfig.topics?.bridgePresence} onChange={(value) => onMqttConfigChange('topics.bridgePresence', value)} placeholder="system/device1/presence/ai-bridge" description="Latido periodico del AI Bridge." />
-                <TextParam label="Presencia ESP32" value={mqttConfig.topics?.esp32Presence} onChange={(value) => onMqttConfigChange('topics.esp32Presence', value)} placeholder="system/device1/presence/esp32" description="Latido periodico del firmware real." />
-                <TextParam label="Presencia simulador" value={mqttConfig.topics?.simulatorPresence} onChange={(value) => onMqttConfigChange('topics.simulatorPresence', value)} placeholder="system/device1/presence/simulator" description="Latido periodico del simulador local." />
-              </div>
-
-              <RangeParam
-                param={{ key: 'interval', label: 'Intervalo heartbeat (ms)', min: 500, max: 10000, step: 500 }}
-                value={mqttConfig.interval}
-                onChange={(_, value) => onMqttConfigChange('interval', value)}
-              />
-              <p className="text-xs text-gray-600">Tiempo máximo entre publicaciones. Si la emoción dominante no cambia, se envía un heartbeat tras este intervalo.</p>
+              <p className="text-xs text-gray-600">
+                Los topics MQTT se generan automaticamente a partir del Device ID para simplificar la configuracion.
+              </p>
 
               <button type="button" onClick={onMqttReset} className="text-xs text-gray-500 transition-colors hover:text-gray-300">
                 Restaurar defaults MQTT

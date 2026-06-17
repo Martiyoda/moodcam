@@ -42,16 +42,13 @@ test('mapea emocion facial existente a categorias simples', () => {
   assert.ok(scores.joyful > scores.calm)
 })
 
-test('prepara perfiles de pintor con videos placeholder y respuestas', () => {
+test('prepara perfiles de pintor con respuestas emocionales simples', () => {
   const painter = getPainterProfile('kandinsky')
   const response = selectPainterResponse({ painterId: 'kandinsky', emotion: 'confused' })
 
   assert.equal(painter.id, 'kandinsky')
-  assert.ok(painter.questions.length > 0)
-  assert.ok(painter.openingLine.includes('Kandinsky'))
-  assert.ok(painter.heygenNotes.includes('No imitar voz real'))
-  assert.ok(response.video.src.includes('/painters/placeholders/kandinsky/confused.mp4'))
-  assert.equal(response.video.ready, false)
-  assert.ok(response.script.includes('robot'))
-  assert.ok(response.actionCue.length > 0)
+  assert.equal(Array.isArray(painter.responses), true)
+  assert.ok(painter.responses.length > 0)
+  assert.equal(response.emotion, 'confused')
+  assert.ok(response.text.length > 0)
 })

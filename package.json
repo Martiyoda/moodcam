@@ -8,8 +8,6 @@
     "dev:client": "vite --host 127.0.0.1",
     "dev:server": "node server/index.js",
     "ai:bridge": "node server/ai-bridge/index.js",
-    "robot:simulator": "node server/esp32-simulator/index.js",
-    "demo:robot": "node scripts/demo-stack.mjs",
     "demo:session": "node scripts/mqtt-smoke-session.mjs",
     "test:emotion-bridge": "node examples/emotion_to_hardware_test.mjs",
     "test:publish-emotion": "node examples/publish_emotion_input.mjs",

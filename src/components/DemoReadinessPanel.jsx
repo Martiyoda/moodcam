@@ -44,7 +44,7 @@ export default function DemoReadinessPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Estado del sistema</h2>
-          <p className="mt-1 text-xs text-zinc-500">{calibrationActive ? 'Calibración directa del brazo. AI Bridge aislado.' : 'Ruta esperada: emoción, plan artístico y brazo/simulador.'}</p>
+          <p className="mt-1 text-xs text-zinc-500">{calibrationActive ? 'Calibración directa del brazo. AI Bridge aislado.' : 'Ruta esperada: emoción, plan artístico y brazo físico.'}</p>
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">

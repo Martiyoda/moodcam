@@ -6,7 +6,7 @@ import { validateDecision } from './validator.js'
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url))
 const ROOT_DIR = path.resolve(SERVER_DIR, '..')
-const PROMPT_PATH = path.join(SERVER_DIR, 'openai_decision_prompt.md')
+const PROMPT_PATH = path.join(SERVER_DIR, 'openai_decision_prompt.txt')
 
 const ARTIST_ALIASES = {
   kandinsky: 'kandinsky',

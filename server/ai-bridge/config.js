@@ -63,7 +63,6 @@ function applyTopicOverrides(topics, env) {
     webPresence: env.MQTT_WEB_PRESENCE_TOPIC,
     bridgePresence: env.MQTT_BRIDGE_PRESENCE_TOPIC,
     esp32Presence: env.MQTT_ESP32_PRESENCE_TOPIC,
-    simulatorPresence: env.MQTT_SIMULATOR_PRESENCE_TOPIC,
   }
 
   Object.entries(overrides).forEach(([key, value]) => {
