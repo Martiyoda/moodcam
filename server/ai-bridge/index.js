@@ -49,6 +49,9 @@ export function startAiBridge(config = loadBridgeConfig()) {
         }
 
         console.log(`Plan ${decision.plan.id} publicado (${decision.source}) con ${publishResult.commandCount} mensajes.`)
+        if (decision.reason) {
+          console.warn(`Motivo ${decision.source}: ${decision.reason}`)
+        }
       }
     } catch (error) {
       publishBridgeError(client, config, {

@@ -209,6 +209,7 @@ export default function useMqtt() {
                     payload: parseJsonMessage(message),
                     timestamp: Date.now(),
                 })
+                setLastSystemError(null)
             }
             if (topic === getTopic(configRef.current, TOPIC_KEYS.systemError)) {
                 setLastSystemError({
@@ -216,7 +217,7 @@ export default function useMqtt() {
                     payload: parseJsonMessage(message),
                     timestamp: Date.now(),
                 })
-                if (parsedPayload?.type !== 'ai_bridge_error') {
+                if (parsedPayload?.type !== 'ai_bridge_error' && parsedPayload?.type !== 'bridge_offline') {
                     setLastCalibrationError(receivedMessage)
                 }
             }
