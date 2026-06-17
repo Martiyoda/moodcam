@@ -1,17 +1,26 @@
 import mqtt from 'mqtt'
 import { pathToFileURL } from 'node:url'
-import { TOPIC_KEYS, parseJsonMessage } from '../../packages/contracts/mqttContract.js'
+import { TOPIC_KEYS, buildPresencePayload, parseJsonMessage } from '../../packages/contracts/mqttContract.js'
 import { buildMqttOptions, loadBridgeConfig } from './config.js'
 import { decideArtPlan } from './providers/artDecisionProvider.js'
 import { publishBridgeError, publishPlanAndCommands } from './providers/robotCommandPublisher.js'
 
 const sessions = new Map()
+const BRIDGE_PRESENCE_INTERVAL_MS = 5000
 
 export function startAiBridge(config = loadBridgeConfig()) {
   const client = mqtt.connect(config.mqttUrl, buildMqttOptions(config))
+  const startedAt = Date.now()
+  let presenceTimer = null
 
   client.on('connect', () => {
     console.log(`AI Bridge conectado a ${config.mqttUrl} para ${config.deviceId}`)
+    console.log(`AI Bridge presencia MQTT: ${config.topics[TOPIC_KEYS.bridgePresence]}`)
+    publishBridgePresence(client, config, startedAt)
+    if (presenceTimer) clearInterval(presenceTimer)
+    presenceTimer = setInterval(() => {
+      if (client.connected) publishBridgePresence(client, config, startedAt)
+    }, BRIDGE_PRESENCE_INTERVAL_MS)
     client.subscribe([
       config.topics[TOPIC_KEYS.sessionStart],
       config.topics[TOPIC_KEYS.faceEmotion],
@@ -67,7 +76,23 @@ export function startAiBridge(config = loadBridgeConfig()) {
     console.error('MQTT bridge error:', error.message)
   })
 
+  client.on('close', () => {
+    if (presenceTimer) {
+      clearInterval(presenceTimer)
+      presenceTimer = null
+    }
+  })
+
   return client
+}
+
+function publishBridgePresence(client, config, startedAt) {
+  client.publish(config.topics[TOPIC_KEYS.bridgePresence], JSON.stringify(buildPresencePayload({
+    deviceId: config.deviceId,
+    component: 'ai-bridge',
+    uptimeMs: Date.now() - startedAt,
+    intervalMs: BRIDGE_PRESENCE_INTERVAL_MS,
+  })), { qos: 0, retain: true })
 }
 
 function rememberSession(payload) {

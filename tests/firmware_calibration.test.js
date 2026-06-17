@@ -5,6 +5,7 @@ import test from 'node:test'
 const config = readFileSync(new URL('../arduino/main/src/robot_config.h', import.meta.url), 'utf8')
 const main = readFileSync(new URL('../arduino/main/main.ino', import.meta.url), 'utf8')
 const motors = readFileSync(new URL('../arduino/main/src/core/motors.cpp', import.meta.url), 'utf8')
+const mqttConfigExample = readFileSync(new URL('../arduino/main/src/config.example.h', import.meta.url), 'utf8')
 
 function functionBody(source, name, nextName) {
   const start = source.indexOf(name)
@@ -75,4 +76,13 @@ test('la interpolacion de calibracion es no bloqueante', () => {
   assert.doesNotMatch(update, /delay\(/)
   assert.ok(main.indexOf('mqttClient.loop()') < main.indexOf('updateCalibrationMotion(completedServo'))
   assert.ok(main.indexOf('if (!Serial.available())') < main.indexOf('updateCalibrationMotion(completedServo'))
+})
+
+test('publica presencia MQTT periodica separada del estado del robot', () => {
+  assert.match(mqttConfigExample, /#define TOPIC_ESP32_PRESENCE "system\/" MQTT_DEVICE_ID "\/presence\/esp32"/)
+  assert.match(main, /constexpr unsigned long MQTT_PRESENCE_MS = 5000/)
+  assert.match(main, /void publishPresence\(bool force\)/)
+  assert.match(main, /mqttClient\.publish\(TOPIC_ESP32_PRESENCE, payload\.c_str\(\), true\)/)
+  assert.match(main, /publishPresence\(true\)/)
+  assert.match(main, /mqttClient\.loop\(\);[\s\S]*publishPresence\(\)/)
 })

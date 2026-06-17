@@ -5,6 +5,7 @@ import {
     DEFAULT_DEVICE_ID,
     TOPIC_KEYS,
     buildFaceEmotionPayload,
+    buildPresencePayload,
     buildSessionStartPayload,
     buildSessionSummaryPayload,
     createMqttClientId,
@@ -15,6 +16,7 @@ import {
 } from '../lib/mqttContract'
 
 const MQTT_STORAGE_KEY = 'moodcam-mqtt-config'
+const WEB_PRESENCE_INTERVAL_MS = 5000
 
 export const DEFAULT_MQTT_CONFIG = {
     enabled: false,
@@ -65,6 +67,18 @@ function getTopic(config, key) {
 
 function toJsonPayload(payload) {
     return JSON.stringify(payload)
+}
+
+function publishWebPresence(client, config, startedAt = Date.now(), status = 'online', reason) {
+    const payload = buildPresencePayload({
+        deviceId: config.deviceId,
+        component: 'web',
+        status,
+        uptimeMs: status === 'online' ? Date.now() - startedAt : undefined,
+        intervalMs: status === 'online' ? WEB_PRESENCE_INTERVAL_MS : undefined,
+        reason,
+    })
+    client.publish(getTopic(config, TOPIC_KEYS.webPresence), JSON.stringify(payload), { qos: 0, retain: true })
 }
 
 export default function useMqtt() {
@@ -178,6 +192,9 @@ export default function useMqtt() {
         }
         clientRef.current = client
 
+        let presenceTimer = null
+        const startedAt = Date.now()
+
         client.on('connect', () => {
             setConnectionStatus('connected')
             setLastError(null)
@@ -187,6 +204,11 @@ export default function useMqtt() {
                 JSON.stringify({ status: 'online', timestamp: Date.now() }),
                 { qos: 1, retain: true }
             )
+            publishWebPresence(client, configRef.current, startedAt)
+            if (presenceTimer) window.clearInterval(presenceTimer)
+            presenceTimer = window.setInterval(() => {
+                if (client.connected) publishWebPresence(client, configRef.current, startedAt)
+            }, WEB_PRESENCE_INTERVAL_MS)
             client.subscribe([...new Set([
                 getTopic(configRef.current, TOPIC_KEYS.robotStatus),
                 getTopic(configRef.current, TOPIC_KEYS.strokePlan),
@@ -246,6 +268,10 @@ export default function useMqtt() {
         })
 
         return () => {
+            if (presenceTimer) {
+                window.clearInterval(presenceTimer)
+                presenceTimer = null
+            }
             // Publicar offline antes de cerrar
             if (client.connected) {
                 client.publish(
@@ -253,6 +279,7 @@ export default function useMqtt() {
                     JSON.stringify({ status: 'offline', timestamp: Date.now() }),
                     { qos: 1, retain: true }
                 )
+                publishWebPresence(client, configRef.current, startedAt, 'offline', 'disconnect')
             }
             client.end(true)
             clientRef.current = null

@@ -1,5 +1,5 @@
 import mqtt from 'mqtt'
-import { DEFAULT_DEVICE_ID, TOPIC_KEYS, createMqttClientId, createTopicMap, normalizeDeviceId, parseJsonMessage } from '../../packages/contracts/mqttContract.js'
+import { DEFAULT_DEVICE_ID, TOPIC_KEYS, buildPresencePayload, createMqttClientId, createTopicMap, normalizeDeviceId, parseJsonMessage } from '../../packages/contracts/mqttContract.js'
 import { loadServerEnv } from '../loadEnv.js'
 import { createCalibrationSimulator } from './calibrationState.js'
 
@@ -10,6 +10,9 @@ const mqttUrl = process.env.MQTT_URL || process.env.MQTT_BROKER_URL || 'wss://br
 const commandDelayMs = clampNumber(process.env.ESP32_SIMULATOR_DELAY_MS, 0, 5000, 80)
 const topics = createTopicMap(deviceId)
 const calibration = createCalibrationSimulator()
+const SIMULATOR_PRESENCE_INTERVAL_MS = 5000
+const startedAt = Date.now()
+let presenceTimer = null
 
 const client = mqtt.connect(mqttUrl, {
   clean: true,
@@ -17,10 +20,26 @@ const client = mqtt.connect(mqttUrl, {
   clientId: createMqttClientId('simulator', deviceId),
   username: process.env.MQTT_USERNAME || undefined,
   password: process.env.MQTT_PASSWORD || undefined,
+  will: {
+    topic: topics[TOPIC_KEYS.simulatorPresence],
+    payload: JSON.stringify(buildPresencePayload({
+      deviceId,
+      component: 'simulator',
+      status: 'offline',
+      reason: 'lwt',
+    })),
+    qos: 0,
+    retain: true,
+  },
 })
 
 client.on('connect', () => {
   console.log(`ESP32 simulator conectado a ${mqttUrl} para ${deviceId}`)
+  publishSimulatorPresence()
+  if (presenceTimer) clearInterval(presenceTimer)
+  presenceTimer = setInterval(() => {
+    if (client.connected) publishSimulatorPresence()
+  }, SIMULATOR_PRESENCE_INTERVAL_MS)
   client.subscribe(topics[TOPIC_KEYS.robotCommand], { qos: 1 })
   publishStatus('idle', { message: 'Simulador listo.' })
   publishCalibrationStatus({ status: 'joint_state', ...calibration.getState(), position_known: false, angles_are_commanded: true })
@@ -64,6 +83,22 @@ client.on('message', async (topic, message) => {
 client.on('error', (error) => {
   console.error('ESP32 simulator MQTT error:', error.message)
 })
+
+client.on('close', () => {
+  if (presenceTimer) {
+    clearInterval(presenceTimer)
+    presenceTimer = null
+  }
+})
+
+function publishSimulatorPresence() {
+  client.publish(topics[TOPIC_KEYS.simulatorPresence], JSON.stringify(buildPresencePayload({
+    deviceId,
+    component: 'simulator',
+    uptimeMs: Date.now() - startedAt,
+    intervalMs: SIMULATOR_PRESENCE_INTERVAL_MS,
+  })), { qos: 0, retain: true })
+}
 
 function handleCalibrationCommand(command) {
   const messages = calibration.handleCommand(command)

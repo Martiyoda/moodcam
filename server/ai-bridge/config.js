@@ -1,4 +1,4 @@
-import { DEFAULT_DEVICE_ID, createMqttClientId, createTopicMap, normalizeDeviceId } from '../../packages/contracts/mqttContract.js'
+import { DEFAULT_DEVICE_ID, TOPIC_KEYS, buildPresencePayload, createMqttClientId, createTopicMap, normalizeDeviceId } from '../../packages/contracts/mqttContract.js'
 import { loadServerEnv } from '../loadEnv.js'
 
 loadServerEnv()
@@ -27,15 +27,15 @@ export function buildMqttOptions(config) {
     connectTimeout: 10000,
     clientId: createMqttClientId('ai-bridge', config.deviceId),
     will: {
-      topic: config.topics.systemError,
-      payload: JSON.stringify({
-        type: 'bridge_offline',
-        device_id: config.deviceId,
-        message: 'AI Bridge desconectado inesperadamente.',
-        timestamp: Date.now(),
-      }),
-      qos: 1,
-      retain: false,
+      topic: config.topics[TOPIC_KEYS.bridgePresence],
+      payload: JSON.stringify(buildPresencePayload({
+        deviceId: config.deviceId,
+        component: 'ai-bridge',
+        status: 'offline',
+        reason: 'lwt',
+      })),
+      qos: 0,
+      retain: true,
     },
   }
 
@@ -60,6 +60,10 @@ function applyTopicOverrides(topics, env) {
     robotStatus: env.MQTT_ROBOT_STATUS_TOPIC,
     systemError: env.MQTT_SYSTEM_ERROR_TOPIC,
     moodcamStatus: env.MQTT_MOODCAM_STATUS_TOPIC,
+    webPresence: env.MQTT_WEB_PRESENCE_TOPIC,
+    bridgePresence: env.MQTT_BRIDGE_PRESENCE_TOPIC,
+    esp32Presence: env.MQTT_ESP32_PRESENCE_TOPIC,
+    simulatorPresence: env.MQTT_SIMULATOR_PRESENCE_TOPIC,
   }
 
   Object.entries(overrides).forEach(([key, value]) => {

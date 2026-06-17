@@ -255,6 +255,10 @@ export default function SettingsPage({ config, onConfigChange, onReset, mqttConf
                 <TextParam label="Topic estado robot" value={mqttConfig.topics?.robotStatus} onChange={(value) => onMqttConfigChange('topics.robotStatus', value)} placeholder="robot/device1/status" description="Respuestas del ESP32." />
                 <TextParam label="Topic errores" value={mqttConfig.topics?.systemError} onChange={(value) => onMqttConfigChange('topics.systemError', value)} placeholder="system/device1/error" description="Errores de ESP32, sistema o fallback del AI Bridge." />
                 <TextParam label="Topic estado Moodcam" value={mqttConfig.topics?.moodcamStatus} onChange={(value) => onMqttConfigChange('topics.moodcamStatus', value)} placeholder="moodcam/device1/status" description="Online/offline de la app." />
+                <TextParam label="Presencia web" value={mqttConfig.topics?.webPresence} onChange={(value) => onMqttConfigChange('topics.webPresence', value)} placeholder="system/device1/presence/web" description="Latido periodico de la Web App." />
+                <TextParam label="Presencia bridge" value={mqttConfig.topics?.bridgePresence} onChange={(value) => onMqttConfigChange('topics.bridgePresence', value)} placeholder="system/device1/presence/ai-bridge" description="Latido periodico del AI Bridge." />
+                <TextParam label="Presencia ESP32" value={mqttConfig.topics?.esp32Presence} onChange={(value) => onMqttConfigChange('topics.esp32Presence', value)} placeholder="system/device1/presence/esp32" description="Latido periodico del firmware real." />
+                <TextParam label="Presencia simulador" value={mqttConfig.topics?.simulatorPresence} onChange={(value) => onMqttConfigChange('topics.simulatorPresence', value)} placeholder="system/device1/presence/simulator" description="Latido periodico del simulador local." />
               </div>
 
               <RangeParam

@@ -18,6 +18,10 @@ export const TOPIC_KEYS = {
     robotStatus: 'robotStatus',
     systemError: 'systemError',
     moodcamStatus: 'moodcamStatus',
+    webPresence: 'webPresence',
+    bridgePresence: 'bridgePresence',
+    esp32Presence: 'esp32Presence',
+    simulatorPresence: 'simulatorPresence',
 }
 
 export const TOPIC_TEMPLATES = {
@@ -29,6 +33,10 @@ export const TOPIC_TEMPLATES = {
     [TOPIC_KEYS.robotStatus]: 'robot/{deviceId}/status',
     [TOPIC_KEYS.systemError]: 'system/{deviceId}/error',
     [TOPIC_KEYS.moodcamStatus]: 'moodcam/{deviceId}/status',
+    [TOPIC_KEYS.webPresence]: 'system/{deviceId}/presence/web',
+    [TOPIC_KEYS.bridgePresence]: 'system/{deviceId}/presence/ai-bridge',
+    [TOPIC_KEYS.esp32Presence]: 'system/{deviceId}/presence/esp32',
+    [TOPIC_KEYS.simulatorPresence]: 'system/{deviceId}/presence/simulator',
 }
 
 export function normalizeDeviceId(deviceId = DEFAULT_DEVICE_ID) {
@@ -101,6 +109,21 @@ export function buildFaceEmotionPayload({ sessionId, deviceId, artistId, emotion
         session_active: Boolean(sessionActive),
         timestamp,
         detection_time: new Date(timestamp).toISOString(),
+    })
+}
+
+export function buildPresencePayload({ deviceId, component, status = 'online', uptimeMs, intervalMs, reason, extra = {} }) {
+    const timestamp = Date.now()
+    return compactObject({
+        type: 'presence',
+        device_id: normalizeDeviceId(deviceId),
+        component,
+        status,
+        timestamp,
+        uptime_ms: uptimeMs,
+        interval_ms: intervalMs,
+        reason,
+        ...extra,
     })
 }
 

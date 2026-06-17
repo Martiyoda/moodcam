@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   ARM_CALIBRATION_COMMAND_TYPES,
   buildFaceEmotionPayload,
+  buildPresencePayload,
   buildSessionSummaryPayload,
   calibrationTopicsFromMap,
   createMqttClientId,
@@ -28,6 +29,10 @@ test('crea topics por deviceId para Moodcam, AI Bridge y robot', () => {
   assert.equal(topics.strokePlan, 'ai/robot-aula-1/stroke_plan')
   assert.equal(topics.robotCommand, 'robot/robot-aula-1/command')
   assert.equal(topics.systemError, 'system/robot-aula-1/error')
+  assert.equal(topics.webPresence, 'system/robot-aula-1/presence/web')
+  assert.equal(topics.bridgePresence, 'system/robot-aula-1/presence/ai-bridge')
+  assert.equal(topics.esp32Presence, 'system/robot-aula-1/presence/esp32')
+  assert.equal(topics.simulatorPresence, 'system/robot-aula-1/presence/simulator')
   assert.deepEqual(calibrationTopicsFromMap(topics), {
     command: 'robot/robot-aula-1/command',
     status: 'robot/robot-aula-1/status',
@@ -66,6 +71,22 @@ test('normaliza payloads de observacion y resumen de sesion', () => {
   assert.equal(summary.type, 'session_summary')
   assert.equal(summary.artist_id, 'kandinsky')
   assert.equal(summary.combined_emotions[0].emotion, 'happy')
+})
+
+test('crea payloads de presencia con formato compartido', () => {
+  const presence = buildPresencePayload({
+    deviceId: 'robot aula 1',
+    component: 'ai-bridge',
+    uptimeMs: 1234,
+    intervalMs: 5000,
+  })
+
+  assert.equal(presence.type, 'presence')
+  assert.equal(presence.device_id, 'robot-aula-1')
+  assert.equal(presence.component, 'ai-bridge')
+  assert.equal(presence.status, 'online')
+  assert.equal(presence.uptime_ms, 1234)
+  assert.equal(presence.interval_ms, 5000)
 })
 
 test('envuelve comandos de robot con inicio, indices y fin', () => {

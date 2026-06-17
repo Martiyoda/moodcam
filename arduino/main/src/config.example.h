@@ -21,3 +21,4 @@
 #define TOPIC_EMOTION_INPUT "moodcam/" MQTT_DEVICE_ID "/emotion/face"
 #define TOPIC_ROBOT_STATUS "robot/" MQTT_DEVICE_ID "/status"
 #define TOPIC_ROBOT_ERROR "system/" MQTT_DEVICE_ID "/error"
+#define TOPIC_ESP32_PRESENCE "system/" MQTT_DEVICE_ID "/presence/esp32"

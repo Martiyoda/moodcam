@@ -26,6 +26,7 @@ constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
 constexpr unsigned long WIFI_STATUS_LOG_MS = 5000;
 constexpr unsigned long MQTT_RETRY_MS = 5000;
 constexpr unsigned long HEARTBEAT_LOG_MS = 3000;
+constexpr unsigned long MQTT_PRESENCE_MS = 5000;
 constexpr bool WIFI_DIAGNOSTIC_SCAN = true;
 
 WiFiClient wifiClient;
@@ -36,6 +37,7 @@ unsigned long lastWifiAttempt = 0;
 unsigned long lastMqttAttempt = 0;
 unsigned long lastWifiStatusLog = 0;
 unsigned long lastHeartbeatLog = 0;
+unsigned long lastMqttPresence = 0;
 bool wifiAttemptInProgress = false;
 
 void printHelp();
@@ -49,6 +51,7 @@ void publishError(const char* detail);
 void publishJointState();
 void publishStopped(const char* source);
 void printHeartbeat();
+void publishPresence(bool force = false);
 void handleInputCommand(const String& json, bool fromMqtt);
 void handleEmotionCommand(const String& json, bool fromMqtt);
 void handleCalibrationCommand(const String& json, const String& type);
@@ -118,6 +121,7 @@ void loop() {
       }
     } else {
       mqttClient.loop();
+      publishPresence();
     }
   }
 
@@ -169,6 +173,24 @@ void printHeartbeat() {
   Serial.print(wifiStatusText(WiFi.status()));
   Serial.print(" mqtt=");
   Serial.println(mqttClient.connected() ? "on" : "off");
+}
+
+void publishPresence(bool force) {
+  if (!NETWORK_ENABLED || !mqttClient.connected()) {
+    return;
+  }
+  const unsigned long now = millis();
+  if (!force && lastMqttPresence != 0 && now - lastMqttPresence < MQTT_PRESENCE_MS) {
+    return;
+  }
+  lastMqttPresence = now;
+  String payload = String("{\"type\":\"presence\",\"device_id\":\"") + MQTT_DEVICE_ID
+    + "\",\"component\":\"esp32\",\"status\":\"online\",\"timestamp\":" + now
+    + ",\"uptime_ms\":" + now
+    + ",\"interval_ms\":" + MQTT_PRESENCE_MS
+    + ",\"wifi\":\"" + wifiStatusText(WiFi.status())
+    + "\",\"mqtt\":\"connected\"}";
+  mqttClient.publish(TOPIC_ESP32_PRESENCE, payload.c_str(), true);
 }
 
 void printHelp() {
@@ -363,6 +385,7 @@ void connectMQTT() {
     Serial.print("Topic suscrito: ");
     Serial.println(TOPIC_EMOTION_INPUT);
     publishStatus("completed", "mqtt_connected");
+    publishPresence(true);
   } else {
     publishError("no se pudo suscribir a topics mqtt");
   }
