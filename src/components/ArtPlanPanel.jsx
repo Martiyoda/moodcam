@@ -1,6 +1,6 @@
 import { getEmotionLabel } from '../lib/artEngine'
 
-export default function ArtPlanPanel({ plan, planSource, mqttEnabled, mqttStatus, robotStatus, onSend, disabled = false }) {
+export default function ArtPlanPanel({ plan, planSource, mqttEnabled, mqttStatus, robotStatus, onSend, disabled = false, disabledReason = '' }) {
   if (!plan) {
     return (
       <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-4 text-sm text-gray-500">
@@ -34,9 +34,15 @@ export default function ArtPlanPanel({ plan, planSource, mqttEnabled, mqttStatus
           disabled={disabled || !mqttEnabled || mqttStatus !== 'connected'}
           className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 text-gray-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-emerald-400 transition-colors"
         >
-          {disabled ? 'Brazo calibrando' : 'Pintar la obra'}
+          {disabled ? 'Pintura no disponible' : 'Pintar la obra'}
         </button>
       </div>
+
+      {disabledReason && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          {disabledReason}
+        </div>
+      )}
 
       <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-4">
         <span className="block text-[10px] uppercase tracking-wider text-amber-200/70">Resumen artístico</span>

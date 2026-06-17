@@ -350,9 +350,18 @@ function App() {
     stopCamera()
   }, [handleResetExperience, stopCamera])
 
+  const robotPaintBlockedReason = isCalibrationOnlyRobotError(lastSystemError?.payload)
+    ? 'El ESP32 conectado está en modo calibración segura. Flashea un firmware con FINAL_ARM_MODE activo para pintar.'
+    : ''
+  const robotPaintDisabled = calibrationLocked || Boolean(robotPaintBlockedReason)
+
   const handleSendPlan = useCallback(() => {
     if (calibrationLocked) {
       setActionMessage('El envío artístico está bloqueado mientras la calibración del brazo está activa.')
+      return
+    }
+    if (robotPaintBlockedReason) {
+      setActionMessage(robotPaintBlockedReason)
       return
     }
     if (!artPlan || combinedEmotionSummary.length === 0) return
@@ -394,6 +403,7 @@ function App() {
     transcript,
     voiceSummary,
     calibrationLocked,
+    robotPaintBlockedReason,
   ])
 
   const handleCalibrationStateChange = useCallback((nextState) => {
@@ -626,7 +636,7 @@ function App() {
                 <VoiceEmotionPanel latestSample={latestVoiceSample} summary={voiceSummary} combinedSummary={combinedEmotionSummary} faceSummary={displayedFaceSummary} />
               </div>
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-                <ArtPlanPanel plan={artPlan} planSource={planSource} mqttEnabled={mqttConfig.enabled} mqttStatus={connectionStatus} robotStatus={robotStatusPayload} onSend={handleSendPlan} disabled={calibrationLocked} />
+                <ArtPlanPanel plan={artPlan} planSource={planSource} mqttEnabled={mqttConfig.enabled} mqttStatus={connectionStatus} robotStatus={robotStatusPayload} onSend={handleSendPlan} disabled={robotPaintDisabled} disabledReason={robotPaintBlockedReason} />
               </div>
             </div>
             <ScreenActions>
@@ -713,6 +723,11 @@ function ScreenActions({ children }) {
 function formatSystemError(payload) {
   if (typeof payload === 'string') return payload
   return payload?.message || payload?.error || JSON.stringify(payload)
+}
+
+function isCalibrationOnlyRobotError(payload) {
+  const detail = typeof payload === 'string' ? payload : payload?.detail || payload?.message || payload?.error || ''
+  return String(detail).toLowerCase().includes('tipo de comando de calibracion desconocido')
 }
 
 function blockedStepMessage(step) {

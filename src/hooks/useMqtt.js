@@ -217,7 +217,7 @@ export default function useMqtt() {
                     payload: parseJsonMessage(message),
                     timestamp: Date.now(),
                 })
-                if (parsedPayload?.type !== 'ai_bridge_error' && parsedPayload?.type !== 'bridge_offline') {
+                if (parsedPayload?.type !== 'ai_bridge_error' && parsedPayload?.type !== 'bridge_offline' && !isCalibrationOnlyRobotError(parsedPayload)) {
                     setLastCalibrationError(receivedMessage)
                 }
             }
@@ -401,4 +401,9 @@ function isCalibrationStatus(payload) {
         'servos_released',
         'servo_attaching',
     ].includes(payload?.status)
+}
+
+function isCalibrationOnlyRobotError(payload) {
+    const detail = typeof payload === 'string' ? payload : payload?.detail || payload?.message || payload?.error || ''
+    return String(detail).toLowerCase().includes('tipo de comando de calibracion desconocido')
 }
