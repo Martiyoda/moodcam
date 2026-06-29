@@ -6,13 +6,26 @@ import EmotionDisplay from './components/EmotionDisplay'
 import SettingsModal from './components/SettingsModal'
 import {generateSimpleArtPlan} from './lib/simpleArtEngine.js'
 import { generateArtPlan } from './lib/artEngine'
+import VideoLoop from './components/Avatar/VideoLoop'
 // Creamos la conexión entre moodcam y HiveMQ
 import client from './lib/mqttClient'
+import {useVoiceConversation} from './components/Avatar/hooks/useVoiceConversation.js'
+import {useStabilizedValue} from './components/Avatar/hooks/useStabilizedValue.js'
 
 
 // Es el componente principal de la aplicación, el cerebro de toda la página. React (http://localhost:5173) ejecuta App()
 // Lo que aparece en el return es lo que se visualiza
 function App() {
+
+    const {
+    isRecording,
+    transcription,
+    connectionStatus: voiceConnectionStatus,
+    isSpeaking,
+    currentUserPhoto,
+    toggleConversation,
+    clearError,
+  } = useVoiceConversation();
 
   // Función de prueba para describir movimientos con el brazo
 const runSimpleArtPlan = () => {
@@ -181,6 +194,8 @@ const testArtEngine = () => {
     }
   }, [emotions, dominant, publishEmotion])
 
+    const stabilizedConnectionStatus = useStabilizedValue(voiceConnectionStatus, 400);
+
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col">
       {/* Header */}
@@ -225,7 +240,7 @@ const testArtEngine = () => {
         {/* Columna izquierda: Cámara */}
         <div className="w-full lg:w-3/5 space-y-4">
           <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
-
+          <VideoLoop connectionStatus={stabilizedConnectionStatus} isSpeaking={isSpeaking} />
           {/* Controles */}
           <div className="flex justify-center gap-3">
             {!cameraActive ? (
@@ -258,7 +273,6 @@ const testArtEngine = () => {
               </button>
             )}
           </div>
-
           {/* Error */}
           {error && (
             <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-xl p-3 text-sm text-center">
