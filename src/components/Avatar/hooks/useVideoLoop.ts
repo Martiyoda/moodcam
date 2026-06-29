@@ -1,8 +1,10 @@
 import { useRef, useEffect, useState } from "react";
 import { safePlayVideo } from "../../../utils/videoUtils";
+import idleVideoSrc from "../../../animations/idle_video.mp4";
+import speakVideoSrc from "../../../animations/speak_video.mp4";
 
-const IDLE_VIDEO = "../animations/idle_video.mp4";
-const SPEAK_VIDEO = "../animations/speak_video.mp4";
+const IDLE_VIDEO = idleVideoSrc;
+const SPEAK_VIDEO = speakVideoSrc;
 
 export type VideoMode = "idle" | "speak";
 

@@ -22,7 +22,7 @@ export default function VideoLoop({ connectionStatus, isSpeaking }: VideoLoopPro
 
   return (
     <div
-      className="relative w-full h-full min-h-screen overflow-hidden"
+      className="relative w-full aspect-[4/3] min-h-[320px] overflow-hidden bg-black"
       style={{ contain: "layout" }}
     >
       {/* Video de fondo fijo en loop continuo */}

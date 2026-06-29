@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import backgroundVideoSrc from "../../../animations/video_background.mp4";
 
 /**
  * Hook para manejar el video de fondo que se reproduce en loop continuo
@@ -10,7 +11,7 @@ export function useBackgroundVideo() {
     const backgroundVideo = backgroundVideoRef.current;
     if (!backgroundVideo) return;
 
-    backgroundVideo.src = "/animations/video_background.mp4";
+    backgroundVideo.src = backgroundVideoSrc;
     backgroundVideo.load();
 
     const handleBackgroundCanPlay = () => {
