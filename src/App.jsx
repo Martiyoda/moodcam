@@ -4,7 +4,6 @@ import useMqtt from './hooks/useMqtt'
 import CameraView from './components/CameraView'
 import EmotionDisplay from './components/EmotionDisplay'
 import SettingsModal from './components/SettingsModal'
-// Importamos el plan de dibujo
 import {generateSimpleArtPlan} from './lib/simpleArtEngine.js'
 import { generateArtPlan } from './lib/artEngine'
 // Creamos la conexión entre moodcam y HiveMQ
