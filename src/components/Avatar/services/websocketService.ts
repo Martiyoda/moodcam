@@ -62,11 +62,6 @@ export class WebSocketService {
         input_audio_transcription: { ...SESSION_CONFIG.input_audio_transcription },
       } as SessionConfig,
     });
-
-    // Solicitar respuesta inicial
-    this.send({
-      type: "response.create",
-    });
   }
 
   private async handleMessage(event: MessageEvent) {

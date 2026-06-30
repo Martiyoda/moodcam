@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import os
 
@@ -122,7 +123,11 @@ async def forward_client_to_azure(websocket: WebSocket, realtime_ws) -> None:
             if "bytes" in data and data["bytes"] is not None:
                 payload = data["bytes"]
                 if payload:
-                    await realtime_ws.send(payload)
+                    audio_event = {
+                        "type": "input_audio_buffer.append",
+                        "audio": base64.b64encode(payload).decode("utf-8"),
+                    }
+                    await realtime_ws.send(json.dumps(audio_event))
                 continue
 
             if "text" in data and data["text"] is not None:
