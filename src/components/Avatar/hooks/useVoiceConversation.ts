@@ -42,7 +42,7 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
   } = useWebSocket();
   const { startRecording, stopRecording, isRecording: audioIsRecording } =
     useAudioRecording();
-  const { playAudio, stopAllAudio, hasActiveAudio } = useAudioPlayback();
+  const { preparePlayback, playAudio, stopAllAudio, hasActiveAudio } = useAudioPlayback();
 
   const currentResponseIdRef = useRef<string | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -122,6 +122,8 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
     try {
       setError("");
       setConnectionStatus("Connecting");
+
+      await preparePlayback();
 
       onMessage("audio", async (blob: Blob) => {
         if (isInterruptedRef.current) {
@@ -346,6 +348,7 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
     connect,
     onMessage,
     onConnection,
+    preparePlayback,
     startRecording,
     handleAudioChunk,
     playAudio,

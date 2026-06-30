@@ -2,6 +2,7 @@ import { useRef, useCallback } from "react";
 import { AUDIO_PROCESSING } from "../constants";
 
 interface UseAudioPlaybackReturn {
+  preparePlayback: () => Promise<void>;
   playAudio: (audioData: Float32Array) => void;
   stopAllAudio: () => void;
   hasActiveAudio: () => boolean;
@@ -16,7 +17,7 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
   const isPlayingRef = useRef<boolean>(false);
   const nextPlayTimeRef = useRef<number>(0);
   const activeAudioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
-  const prebufferMsRef = useRef<number>(180);
+  const prebufferMsRef = useRef<number>(60);
   const fadeSecondsRef = useRef<number>(0.005);
 
   const initializeAudioContext = useCallback(() => {
@@ -52,6 +53,13 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
     isPlayingRef.current = false;
     nextPlayTimeRef.current = 0;
   }, []);
+
+  const preparePlayback = useCallback(async () => {
+    const audioContext = initializeAudioContext();
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+  }, [initializeAudioContext]);
 
   const playAudioQueue = useCallback(() => {
     const audioContext = initializeAudioContext();
@@ -142,6 +150,7 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
   }, []);
 
   return {
+    preparePlayback,
     playAudio,
     stopAllAudio,
     hasActiveAudio,
