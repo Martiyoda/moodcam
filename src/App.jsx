@@ -40,10 +40,8 @@ function formatPercent(value) {
 function App() {
   const {
     isRecording,
-    transcription,
     connectionStatus: voiceConnectionStatus,
     isSpeaking,
-    currentUserPhoto,
     toggleConversation,
     clearError,
   } = useVoiceConversation()
@@ -248,7 +246,7 @@ function App() {
                   <button
                     onClick={() => {
                       clearError()
-                      toggleConversation(transcription)
+                      toggleConversation()
                     }}
                     className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
                   >
@@ -283,19 +281,6 @@ function App() {
                   age={age}
                   gender={gender}
                 />
-
-                {currentUserPhoto && (
-                  <div className="mt-5 rounded-2xl border border-white/6 bg-white/[0.04] p-3">
-                    <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-                      Usuario actual
-                    </p>
-                    <img
-                      src={currentUserPhoto}
-                      alt="Usuario actual"
-                      className="h-28 w-full rounded-xl object-cover"
-                    />
-                  </div>
-                )}
               </div>
             </div>
 

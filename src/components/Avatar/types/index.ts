@@ -5,29 +5,10 @@ export interface Message {
 }
 
 export type ConnectionStatus = "Disconnected" | "Connecting" | "Connected";
-export type PhotoState = "idle" | "takingPhoto" | "photoTaken";
 
 export interface WebSocketMessage {
   type: string;
   [key: string]: unknown;
-}
-
-export interface CurrentUserNode {
-  userId?: string | number;
-  caricatures: string[];
-  caricaturesTimestamp: string;
-  email: string;
-  fullName: string;
-  photo: string;
-  timestamp: string;
-}
-
-export interface RobotActionNode {
-  caricatureImage?: string;
-  fullName?: string;
-  timestamp?: number;
-  type?: string;
-  userId?: string | number;
 }
 
 export interface SessionConfig {

@@ -1,6 +1,5 @@
 import { VOICE_ASSISTANT_INSTRUCTIONS } from "./aiPrompts";
 
-// src/config.ts
 export const WEBSOCKET_URL =
   import.meta.env.VITE_WS_URL ||
   (typeof window !== "undefined"
@@ -60,6 +59,5 @@ export const SESSION_CONFIG = {
   },
 } as const;
 
-// Re-exportar prompts de IA para facilitar el acceso
 export * from "./aiPrompts";
 

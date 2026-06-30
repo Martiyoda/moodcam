@@ -1,15 +1,15 @@
-# Script to start the full development environment
-# Creates the backend venv if needed, installs dependencies, and starts backend + frontend.
+# Script to start the local development environment.
+# Starts the backend and frontend directly, without Docker.
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Starting development environment" -ForegroundColor Cyan
+Write-Host "  Starting local development environment" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Get project paths
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backPath = Join-Path $projectRoot "back"
-$frontPath = Join-Path $projectRoot "front"
+$frontPath = $projectRoot
 $venvDir = Join-Path $backPath "venv"
 $venvPath = Join-Path $venvDir "Scripts\Activate.ps1"
 $pythonPath = Join-Path $venvDir "Scripts\python.exe"
@@ -20,7 +20,7 @@ if (-not (Test-Path $venvPath)) {
     Write-Host "Virtual environment not found. Creating it..." -ForegroundColor Yellow
     Push-Location $backPath
     try {
-        py -m venv venv
+        py -3 -m venv venv
     } finally {
         Pop-Location
     }
@@ -31,14 +31,21 @@ if (-not (Test-Path $pythonPath)) {
     exit 1
 }
 
+# Install backend dependencies if they are missing or outdated.
+if (-not (Test-Path $requirementsPath)) {
+    Write-Host "ERROR: requirements.txt not found at: $requirementsPath" -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "Installing backend dependencies..." -ForegroundColor Yellow
 & $pythonPath -m pip install --upgrade pip
 & $pythonPath -m pip install -r $requirementsPath
 
-# Verify frontend directory exists
-if (-not (Test-Path $frontPath)) {
-    Write-Host "ERROR: Frontend directory not found at: $frontPath" -ForegroundColor Red
-    exit 1
+# Ensure the frontend dependencies exist.
+$nodeModulesPath = Join-Path $frontPath "node_modules"
+if (-not (Test-Path $nodeModulesPath)) {
+    Write-Host "Frontend dependencies not found. Running npm install..." -ForegroundColor Yellow
+    npm install
 }
 
 Write-Host "1. Backend ready..." -ForegroundColor Yellow
@@ -72,6 +79,9 @@ Write-Host "  Services started successfully" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Backend: http://localhost:8000" -ForegroundColor Yellow
-Write-Host "Frontend: http://localhost:3000" -ForegroundColor Yellow
+Write-Host "Frontend: http://localhost:5173" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "If dependencies are missing, install them manually with:" -ForegroundColor Gray
+Write-Host "  back\\venv\\Scripts\\python.exe -m pip install -r back\\requirements.txt" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Press Ctrl+C in the PowerShell windows to stop the services." -ForegroundColor Gray
