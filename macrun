@@ -1,0 +1,73 @@
+#!/usr/bin/env zsh
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+BACK="$ROOT/back"
+FRONT="$ROOT"
+VENV="$BACK/venv"
+PYTHON="$VENV/bin/python3"
+
+find_available_port() {
+  python3 - <<'PY'
+import os
+import socket
+
+start_port = int(os.getenv("PORT", "8000").strip() or "8000")
+for port in range(start_port, start_port + 20):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("0.0.0.0", port))
+        except OSError:
+            continue
+        print(port)
+        break
+else:
+    print(start_port)
+PY
+}
+
+BACKEND_PORT="$(find_available_port)"
+export PORT="$BACKEND_PORT"
+export VITE_API_URL="http://localhost:${BACKEND_PORT}"
+export VITE_WS_URL="ws://localhost:${BACKEND_PORT}/ws"
+
+if ! command -v python3 >/dev/null 2>&1; then
+  printf "Error: python3 no encontrado. Instala Python 3 y vuelve a ejecutar.\n"
+  exit 1
+fi
+
+printf "[macrun] Preparando backend...\n"
+cd "$BACK"
+if [ ! -d "$VENV" ]; then
+  python3 -m venv venv
+fi
+"$PYTHON" -m pip install --upgrade pip
+"$PYTHON" -m pip install -r requirements.txt
+
+if [ ! -d "$ROOT/node_modules" ]; then
+  printf "[macrun] Instalando dependencias frontend...\n"
+  cd "$ROOT"
+  npm install
+fi
+
+open_terminal_window() {
+  local command="$1"
+  local escaped=${command//\\/\\\\}
+  escaped=${escaped//"/\\"}
+  osascript <<EOF
+tell application "Terminal"
+  activate
+  do script "$escaped"
+end tell
+EOF
+}
+
+printf "[macrun] Abriendo backend en una ventana nueva...\n"
+open_terminal_window "export PORT='$BACKEND_PORT' && cd '$BACK' && '$PYTHON' main.py"
+
+printf "[macrun] Abriendo frontend en una ventana nueva...\n"
+open_terminal_window "export PORT='$BACKEND_PORT' VITE_API_URL='http://localhost:${BACKEND_PORT}' VITE_WS_URL='ws://localhost:${BACKEND_PORT}/ws' && cd '$FRONT' && npm run dev"
+
+printf "[macrun] Backend y frontend arrancando en ventanas nuevas.\n"

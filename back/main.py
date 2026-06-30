@@ -2,13 +2,32 @@ import asyncio
 import base64
 import json
 import os
+import ssl
+from pathlib import Path
 
 import websockets
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-load_dotenv()
+ENV_FILE = Path(__file__).resolve().parent / ".env"
+load_dotenv(ENV_FILE, override=False)
+
+
+def find_available_port(start_port: int = 8000, max_tries: int = 20) -> int:
+    import socket
+
+    for port in range(start_port, start_port + max_tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(("0.0.0.0", port))
+                return port
+            except OSError:
+                continue
+
+    return start_port
+
 
 app = FastAPI(title="Voice Relay API")
 
@@ -45,6 +64,45 @@ def is_backend_configured() -> bool:
     return bool(AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY)
 
 
+def is_ssl_certificate_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "certificate verify failed" in message or "ssl" in message and "certificate" in message
+
+
+async def relay_realtime_session(websocket: WebSocket, realtime_url: str, headers: dict) -> None:
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    try:
+        async with websockets.connect(
+            realtime_url,
+            additional_headers=headers,
+            ssl=ssl_context,
+        ) as realtime_ws:
+            client_task = asyncio.create_task(
+                forward_client_to_azure(websocket, realtime_ws)
+            )
+            azure_task = asyncio.create_task(
+                forward_azure_to_client(websocket, realtime_ws)
+            )
+            done, pending = await asyncio.wait(
+                {client_task, azure_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            for task in pending:
+                task.cancel()
+
+            await asyncio.gather(*pending, return_exceptions=True)
+            for task in done:
+                task.result()
+    except WebSocketDisconnect:
+        return
+    except Exception as exc:
+        raise exc
+
+
 @app.get("/")
 async def root():
     return {"ok": True, "service": "voice-relay"}
@@ -57,6 +115,10 @@ async def health():
         "azure_openai_configured": is_backend_configured(),
         "model_name": MODEL_NAME,
         "api_version": AZURE_OPENAI_API_VERSION,
+        "env_file": str(ENV_FILE),
+        "env_file_exists": ENV_FILE.exists(),
+        "endpoint_configured": bool(AZURE_OPENAI_ENDPOINT),
+        "api_key_configured": bool(AZURE_OPENAI_API_KEY),
     }
 
 
@@ -78,33 +140,26 @@ async def websocket_endpoint(websocket: WebSocket):
     realtime_url = build_realtime_url()
 
     try:
-        async with websockets.connect(
-            realtime_url,
-            additional_headers=headers,
-        ) as realtime_ws:
-            client_task = asyncio.create_task(
-                forward_client_to_azure(websocket, realtime_ws)
-            )
-            azure_task = asyncio.create_task(
-                forward_azure_to_client(websocket, realtime_ws)
-            )
-            done, pending = await asyncio.wait(
-                {client_task, azure_task},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-
-            for task in pending:
-                task.cancel()
-
-            await asyncio.gather(*pending, return_exceptions=True)
-            for task in done:
-                task.result()
+        await relay_realtime_session(websocket, realtime_url, headers)
     except WebSocketDisconnect:
         pass
     except Exception as exc:
         if websocket.client_state.name != "DISCONNECTED":
             try:
-                await websocket.send_json({"type": "error", "message": str(exc)})
+                error_message = str(exc)
+                if not error_message:
+                    error_message = "Error desconocido al conectar con Azure OpenAI"
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": error_message,
+                        "error": {
+                            "type": "azure_connection_error",
+                            "message": error_message,
+                        },
+                    }
+                )
+                await asyncio.sleep(0.1)
             except Exception:
                 pass
     finally:
@@ -166,4 +221,21 @@ async def forward_azure_to_client(websocket: WebSocket, realtime_ws) -> None:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", "8000").strip() or "8000")
+    if port <= 0:
+        port = 8000
+
+    try:
+        import socket
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("0.0.0.0", port))
+    except OSError:
+        port = find_available_port(start_port=port)
+
+    print(f"Starting backend on port {port}")
+    print(
+        f"Azure env status: endpoint={bool(AZURE_OPENAI_ENDPOINT)} api_key={bool(AZURE_OPENAI_API_KEY)} model={MODEL_NAME or '(empty)'}"
+    )
+    uvicorn.run(app, host="0.0.0.0", port=port)
