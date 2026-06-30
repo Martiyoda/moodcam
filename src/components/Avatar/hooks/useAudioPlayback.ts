@@ -16,7 +16,7 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
   const isPlayingRef = useRef<boolean>(false);
   const nextPlayTimeRef = useRef<number>(0);
   const activeAudioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
-  const prebufferMsRef = useRef<number>(80);
+  const prebufferMsRef = useRef<number>(180);
   const fadeSecondsRef = useRef<number>(0.005);
 
   const initializeAudioContext = useCallback(() => {
@@ -58,6 +58,10 @@ export function useAudioPlayback(): UseAudioPlaybackReturn {
 
     if (audioQueueRef.current.length === 0) {
       return;
+    }
+
+    if (audioContext.state === "suspended") {
+      void audioContext.resume();
     }
 
     isPlayingRef.current = true;

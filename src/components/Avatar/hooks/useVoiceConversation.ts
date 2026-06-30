@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useWebSocket } from "./useWebSocket";
 import { useAudioRecording } from "./useAudioRecording";
 import { useAudioPlayback } from "./useAudioPlayback";
-import { VOICE_DETECTION, WEBSOCKET_URL } from "../constants";
+import { WEBSOCKET_URL } from "../constants";
 import { Message, ConnectionStatus, WebSocketMessage } from "../types";
 import { arrayBufferToFloat32, base64ToFloat32 } from "../services/audioUtils";
 
@@ -114,22 +114,8 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
       if (!speaking && wasSpeaking) {
         isInterruptedRef.current = false;
       }
-
-      if (!speaking && wasSpeaking) {
-        if (silenceTimerRef.current) {
-          clearTimeout(silenceTimerRef.current);
-        }
-        silenceTimerRef.current = setTimeout(() => {
-          if (wsIsConnected() && !currentResponseIdRef.current) {
-            send({
-              type: "response.create",
-            });
-          }
-          silenceTimerRef.current = null;
-        }, VOICE_DETECTION.silenceDurationMs);
-      }
     },
-    [send, wsIsConnected, hasActiveAudio]
+    [hasActiveAudio]
   );
 
   const startConversation = useCallback(async () => {
