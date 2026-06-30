@@ -13,14 +13,14 @@ interface UseVoiceConversationReturn {
   error: string;
   connectionStatus: ConnectionStatus;
   isSpeaking: boolean;
-  startConversation: () => Promise<void>;
+  startConversation: (initialPrompt?: string) => Promise<void>;
   stopConversation: () => void;
   toggleConversation: () => void;
   clearError: () => void;
 }
 
 /**
- * Hook principal para una conversación de voz pura.
+ * Hook principal para una conversacion de voz pura.
  */
 export function useVoiceConversation(): UseVoiceConversationReturn {
   const HALF_DUPLEX_RELEASE_MS = 800;
@@ -42,7 +42,8 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
   } = useWebSocket();
   const { startRecording, stopRecording, isRecording: audioIsRecording } =
     useAudioRecording();
-  const { preparePlayback, playAudio, stopAllAudio, hasActiveAudio } = useAudioPlayback();
+  const { preparePlayback, playAudio, stopAllAudio, hasActiveAudio } =
+    useAudioPlayback();
 
   const currentResponseIdRef = useRef<string | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -118,243 +119,266 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
     [hasActiveAudio]
   );
 
-  const startConversation = useCallback(async () => {
-    try {
-      setError("");
-      setConnectionStatus("Connecting");
+  const startConversation = useCallback(
+    async (initialPrompt?: string) => {
+      try {
+        setError("");
+        setConnectionStatus("Connecting");
 
-      await preparePlayback();
+        await preparePlayback();
 
-      onMessage("audio", async (blob: Blob) => {
-        if (isInterruptedRef.current) {
-          return;
-        }
-
-        try {
-          const arrayBuffer = await blob.arrayBuffer();
-          const float32 = await arrayBufferToFloat32(arrayBuffer);
-          playAudio(float32);
-        } catch (audioErr) {
-          console.error("Error reproduciendo audio:", audioErr);
-        }
-      });
-
-      onMessage(
-        "conversation.item.input_audio_transcription.completed",
-        (data: WebSocketMessage) => {
-          const userMessage: Message = {
-            role: "user",
-            content: (data.transcript as string) || "",
-            timestamp: new Date(),
-          };
-          setTranscription((prev) => [...prev, userMessage]);
-        }
-      );
-
-      onMessage("response.audio.delta", (data: WebSocketMessage) => {
-        if (isInterruptedRef.current) {
-          return;
-        }
-
-        try {
-          const float32 = base64ToFloat32((data.delta as string) || "");
-          playAudio(float32);
-        } catch (audioErr) {
-          console.error("Error procesando audio delta:", audioErr);
-        }
-      });
-
-      onMessage("conversation.item.output_text.delta", (data: WebSocketMessage) => {
-        const deltaText = (data.delta as string) || "";
-        if (!deltaText.trim()) {
-          return;
-        }
-
-        setTranscription((prev) => {
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage && lastMessage.role === "assistant") {
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...lastMessage,
-                content: lastMessage.content + deltaText,
-              },
-            ];
+        onMessage("audio", async (blob: Blob) => {
+          if (isInterruptedRef.current) {
+            return;
           }
 
-          return [
-            ...prev,
-            {
-              role: "assistant",
-              content: deltaText,
-              timestamp: new Date(),
-            },
-          ];
+          try {
+            const arrayBuffer = await blob.arrayBuffer();
+            const float32 = await arrayBufferToFloat32(arrayBuffer);
+            playAudio(float32);
+          } catch (audioErr) {
+            console.error("Error reproduciendo audio:", audioErr);
+          }
         });
-      });
 
-      onMessage("conversation.item.output_text.done", (data: WebSocketMessage) => {
-        const fullText = (data.text as string) || "";
-        if (!fullText.trim()) {
-          return;
-        }
+        onMessage(
+          "conversation.item.input_audio_transcription.completed",
+          (data: WebSocketMessage) => {
+            const userMessage: Message = {
+              role: "user",
+              content: (data.transcript as string) || "",
+              timestamp: new Date(),
+            };
+            setTranscription((prev) => [...prev, userMessage]);
+          }
+        );
 
-        setTranscription((prev) => {
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage && lastMessage.role === "assistant") {
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...lastMessage,
-                content: fullText || lastMessage.content,
-              },
-            ];
+        onMessage("response.audio.delta", (data: WebSocketMessage) => {
+          if (isInterruptedRef.current) {
+            return;
           }
 
-          return [
-            ...prev,
-            {
-              role: "assistant",
-              content: fullText,
-              timestamp: new Date(),
-            },
-          ];
+          try {
+            const float32 = base64ToFloat32((data.delta as string) || "");
+            playAudio(float32);
+          } catch (audioErr) {
+            console.error("Error procesando audio delta:", audioErr);
+          }
         });
-      });
 
-      onMessage("response.audio_transcript.delta", (data: WebSocketMessage) => {
-        const transcriptDelta = (data.delta as string) || "";
-        if (!transcriptDelta.trim()) {
-          return;
-        }
+        onMessage(
+          "conversation.item.output_text.delta",
+          (data: WebSocketMessage) => {
+            const deltaText = (data.delta as string) || "";
+            if (!deltaText.trim()) {
+              return;
+            }
 
-        setTranscription((prev) => {
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage && lastMessage.role === "assistant") {
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...lastMessage,
-                content: lastMessage.content + transcriptDelta,
-              },
-            ];
+            setTranscription((prev) => {
+              const lastMessage = prev[prev.length - 1];
+              if (lastMessage && lastMessage.role === "assistant") {
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    ...lastMessage,
+                    content: lastMessage.content + deltaText,
+                  },
+                ];
+              }
+
+              return [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: deltaText,
+                  timestamp: new Date(),
+                },
+              ];
+            });
+          }
+        );
+
+        onMessage(
+          "conversation.item.output_text.done",
+          (data: WebSocketMessage) => {
+            const fullText = (data.text as string) || "";
+            if (!fullText.trim()) {
+              return;
+            }
+
+            setTranscription((prev) => {
+              const lastMessage = prev[prev.length - 1];
+              if (lastMessage && lastMessage.role === "assistant") {
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    ...lastMessage,
+                    content: fullText || lastMessage.content,
+                  },
+                ];
+              }
+
+              return [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: fullText,
+                  timestamp: new Date(),
+                },
+              ];
+            });
+          }
+        );
+
+        onMessage(
+          "response.audio_transcript.delta",
+          (data: WebSocketMessage) => {
+            const transcriptDelta = (data.delta as string) || "";
+            if (!transcriptDelta.trim()) {
+              return;
+            }
+
+            setTranscription((prev) => {
+              const lastMessage = prev[prev.length - 1];
+              if (lastMessage && lastMessage.role === "assistant") {
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    ...lastMessage,
+                    content: lastMessage.content + transcriptDelta,
+                  },
+                ];
+              }
+
+              return [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: transcriptDelta,
+                  timestamp: new Date(),
+                },
+              ];
+            });
+          }
+        );
+
+        onMessage("response.audio_transcript.done", (data: WebSocketMessage) => {
+          const fullTranscript = (data.transcript as string) || "";
+          if (!fullTranscript.trim()) {
+            return;
           }
 
-          return [
-            ...prev,
-            {
-              role: "assistant",
-              content: transcriptDelta,
-              timestamp: new Date(),
-            },
-          ];
-        });
-      });
+          setTranscription((prev) => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage && lastMessage.role === "assistant") {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  ...lastMessage,
+                  content: fullTranscript || lastMessage.content,
+                },
+              ];
+            }
 
-      onMessage("response.audio_transcript.done", (data: WebSocketMessage) => {
-        const fullTranscript = (data.transcript as string) || "";
-        if (!fullTranscript.trim()) {
-          return;
-        }
-
-        setTranscription((prev) => {
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage && lastMessage.role === "assistant") {
             return [
-              ...prev.slice(0, -1),
+              ...prev,
               {
-                ...lastMessage,
-                content: fullTranscript || lastMessage.content,
+                role: "assistant",
+                content: fullTranscript,
+                timestamp: new Date(),
               },
             ];
-          }
-
-          return [
-            ...prev,
-            {
-              role: "assistant",
-              content: fullTranscript,
-              timestamp: new Date(),
-            },
-          ];
+          });
         });
-      });
 
-      onMessage("response.created", (data: WebSocketMessage) => {
-        currentResponseIdRef.current =
-          (data.response as { id?: string })?.id || null;
-      });
+        onMessage("response.created", (data: WebSocketMessage) => {
+          currentResponseIdRef.current =
+            (data.response as { id?: string })?.id || null;
+        });
 
-      onMessage("response.done", () => {
-        currentResponseIdRef.current = null;
-      });
-
-      onMessage("response.cancelled", () => {
-        currentResponseIdRef.current = null;
-        stopAllAudio();
-        isInterruptedRef.current = false;
-      });
-
-      onMessage("error", (data: WebSocketMessage) => {
-        const directMessage =
-          typeof data.message === "string" ? data.message : "";
-        const nestedMessage =
-          typeof data.error === "object" &&
-          data.error !== null &&
-          "message" in data.error &&
-          typeof (data.error as { message?: unknown }).message === "string"
-            ? (data.error as { message: string }).message
-            : "";
-        setError(directMessage || nestedMessage || "Error desconocido");
-        setConnectionStatus("Disconnected");
-      });
-
-      onConnection({
-        onOpen: () => {
-          setIsConnected(true);
-          setConnectionStatus("Connected");
-          setIsRecording(true);
+        onMessage("response.done", () => {
           currentResponseIdRef.current = null;
+        });
+
+        onMessage("response.cancelled", () => {
+          currentResponseIdRef.current = null;
+          stopAllAudio();
           isInterruptedRef.current = false;
+        });
 
-          if (silenceTimerRef.current) {
-            clearTimeout(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-          }
-        },
-        onClose: () => {
-          setIsConnected(false);
+        onMessage("error", (data: WebSocketMessage) => {
+          const directMessage =
+            typeof data.message === "string" ? data.message : "";
+          const nestedMessage =
+            typeof data.error === "object" &&
+            data.error !== null &&
+            "message" in data.error &&
+            typeof (data.error as { message?: unknown }).message === "string"
+              ? (data.error as { message: string }).message
+              : "";
+          setError(directMessage || nestedMessage || "Error desconocido");
           setConnectionStatus("Disconnected");
-          setIsRecording(false);
-        },
-        onError: (err: Error) => {
-          setError(err.message);
-          setConnectionStatus("Disconnected");
-        },
-      });
+        });
 
-      await connect(WEBSOCKET_URL);
-      await startRecording(handleAudioChunk, handleUserSpeaking);
-    } catch (err) {
-      console.error("Error iniciando conversación:", err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Error al acceder al micrófono o conectar con el servidor"
-      );
-      setConnectionStatus("Disconnected");
-    }
-  }, [
-    connect,
-    onMessage,
-    onConnection,
-    preparePlayback,
-    startRecording,
-    handleAudioChunk,
-    playAudio,
-    stopAllAudio,
-    handleUserSpeaking,
-  ]);
+        onConnection({
+          onOpen: () => {
+            setIsConnected(true);
+            setConnectionStatus("Connected");
+            setIsRecording(true);
+            currentResponseIdRef.current = null;
+            isInterruptedRef.current = false;
+
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = null;
+            }
+          },
+          onClose: () => {
+            setIsConnected(false);
+            setConnectionStatus("Disconnected");
+            setIsRecording(false);
+          },
+          onError: (err: Error) => {
+            setError(err.message);
+            setConnectionStatus("Disconnected");
+          },
+        });
+
+        await connect(WEBSOCKET_URL);
+        await startRecording(handleAudioChunk, handleUserSpeaking);
+
+        if (initialPrompt) {
+          send({
+            type: "response.create",
+            response: {
+              modalities: ["text", "audio"],
+              instructions: initialPrompt,
+            },
+          });
+        }
+      } catch (err) {
+        console.error("Error iniciando conversacion:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Error al acceder al microfono o conectar con el servidor"
+        );
+        setConnectionStatus("Disconnected");
+      }
+    },
+    [
+      connect,
+      onMessage,
+      onConnection,
+      preparePlayback,
+      startRecording,
+      handleAudioChunk,
+      playAudio,
+      stopAllAudio,
+      handleUserSpeaking,
+      send,
+    ]
+  );
 
   const stopConversation = useCallback(() => {
     stopAllAudio();

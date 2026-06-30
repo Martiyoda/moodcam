@@ -26,7 +26,6 @@ function loadStoredConfig() {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (!stored) return null
         const parsed = JSON.parse(stored)
-        // Merge con defaults para cubrir nuevas keys tras actualizaciones
         return mergeDeep(structuredClone(DEFAULT_CONFIG), parsed)
     } catch {
         return null
@@ -37,7 +36,7 @@ function saveConfig(config) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
     } catch {
-        // Silenciar errores de quota o modo privado
+        // Ignore storage quota or private browsing failures.
     }
 }
 
@@ -78,7 +77,6 @@ function buildHumanConfig(userConfig) {
     }
 }
 
-// Instancia singleton para evitar recargar modelos
 let humanInstance = null
 function getHuman(config) {
     if (!humanInstance) {
@@ -107,12 +105,10 @@ export default function useFaceDetection() {
 
     const configRef = useRef(detectionConfig)
 
-    // Mantener configRef sincronizado
     useEffect(() => {
         configRef.current = detectionConfig
     }, [detectionConfig])
 
-    // Aplicar cambios de config al Human instance en caliente
     const updateConfig = useCallback((key, value) => {
         setDetectionConfig(prev => {
             const next = structuredClone(prev)
@@ -131,23 +127,19 @@ export default function useFaceDetection() {
         setDetectionConfig(defaults)
     }, [])
 
-    // Persistir config en localStorage cuando cambia
     useEffect(() => {
         saveConfig(detectionConfig)
     }, [detectionConfig])
 
-    // Sincronizar config con Human instance
     useEffect(() => {
         if (!humanInstance) return
         const newHumanConfig = buildHumanConfig(detectionConfig)
-        // Actualizar config del runtime sin recargar modelos
         Object.assign(humanInstance.config.face.detector, newHumanConfig.face.detector)
         Object.assign(humanInstance.config.face.emotion, newHumanConfig.face.emotion)
         Object.assign(humanInstance.config.filter, newHumanConfig.filter)
         humanInstance.config.cacheSensitivity = newHumanConfig.cacheSensitivity
     }, [detectionConfig])
 
-    // Suavizado exponencial de emociones
     const smoothEmotions = useCallback((rawEmotions) => {
         const cfg = configRef.current.smoothing
         if (!cfg.enabled || !smoothedEmotionsRef.current) {
@@ -164,7 +156,6 @@ export default function useFaceDetection() {
         return smoothed
     }, [])
 
-    // Cargar modelos
     useEffect(() => {
         async function loadModels() {
             try {
@@ -175,7 +166,7 @@ export default function useFaceDetection() {
                 setModelsLoaded(true)
             } catch (err) {
                 console.error('Error cargando modelos:', err)
-                setError('No se pudieron cargar los modelos de detección facial.')
+                setError('No se pudieron cargar los modelos de deteccion facial.')
             } finally {
                 setLoading(false)
             }
@@ -184,9 +175,8 @@ export default function useFaceDetection() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Iniciar cámara
     const startCamera = useCallback(async () => {
-        if (!modelsLoaded) return
+        if (!modelsLoaded) return false
         try {
             setError(null)
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -202,13 +192,14 @@ export default function useFaceDetection() {
                 videoRef.current.srcObject = stream
             }
             setCameraActive(true)
+            return true
         } catch (err) {
-            console.error('Error accediendo a cámara:', err)
-            setError('No se pudo acceder a la cámara. Asegúrate de dar permisos.')
+            console.error('Error accediendo a camara:', err)
+            setError('No se pudo acceder a la camara. Asegurate de dar permisos.')
+            return false
         }
     }, [modelsLoaded])
 
-    // Detener cámara
     const stopCamera = useCallback(() => {
         if (streamRef.current) {
             streamRef.current.getTracks().forEach((track) => track.stop())
@@ -230,7 +221,6 @@ export default function useFaceDetection() {
         setGender(null)
     }, [])
 
-    // Detección en loop
     useEffect(() => {
         if (!cameraActive || !modelsLoaded) return
 
@@ -255,7 +245,6 @@ export default function useFaceDetection() {
                         const ctx = canvas.getContext('2d')
                         ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-                        // Dibujar detecciones usando la API de drawing de Human
                         human.draw.face(canvas, result.face, {
                             drawBoxes: true,
                             drawLabels: false,
@@ -268,7 +257,6 @@ export default function useFaceDetection() {
                     if (result.face && result.face.length > 0) {
                         const face = result.face[0]
 
-                        // Procesar emociones con suavizado
                         if (face.emotion && face.emotion.length > 0) {
                             const rawMap = {}
                             face.emotion.forEach(({ emotion, score }) => {
@@ -277,12 +265,10 @@ export default function useFaceDetection() {
                             const smoothed = smoothEmotions(rawMap)
                             setEmotions(smoothed)
 
-                            // Emoción dominante del resultado suavizado
                             const dominantEmotion = Object.entries(smoothed).sort(([, a], [, b]) => b - a)[0][0]
                             setDominant(dominantEmotion)
                         }
 
-                        // Edad y género (extras)
                         if (face.age) setAge(Math.round(face.age))
                         if (face.gender) setGender(face.gender)
                     } else {
@@ -292,10 +278,9 @@ export default function useFaceDetection() {
                         setGender(null)
                     }
                 } catch (err) {
-                    console.error('Error en detección:', err)
+                    console.error('Error en deteccion:', err)
                 }
 
-                // Siguiente frame con un pequeño delay para no saturar
                 if (detectingRef.current) {
                     rafRef.current = requestAnimationFrame(detectLoop)
                 }
@@ -315,9 +300,8 @@ export default function useFaceDetection() {
                 rafRef.current = null
             }
         }
-    }, [cameraActive, modelsLoaded])
+    }, [cameraActive, modelsLoaded, smoothEmotions])
 
-    // Cleanup al desmontar
     useEffect(() => {
         return () => {
             stopCamera()

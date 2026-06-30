@@ -9,6 +9,7 @@ import { generateArtPlan } from './lib/artEngine'
 import client from './lib/mqttClient'
 import { useVoiceConversation } from './components/Avatar/hooks/useVoiceConversation.js'
 import VideoLoop from './components/Avatar/VideoLoop'
+import { AI_PROMPTS } from './components/Avatar/constants'
 
 const EMOTION_LABELS = {
   happy: 'Alegría',
@@ -42,6 +43,8 @@ function App() {
     isRecording,
     connectionStatus: voiceConnectionStatus,
     isSpeaking,
+    startConversation,
+    stopConversation,
     toggleConversation,
     clearError,
   } = useVoiceConversation()
@@ -152,6 +155,25 @@ function App() {
     client.publish('robot/servo1', 'STOP')
   }
 
+  const handleCameraButtonClick = async () => {
+    if (cameraActive) {
+      stopCamera()
+      if (isRecording) {
+        stopConversation()
+      }
+      return
+    }
+
+    const cameraStarted = await startCamera()
+    if (!cameraStarted) {
+      return
+    }
+
+    if (!isRecording) {
+      await startConversation(AI_PROMPTS.cameraWelcomePrompt)
+    }
+  }
+
   const testArtEngine = () => {
     const plan = generateArtPlan({
       mainEmotions: [
@@ -232,7 +254,7 @@ function App() {
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <button
-                    onClick={cameraActive ? stopCamera : startCamera}
+                    onClick={handleCameraButtonClick}
                     disabled={!cameraActive && (!modelsLoaded || loading)}
                     className="rounded-2xl bg-[linear-gradient(90deg,_#2a7edb,_#2491f0)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(36,145,240,0.28)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                   >
