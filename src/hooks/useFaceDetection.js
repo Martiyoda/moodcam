@@ -91,7 +91,17 @@ export default function useFaceDetection() {
     const streamRef = useRef(null)
     const rafRef = useRef(null)
     const detectingRef = useRef(false)
+    // 
+    const sessionActiveRef = useRef(false)
+
     const smoothedEmotionsRef = useRef(null)
+
+    // Creamos la estructura de la sesión de 60 s
+    const SESSION_DURATION = 5000 // 60 segundos
+    // Guardaremos todas las muestras
+    const sessionRef = useRef({start: Date.now(), samples: []})
+    // Resultado final que enviaremos más adelante por MQTT
+    const [sessionResult, setSessionResult] = useState(null)
 
     const [modelsLoaded, setModelsLoaded] = useState(false)
     const [cameraActive, setCameraActive] = useState(false)
@@ -156,6 +166,57 @@ export default function useFaceDetection() {
         return smoothed
     }, [])
 
+    const addEmotionSample = useCallback((emotionMap) => {
+        sessionRef.current.samples.push(emotionMap)
+    }, [])
+
+
+    const finishSession = useCallback(() => {
+
+        const samples = sessionRef.current.samples
+
+        if (samples.length === 0) {
+            sessionRef.current = {
+                start: Date.now(),
+                samples: []
+            }
+            return null
+        }
+
+        const totals = {}
+
+        samples.forEach(sample => {
+            Object.entries(sample).forEach(([emotion, value]) => {
+                totals[emotion] = (totals[emotion] || 0) + value
+            })
+        })
+
+        Object.keys(totals).forEach(key => {
+            totals[key] /= samples.length
+        })
+
+        const top2 = Object.entries(totals)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 2)
+
+        const result = {
+            duration: SESSION_DURATION / 1000, // Duración de la sesión
+            samples: samples.length,
+            emotion1: top2[0]?.[0],
+            value1: top2[0]?.[1],
+            emotion2: top2[1]?.[0],
+            value2: top2[1]?.[1]
+        }
+
+        sessionRef.current = {
+            start: Date.now(),
+            samples: []
+        }
+
+        return result
+
+    }, [])
+
     useEffect(() => {
         async function loadModels() {
             try {
@@ -191,6 +252,10 @@ export default function useFaceDetection() {
             if (videoRef.current) {
                 videoRef.current.srcObject = stream
             }
+            //
+            // Reiniciar la sesión cada vez que se inicia la cámara
+            sessionRef.current = {start: Date.now(),samples: []}
+            sessionActiveRef.current = true
             setCameraActive(true)
             return true
         } catch (err) {
@@ -213,6 +278,9 @@ export default function useFaceDetection() {
             rafRef.current = null
         }
         detectingRef.current = false
+        //
+        sessionActiveRef.current = false
+
         smoothedEmotionsRef.current = null
         setCameraActive(false)
         setEmotions(null)
@@ -264,9 +332,34 @@ export default function useFaceDetection() {
                             })
                             const smoothed = smoothEmotions(rawMap)
                             setEmotions(smoothed)
+                            
+                            // Guardar esta muestra en la sesión
+                            addEmotionSample(smoothed)
 
                             const dominantEmotion = Object.entries(smoothed).sort(([, a], [, b]) => b - a)[0][0]
                             setDominant(dominantEmotion)
+                            
+                            // Comprobamos si han pasado 60 segundos
+                            if (Date.now() - sessionRef.current.start >= SESSION_DURATION) {
+
+                                const result = finishSession()
+
+                                if (result) {
+
+                                    console.log("Sesión terminada")
+
+                                    setSessionResult(result)
+
+                                    sessionActiveRef.current = false
+
+                                    stopCamera()
+
+                                    return
+
+                                }
+
+                            }
+                           
                         }
 
                         if (face.age) setAge(Math.round(face.age))
@@ -281,7 +374,7 @@ export default function useFaceDetection() {
                     console.error('Error en deteccion:', err)
                 }
 
-                if (detectingRef.current) {
+                if (detectingRef.current && sessionActiveRef.current) {
                     rafRef.current = requestAnimationFrame(detectLoop)
                 }
             }
@@ -315,6 +408,7 @@ export default function useFaceDetection() {
         cameraActive,
         emotions,
         dominant,
+        sessionResult, // Nos devuelve el resultado de la sesión de 60s
         age,
         gender,
         error,

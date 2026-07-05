@@ -10,6 +10,7 @@ import client from './lib/mqttClient'
 import { useVoiceConversation } from './components/Avatar/hooks/useVoiceConversation.js'
 import VideoLoop from './components/Avatar/VideoLoop'
 import { AI_PROMPTS } from './components/Avatar/constants'
+import { publishPoints } from "./lib/MQTTPublisher";
 
 const EMOTION_LABELS = {
   happy: 'Alegría',
@@ -56,6 +57,7 @@ function App() {
     cameraActive,
     emotions,
     dominant,
+    sessionResult,
     age,
     gender,
     error,
@@ -81,11 +83,21 @@ function App() {
   const [samplesCaptured, setSamplesCaptured] = useState(0)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
+  /* Envía cada vez la emoción recibida
   useEffect(() => {
     if (emotions && dominant) {
       publishEmotion(emotions, dominant)
     }
-  }, [emotions, dominant, publishEmotion])
+  }, [emotions, dominant, publishEmotion])*/
+
+  // Publicamos la información de la sesión
+  useEffect(() => {
+    console.log("sessionResult en App:", sessionResult)
+
+    if (sessionResult) {
+      publishEmotion(sessionResult)
+    }
+ }, [sessionResult, publishEmotion])
 
   useEffect(() => {
     if (!cameraActive) {
@@ -111,7 +123,7 @@ function App() {
     }
   }, [cameraActive, emotions])
 
-  const runSimpleArtPlan = () => {
+  /*const runSimpleArtPlan = () => {
     const plan = generateSimpleArtPlan(dominant)
 
     plan.commands.forEach((command, index) => {
@@ -119,8 +131,77 @@ function App() {
         client.publish('robot/arm', command)
       }, index * 1500)
     })
-  }
+  }*/
+ 
+/*const runSimpleArtPlan = () => {
 
+    if (!sessionResult)
+    {
+        console.log("No hay datos de sesión");
+        return;
+    }
+
+    console.log("SESSION RESULT");
+    console.log(sessionResult);
+
+    const plan = generateSimpleArtPlan(
+
+        sessionResult.emotion1,
+        sessionResult.value1,
+
+        sessionResult.emotion2,
+        sessionResult.value2
+
+    );
+
+    console.log("PLAN");
+
+    console.log(plan);
+
+}
+const runSimpleArtPlan = () => {
+
+    if (!sessionResult)
+    {
+        console.log("No hay sesión todavía");
+        return;
+    }
+
+    const points = generateSimpleArtPlan(
+
+        sessionResult.emotion1,
+        sessionResult.value1,
+
+        sessionResult.emotion2,
+        sessionResult.value2
+
+    );
+
+    console.log("PUNTOS GENERADOS");
+    console.log(points);
+
+}*/
+
+const runSimpleArtPlan = () => {
+
+    if (!sessionResult)
+    {
+        console.log("No hay sesión todavía");
+        return;
+    }
+
+    const points = generateSimpleArtPlan(
+        sessionResult.emotion1,
+        sessionResult.value1,
+        sessionResult.emotion2,
+        sessionResult.value2
+    );
+
+    console.log("TOTAL PUNTOS:", points.length);
+
+    publishPoints(points);
+
+}
   const sendEmotionPose = () => {
     if (dominant === 'happy') {
       client.publish('robot/arm', 'SOFT')
@@ -193,7 +274,17 @@ function App() {
     ? Object.entries(emotions).sort(([, a], [, b]) => b - a)
     : []
 
-  const topEmotions = sortedEmotions.slice(0, 2)
+  // const topEmotions = sortedEmotions.slice(0, 2)
+  const topEmotions = sessionResult
+  ? [
+      [sessionResult.emotion1, sessionResult.value1],
+      [sessionResult.emotion2, sessionResult.value2],
+    ]
+  : emotions
+    ? Object.entries(emotions)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 2)
+    : []
   const dominantPercent = dominant ? formatPercent(emotions?.[dominant]) : 0
   const detectionActive = cameraActive && !!dominant
   const statusText = mqttConfig.enabled
@@ -302,6 +393,7 @@ function App() {
                   dominant={dominant}
                   age={age}
                   gender={gender}
+                  sessionResult={sessionResult}
                 />
               </div>
             </div>
@@ -334,13 +426,13 @@ function App() {
                   <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
                     Muestras
                   </p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{samplesCaptured}</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{sessionResult ? sessionResult.samples : samplesCaptured}</p>
                 </div>
                 <div className="rounded-2xl bg-white/[0.03] px-4 py-3">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
                     Tiempo
                   </p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{elapsedSeconds}s</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{(sessionResult ? sessionResult.duration : elapsedSeconds) + " s"}</p>
                 </div>
                 <div className="rounded-2xl bg-white/[0.03] px-4 py-3">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">

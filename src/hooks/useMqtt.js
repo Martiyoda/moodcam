@@ -4,11 +4,11 @@ import mqtt from 'mqtt'
 const MQTT_STORAGE_KEY = 'moodcam-mqtt-config'
 
 export const DEFAULT_MQTT_CONFIG = {
-    enabled: false,
-    brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
+    enabled: true,
+    brokerUrl: 'wss://6a2904749cd54c2d9d727a3a85a645b5.s1.eu.hivemq.cloud:8884/mqtt',
     topicBase: 'moodcam/device1',
-    username: '',
-    password: '',
+    username: 'esp32',
+    password: 'Esplubot32',
     interval: 2000,
 }
 
@@ -167,8 +167,8 @@ export default function useMqtt() {
         }
     }, [mqttConfig.enabled, mqttConfig.brokerUrl, mqttConfig.username, mqttConfig.password, mqttConfig.topicBase])
 
-    // Publicar emociones — estrategia híbrida
-    const publishEmotion = useCallback((emotions, dominant) => {
+    // Publicar emociones contínuamente
+    /*const publishEmotion = useCallback((emotions, dominant) => {
         const client = clientRef.current
         const config = configRef.current
         if (!client || !client.connected || !config.enabled || !emotions || !dominant) return
@@ -199,6 +199,52 @@ export default function useMqtt() {
         )
 
         lastSentRef.current = { dominant, timestamp: now }
+    }, [])*/
+
+    // Publicar solo la sesión de emociones
+    const publishEmotion = useCallback((sessionResult) => {
+
+        console.log("publishEmotion llamado", sessionResult)
+        const client = clientRef.current
+        const config = configRef.current
+
+        console.log("publishEmotion llamado")
+        console.log("client:", client)
+        console.log("connected:", client?.connected)
+        console.log("enabled:", config?.enabled)
+        console.log("sessionResult:", sessionResult)
+
+        if (!client || !client.connected || !config.enabled || !sessionResult) {
+            return
+        }
+
+        const payload = {
+            duration: sessionResult.duration,
+            samples: sessionResult.samples,
+            emotion1: sessionResult.emotion1,
+            value1: Math.round(sessionResult.value1 * 100) / 100,
+            emotion2: sessionResult.emotion2,
+            value2: Math.round(sessionResult.value2 * 100) / 100,
+            timestamp: Date.now(),
+        }
+        console.log("Topic:", `${config.topicBase}/emotion`)
+        console.log("MQTT enviado:", payload)
+        // Que vamos a enviar a la ESP32
+        console.log("Payload que voy a enviar:", payload)
+
+        client.publish(
+            `${config.topicBase}/emotion`,
+            JSON.stringify(payload),
+            { qos: 0 },
+            (err) => {
+                if (err) {
+                    console.error("Error publicando MQTT:", err)
+                } else {
+                    console.log("Mensaje publicado correctamente")
+                }
+            }
+        )
+
     }, [])
 
     return {
