@@ -84,7 +84,7 @@ Nunca escribas secretos reales en archivos versionados. `arduino/main/src/config
 ## Mapa del repositorio
 
 - `src/`: app web React.
-- `src/App.jsx`: orquesta camara, voz, MQTT, sesion, plan artistico y pasos de UI.
+- `src/App.jsx`: orquesta una pantalla unica de seleccion de pintor, camara, voz, MQTT, sesion y estado dinamico de chunks.
 - `src/hooks/useFaceDetection.js`: deteccion facial/emocional en navegador.
 - `src/hooks/useVoiceDetector.js`: captura de voz y fusion emocional.
 - `src/hooks/useMqtt.js`: conexion MQTT web, presencia, publicacion de eventos y recepcion de plan/estado/error.
@@ -147,20 +147,19 @@ Cada comando envuelto debe conservar `plan_id`, `session_id`, `artist`, `sequenc
 
 La UI esta centrada en una sesion artistica:
 
-1. Seleccion de pintor.
+1. Una sola pantalla operativa combina seleccion de pintor, camara, consentimiento de voz, captura y estado de obra dinamica.
 2. Camara y voz opcional con consentimiento explicito (`VOICE_CAPTURE_ENABLED = true`, pero el usuario debe activar microfono).
-3. Publicacion de `session_start`.
+3. Publicacion de `session_start` al iniciar captura.
 4. Captura de muestras de cara cada aproximadamente `650 ms` durante la sesion.
 5. Publicacion de `session/window` cada `SESSION_WINDOW_MS = 5000`, con resumen de cara, voz si hay consentimiento, transcript delta y receta de pintor.
-6. Recepcion de `ai/{deviceId}/stroke_chunk` y visualizacion del ultimo chunk en UI.
+6. Recepcion de `ai/{deviceId}/stroke_chunk` y visualizacion del ultimo chunk, ventana, comandos y cola de robot en UI.
 7. Al finalizar, publicacion de ventana final, `session/end` y `session_summary` compatible.
-8. Espera de plan AI por MQTT hasta `AI_PLAN_WAIT_MS = 8000` cuando se solicita la obra completa.
-9. Si llega `ai/{deviceId}/stroke_plan` con el `session_id` actual, se usa ese plan; si no, se usa fallback local de `generateArtPlan`.
+8. No hay paso final separado para mostrar la obra: la obra se genera por chunks durante la captura.
 
 Notas para agentes frontend:
 
 - No agregues controles avanzados de baja utilidad a la operacion normal si no son imprescindibles.
-- Mantener visibles estado MQTT, errores del sistema, plan artistico y estado/calibracion del robot.
+- Mantener visibles estado MQTT, errores del sistema, ultimo chunk y estado/calibracion del robot.
 - La configuracion MQTT de la web se persiste en `localStorage` bajo `moodcam-mqtt-config`.
 - Si cambias payloads publicados desde la web, actualiza tests de contrato y el bridge.
 
@@ -201,6 +200,8 @@ Pintores soportados:
 - `rothko`: campos de color.
 - `alma-thomas`: patron/mosaico.
 - `de-kooning`: gesto intenso.
+
+En la UI de presentacion solo deben mostrarse los cuatro pintores con receta WRO (`kandinsky`, `pollock`, `rothko`, `alma-thomas`). `de-kooning` puede existir como compatibilidad tecnica, pero no debe aparecer en el selector principal.
 
 Emociones soportadas:
 

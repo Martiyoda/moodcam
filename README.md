@@ -81,14 +81,14 @@ http://127.0.0.1:5173
 
 ## Flujo de uso
 
+La aplicacion usa una sola pantalla operativa:
+
 1. Seleccionar pintor.
-2. Iniciar camara.
-3. Iniciar captura emocional.
-4. Activar voz solo si se acepta la captura de microfono; sin consentimiento la sesion sigue solo con rostro.
-5. Esperar chunks dinamicos y resumen de emocion.
-6. Revisar plan artistico/fallback si aplica.
-7. Enviar plan al brazo solo con supervision fisica directa.
-8. Supervisar estado MQTT, respuesta del robot y profundidad FIFO.
+2. Activar camara.
+3. Activar voz solo si se acepta la captura de microfono; sin consentimiento la sesion sigue solo con rostro.
+4. Iniciar captura emocional.
+5. Durante la sesion, la web publica ventanas y AI Bridge genera chunks dinamicos para la obra.
+6. Supervisar ultimo chunk, estado MQTT, respuesta del robot y profundidad FIFO.
 
 ## Pasos seguidos para crear el proyecto
 
@@ -99,7 +99,7 @@ Esta es la secuencia de implementacion del proyecto completo, desde la base hast
 - Restriccion principal: priorizar seguridad fisica y trazabilidad tecnica.
 
 2. Construccion del frontend base
-- Se creo la app React para captura de camara, lectura emocional y flujo por pasos.
+- Se creo la app React para captura de camara, lectura emocional y flujo operativo en una sola pantalla.
 - Se integraron modelos de deteccion facial/emocional en navegador.
 
 3. Capa de comunicacion MQTT
@@ -224,8 +224,8 @@ Verificacion operativa minima:
 
 1. MQTT conectado desde la web.
 2. AI Bridge conectado y publicando presencia.
-3. Recepcion de plan artistico tras session summary.
-4. Brazo responde en robot/{deviceId}/status.
+3. Recepcion de chunks dinamicos tras publicar ventanas de sesion.
+4. Brazo responde en robot/{deviceId}/status con estado de cola.
 
 ## Troubleshooting rapido
 
@@ -234,11 +234,10 @@ No conecta MQTT:
 - Revisar MQTT_URL, credenciales y puerto websocket.
 - Verificar que deviceId coincide en todos los componentes.
 
-No llega plan artistico:
+No llegan chunks dinamicos:
 
 - Revisar OPENAI_API_KEY y logs de AI Bridge.
-- Confirmar que se publica session/summary.
-- Confirmar que se publican `session/window` y `session/end` si estas probando el flujo dinamico.
+- Confirmar que se publican `session/window` y `session/end`.
 
 Brazo no se mueve:
 
@@ -255,7 +254,7 @@ Checklist rapido:
 3. AI Bridge activo y sin errores de credenciales.
 4. Llegan mensajes de estado del robot en robot/{deviceId}/status.
 5. Durante una sesion, aparecen chunks en ai/{deviceId}/stroke_chunk.
-6. Al cierre, sigue disponible el plan/resumen compatible cuando corresponde.
+6. La UI muestra ultimo chunk y cola del robot sin requerir una pantalla final de obra.
 
 ## Notas de mantenimiento
 

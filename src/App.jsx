@@ -6,11 +6,10 @@ import CameraView from './components/CameraView'
 import EmotionDisplay from './components/EmotionDisplay'
 import SettingsPage from './components/SettingsPage'
 import PainterSelector from './components/PainterSelector'
-import ArtPlanPanel from './components/ArtPlanPanel'
 import ConversationPanel from './components/ConversationPanel'
 import VoiceEmotionPanel from './components/VoiceEmotionPanel'
 import DemoReadinessPanel from './components/DemoReadinessPanel'
-import { calculateEmotionSummary, generateArtPlan, getArtistById } from './lib/artEngine'
+import { calculateEmotionSummary, getArtistById } from './lib/artEngine'
 import { DEFAULT_CONVERSATION_MODE, getConversationMode } from './lib/conversationModes'
 import { calibrationTopicsFromMap, createSessionId } from './lib/mqttContract'
 import { getPainterProfile } from './lib/painterProfiles'
@@ -24,7 +23,6 @@ import {
 const DEFAULT_SESSION_MS = 30_000
 const SESSION_WINDOW_MS = 5_000
 const FACE_SAMPLE_INTERVAL_MS = 650
-const AI_PLAN_WAIT_MS = 8_000
 const VOICE_CAPTURE_ENABLED = true
 
 function App() {
@@ -65,8 +63,6 @@ function App() {
     publishSessionSummary,
     publishSessionWindow,
     publishSessionEnd,
-    publishArtPlan,
-    publishRobotCommands,
     publishCalibrationCommand,
   } = useMqtt()
 
@@ -84,7 +80,6 @@ function App() {
   } = useVoiceDetector()
 
   const [showSettingsPage, setShowSettingsPage] = useState(false)
-  const [currentStep, setCurrentStep] = useState(1)
   const [sessionActive, setSessionActive] = useState(false)
   const [sessionStartedAt, setSessionStartedAt] = useState(null)
   const [remainingMs, setRemainingMs] = useState(DEFAULT_SESSION_MS)
@@ -98,8 +93,6 @@ function App() {
   const [sessionId, setSessionId] = useState(null)
   const [conversationModeId] = useState(DEFAULT_CONVERSATION_MODE)
   const [armCalibrationState, setArmCalibrationState] = useState({ active: false, moving: false })
-  const [aiPlanWaitExpired, setAiPlanWaitExpired] = useState(false)
-  const [artworkRequested, setArtworkRequested] = useState(false)
   const [voiceConsentGranted, setVoiceConsentGranted] = useState(false)
 
   const faceSamplesRef = useRef([])
@@ -123,22 +116,6 @@ function App() {
   const captureDurationMs = captureDurationSeconds * 1000
   const liveFaceSummary = useMemo(() => calculateEmotionSummary(faceEmotionSamples), [faceEmotionSamples])
   const displayedFaceSummary = faceSummary.length ? faceSummary : liveFaceSummary
-  const fallbackArtPlan = useMemo(() => {
-    if (combinedEmotionSummary.length === 0) return null
-    return generateArtPlan({
-      mainEmotions: combinedEmotionSummary,
-      artistId: selectedArtist,
-      mobility,
-      calibration: robotCalibration,
-      colorPreferences: voiceCaptureActive ? voiceSummary.color_preferences : [],
-      voiceSummary: voiceCaptureActive ? voiceSummary : null,
-    })
-  }, [combinedEmotionSummary, mobility, robotCalibration, selectedArtist, voiceCaptureActive, voiceSummary])
-  const aiArtPlan = lastAiPlan?.payload?.robot_commands && lastAiPlan.payload.session_id === sessionId ? lastAiPlan.payload : null
-  const shouldWaitForAiPlan = artworkRequested && mqttConfig.enabled && connectionStatus === 'connected' && combinedEmotionSummary.length > 0 && !aiArtPlan
-  const waitingForAiPlan = shouldWaitForAiPlan && !aiPlanWaitExpired
-  const artPlan = aiArtPlan || (waitingForAiPlan ? null : fallbackArtPlan)
-  const planSource = aiArtPlan ? 'ai_bridge' : 'local_fallback'
 
   useEffect(() => {
     faceSamplesRef.current = faceEmotionSamples
@@ -304,7 +281,7 @@ function App() {
     })
 
     setActionMessage(nextCombinedSummary.length > 0
-      ? 'Lectura emocional enviada por ventanas. Preparando la propuesta artística.'
+      ? 'Lectura emocional enviada por ventanas. La obra dinámica continúa desde los chunks del AI Bridge.'
       : `No hay suficientes datos de emoción. Repite la captura con cámara${voiceCaptureActive ? ' y micrófono' : ''} activos.`)
   }, [
     buildVoiceFusion,
@@ -340,23 +317,6 @@ function App() {
     return () => window.clearInterval(timer)
   }, [captureDurationMs, finishSession, publishEmotionWindow, sessionActive, sessionStartedAt])
 
-  useEffect(() => {
-    if (!artworkRequested || waitingForAiPlan || currentStep !== 2 || combinedEmotionSummary.length === 0 || !artPlan) return
-    setCurrentStep(3)
-    setArtworkRequested(false)
-  }, [artPlan, artworkRequested, combinedEmotionSummary.length, currentStep, waitingForAiPlan])
-
-  useEffect(() => {
-    if (!shouldWaitForAiPlan || aiPlanWaitExpired) return undefined
-
-    const timer = window.setTimeout(() => {
-      setAiPlanWaitExpired(true)
-      setActionMessage('AI Bridge no respondió a tiempo. Mostrando fallback local.')
-    }, AI_PLAN_WAIT_MS)
-
-    return () => window.clearTimeout(timer)
-  }, [aiPlanWaitExpired, shouldWaitForAiPlan])
-
   const handleStartSession = useCallback(async () => {
     if (calibrationLocked) {
       setActionMessage('La captura emocional está bloqueada mientras la calibración del brazo está activa.')
@@ -366,8 +326,6 @@ function App() {
     setFaceEmotionSamples([])
     setFaceSummary([])
     setCombinedEmotionSummary([])
-    setAiPlanWaitExpired(false)
-    setArtworkRequested(false)
     lastFaceSampleRef.current = 0
     lastWindowFaceCursorRef.current = 0
     lastWindowVoiceCursorRef.current = 0
@@ -400,7 +358,6 @@ function App() {
     setRemainingMs(captureDurationMs)
     setSessionStartedAt(Date.now())
     setSessionActive(true)
-    setCurrentStep(2)
   }, [
     cameraActive,
     conversationMode.id,
@@ -433,8 +390,6 @@ function App() {
     setFaceEmotionSamples([])
     setFaceSummary([])
     setCombinedEmotionSummary([])
-    setAiPlanWaitExpired(false)
-    setArtworkRequested(false)
     setActionMessage(null)
     setSessionId(null)
   }, [captureDurationMs, resetVoiceDetection])
@@ -444,65 +399,17 @@ function App() {
     stopCamera()
   }, [handleResetExperience, stopCamera])
 
-  const robotPaintBlockedReason = isCalibrationOnlyRobotError(lastSystemError?.payload)
-    ? 'El ESP32 está en modo calibración. Cambia a modo real desde el panel de robot para pintar.'
-    : ''
-  const robotPaintDisabled = calibrationLocked || Boolean(robotPaintBlockedReason)
-
-  const handleSendPlan = useCallback(() => {
-    if (calibrationLocked) {
-      setActionMessage('El envío artístico está bloqueado mientras la calibración del brazo está activa.')
-      return
-    }
-    if (robotPaintBlockedReason) {
-      setActionMessage(robotPaintBlockedReason)
-      return
-    }
-    if (!artPlan || combinedEmotionSummary.length === 0) return
-
-    const sent = planSource === 'ai_bridge'
-      ? publishRobotCommands(artPlan)
-      : [
-        publishSessionSummary({
-          sessionId,
-          artist: selectedArtistInfo,
-          faceSummary: displayedFaceSummary,
-          voiceSummary,
-          combinedSummary: combinedEmotionSummary,
-          transcript,
-          calibration: robotCalibration,
-          mobility,
-          conversationMode: conversationMode.id,
-        }),
-        publishArtPlan(artPlan),
-        publishRobotCommands(artPlan),
-      ].every(Boolean)
-
-    setActionMessage(sent
-      ? `${planSource === 'ai_bridge' ? 'Obra enviada al brazo' : 'Obra local enviada al brazo'}: ${artPlan.robot_commands.length} comandos.`
-      : 'Activa MQTT y espera a que el estado sea conectado antes de pintar con el brazo.')
-  }, [
-    artPlan,
-    combinedEmotionSummary,
-    conversationMode.id,
-    displayedFaceSummary,
-    mobility,
-    planSource,
-    publishArtPlan,
-    publishRobotCommands,
-    publishSessionSummary,
-    robotCalibration,
-    selectedArtistInfo,
-    sessionId,
-    transcript,
-    voiceSummary,
-    calibrationLocked,
-    robotPaintBlockedReason,
-  ])
-
   const handleCalibrationStateChange = useCallback((nextState) => {
     setArmCalibrationState(nextState)
   }, [])
+
+  const handleSelectArtist = useCallback((artistId) => {
+    if (sessionActive) {
+      setActionMessage('Termina o reinicia la captura antes de cambiar de pintor.')
+      return
+    }
+    setSelectedArtist(artistId)
+  }, [sessionActive])
 
   const remainingSeconds = Math.ceil(remainingMs / 1000)
   const captureProgress = combinedEmotionSummary.length > 0
@@ -512,42 +419,6 @@ function App() {
       : 0
   const calibrationTopics = calibrationTopicsFromMap(mqttConfig.topics)
   const robotStatusPayload = lastRobotStatus?.payload
-  const canRequestArtwork = combinedEmotionSummary.length > 0 && !armCalibrationState.moving
-  const canOpenStep = useCallback((step) => {
-    if (step === 1) return true
-    if (step === 2) return Boolean(selectedArtist) && !armCalibrationState.moving
-    if (step === 3) {
-      const canUseLocalPlan = !mqttConfig.enabled || connectionStatus !== 'connected' || aiPlanWaitExpired
-      return combinedEmotionSummary.length > 0 && (Boolean(aiArtPlan) || canUseLocalPlan) && !armCalibrationState.moving
-    }
-    return false
-  }, [aiArtPlan, aiPlanWaitExpired, armCalibrationState.moving, combinedEmotionSummary.length, connectionStatus, mqttConfig.enabled, selectedArtist])
-  const goToStep = useCallback((step) => {
-    if (!canOpenStep(step)) {
-      setActionMessage(blockedStepMessage(step))
-      return
-    }
-    setCurrentStep(step)
-  }, [canOpenStep])
-  const handleViewArtwork = useCallback(() => {
-    if (!canRequestArtwork) {
-      setActionMessage(blockedStepMessage(3))
-      return
-    }
-    const shouldWait = mqttConfig.enabled && connectionStatus === 'connected' && !aiArtPlan && !aiPlanWaitExpired
-    setArtworkRequested(true)
-    if (shouldWait) {
-      setActionMessage('Esperando el plan del AI Bridge antes de mostrar la obra.')
-      return
-    }
-    if (!artPlan) {
-      setActionMessage('Preparando el plan artístico.')
-      return
-    }
-    setCurrentStep(3)
-    setArtworkRequested(false)
-  }, [aiArtPlan, aiPlanWaitExpired, artPlan, canRequestArtwork, connectionStatus, mqttConfig.enabled])
-  const activeStep = sessionActive ? 2 : currentStep
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
@@ -623,37 +494,27 @@ function App() {
           />
         ) : (
           <>
-            <StepStrip active={activeStep} currentStep={currentStep} canOpenStep={canOpenStep} onSelect={goToStep} />
-        <DemoReadinessPanel
-          mqttStatus={connectionStatus}
-          aiPlan={lastAiPlan}
-          aiChunk={lastAiChunk}
-          hasEmotionSummary={combinedEmotionSummary.length > 0}
-          robotStatus={lastCalibrationStatus || lastRobotStatus}
-          voiceStatus={voiceStatus}
-          voiceEnabled={voiceCaptureActive}
-          painter={selectedPainterProfile}
-          sessionActive={sessionActive}
-          calibrationActive={false}
-          calibrationLocked={calibrationLocked}
-          calibrationMoving={armCalibrationState.moving}
-        />
+            <DemoReadinessPanel
+              mqttStatus={connectionStatus}
+              aiPlan={lastAiPlan}
+              aiChunk={lastAiChunk}
+              hasEmotionSummary={combinedEmotionSummary.length > 0}
+              robotStatus={lastCalibrationStatus || lastRobotStatus}
+              voiceStatus={voiceStatus}
+              voiceEnabled={voiceCaptureActive}
+              painter={selectedPainterProfile}
+              sessionActive={sessionActive}
+              calibrationActive={false}
+              calibrationLocked={calibrationLocked}
+              calibrationMoving={armCalibrationState.moving}
+            />
 
-        {currentStep === 1 && (
-          <Screen title="1. Elige el estilo" description="Selecciona el artista que dará forma visual a la obra final.">
-            <PainterSelector selectedArtist={selectedArtist} onSelect={setSelectedArtist} />
-            <ScreenActions>
-              <button onClick={() => setCurrentStep(2)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 hover:bg-amber-300 transition-colors">
-                Continuar a emoción
-              </button>
-            </ScreenActions>
-          </Screen>
-        )}
-
-        {currentStep === 2 && (
-          <Screen title={`2. Lee tu emoción con ${selectedArtistInfo.name}`} description={voiceCaptureActive ? 'Moodcam observa el rostro y la voz para transformar la sesión en una propuesta artística.' : 'Moodcam observa el rostro para transformar la sesión en una propuesta artística.'}>
+          <Screen title="Crea una obra dinámica" description={voiceCaptureActive ? 'Elige un estilo, captura rostro y voz, y deja que AI Bridge genere chunks en tiempo real.' : 'Elige un estilo, captura el rostro y deja que AI Bridge genere chunks en tiempo real.'}>
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] gap-5">
               <div className="space-y-4">
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+                  <PainterSelector selectedArtist={selectedArtist} onSelect={handleSelectArtist} />
+                </div>
                 <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   {!cameraActive ? (
@@ -716,43 +577,21 @@ function App() {
                     <EmotionDisplay emotions={emotions} dominant={dominant} age={age} gender={gender} />
                   </div>
                 )}
+                <DynamicArtworkStatus aiChunk={lastAiChunk} aiPlan={lastAiPlan} robotStatus={robotStatusPayload} sessionActive={sessionActive} />
               </div>
             </div>
-            <ScreenActions>
-              <button onClick={() => setCurrentStep(1)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-              <button onClick={handleViewArtwork} disabled={!canRequestArtwork || (artworkRequested && waitingForAiPlan)} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors">
-                {artworkRequested && waitingForAiPlan ? 'Esperando AI Bridge...' : 'Ver mi obra'}
-              </button>
-            </ScreenActions>
           </Screen>
-        )}
 
-        {currentStep === 3 && (
-          <Screen title="3. Tu obra en movimiento" description="Revisa la lectura emocional, el resumen artístico y deja que el brazo pinte la obra.">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
-                <VoiceEmotionPanel latestSample={latestVoiceSample} summary={voiceSummary} combinedSummary={combinedEmotionSummary} faceSummary={displayedFaceSummary} />
+            {(actionMessage || lastPublished || lastError || lastSystemError || lastAiPlan) && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-400 space-y-1">
+                {actionMessage && <p>{actionMessage}</p>}
+                {lastAiPlan && <p>Propuesta artística recibida: {lastAiPlan.payload?.id || lastAiPlan.payload?.plan_id || 'sin id'}</p>}
+                {lastAiChunk && <p>Chunk dinámico recibido: {lastAiChunk.payload?.chunk_id || lastAiChunk.payload?.id || 'sin id'}</p>}
+                {lastPublished && <p>Último MQTT: {lastPublished.topic}</p>}
+                {lastSystemError && <p className="text-amber-300">Sistema: {formatSystemError(lastSystemError.payload)}</p>}
+                {lastError && <p className="text-red-300">MQTT: {lastError}</p>}
               </div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-                <ArtPlanPanel plan={artPlan} planSource={planSource} mqttEnabled={mqttConfig.enabled} mqttStatus={connectionStatus} robotStatus={robotStatusPayload} onSend={handleSendPlan} disabled={robotPaintDisabled} disabledReason={robotPaintBlockedReason} />
-              </div>
-            </div>
-            <ScreenActions>
-              <button onClick={() => setCurrentStep(2)} className="px-4 py-2 rounded-lg text-sm font-semibold border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">Anterior</button>
-            </ScreenActions>
-          </Screen>
-        )}
-
-        {(actionMessage || lastPublished || lastError || lastSystemError || lastAiPlan) && (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-400 space-y-1">
-            {actionMessage && <p>{actionMessage}</p>}
-            {lastAiPlan && <p>Propuesta artística recibida: {lastAiPlan.payload?.id || lastAiPlan.payload?.plan_id || 'sin id'}</p>}
-            {lastAiChunk && <p>Chunk dinámico recibido: {lastAiChunk.payload?.chunk_id || lastAiChunk.payload?.id || 'sin id'}</p>}
-            {lastPublished && <p>Último MQTT: {lastPublished.topic}</p>}
-            {lastSystemError && <p className="text-amber-300">Sistema: {formatSystemError(lastSystemError.payload)}</p>}
-            {lastError && <p className="text-red-300">MQTT: {lastError}</p>}
-          </div>
-        )}
+            )}
           </>
         )}
       </main>
@@ -760,41 +599,6 @@ function App() {
       <footer className="py-3 text-center text-xs text-zinc-600 border-t border-zinc-800">
         {`Topics: moodcam/${mqttConfig.deviceId}/session · ai/${mqttConfig.deviceId}/stroke_chunk · robot/${mqttConfig.deviceId}/command`}
       </footer>
-    </div>
-  )
-}
-
-function StepStrip({ active, currentStep, canOpenStep, onSelect }) {
-  const steps = ['Estilo', 'Emoción', 'Obra']
-
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {steps.map((step, index) => {
-        const number = index + 1
-        const current = number === active
-        const done = number < active
-        const open = canOpenStep(number)
-
-        return (
-          <button
-            key={step}
-            onClick={() => onSelect(number)}
-            aria-disabled={!open}
-            className={`rounded-lg border px-2 py-2 text-center text-xs transition-colors ${
-              current || currentStep === number
-                ? 'border-amber-400 bg-amber-400/10 text-white'
-                : done
-                  ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
-                  : open
-                    ? 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600'
-                    : 'cursor-not-allowed border-zinc-900 bg-zinc-950/50 text-zinc-700'
-            }`}
-          >
-            <span className="block text-[10px]">{number}</span>
-            <span className="font-semibold">{step}</span>
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -811,10 +615,36 @@ function Screen({ title, description, children }) {
   )
 }
 
-function ScreenActions({ children }) {
+function DynamicArtworkStatus({ aiChunk, aiPlan, robotStatus, sessionActive }) {
+  const queueDepth = Number(robotStatus?.queue_depth)
+  const hasQueueDepth = Number.isFinite(queueDepth)
+
   return (
-    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800 pt-4">
-      {children}
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4 space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Obra dinámica</h2>
+        <p className="text-xs text-gray-500 mt-1">
+          {sessionActive ? 'Generando trazos por ventanas de emoción.' : 'Inicia una captura para recibir chunks del AI Bridge.'}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <StatusMetric label="Último chunk" value={aiChunk?.payload?.chunk_id || aiChunk?.payload?.id || 'pendiente'} />
+        <StatusMetric label="Ventana" value={aiChunk?.payload?.window_index ?? '-'} />
+        <StatusMetric label="Comandos" value={aiChunk?.payload?.command_count ?? '-'} />
+        <StatusMetric label="Cola robot" value={hasQueueDepth ? `${queueDepth}/${robotStatus.queue_capacity ?? '?'}` : robotStatus?.queue_full ? 'llena' : '-'} />
+      </div>
+      {aiPlan && (
+        <p className="text-xs text-zinc-500">Plan compatible recibido: {aiPlan.payload?.id || aiPlan.payload?.plan_id || 'sin id'}</p>
+      )}
+    </div>
+  )
+}
+
+function StatusMetric({ label, value }) {
+  return (
+    <div className="rounded-md border border-zinc-800 bg-zinc-950/70 px-3 py-2">
+      <span className="block text-[10px] uppercase tracking-wider text-zinc-500">{label}</span>
+      <span className="mt-1 block truncate text-sm font-semibold text-zinc-200">{value}</span>
     </div>
   )
 }
@@ -822,17 +652,6 @@ function ScreenActions({ children }) {
 function formatSystemError(payload) {
   if (typeof payload === 'string') return payload
   return payload?.message || payload?.error || JSON.stringify(payload)
-}
-
-function isCalibrationOnlyRobotError(payload) {
-  const detail = typeof payload === 'string' ? payload : payload?.detail || payload?.message || payload?.error || ''
-  return String(detail).toLowerCase().includes('tipo de comando de calibracion desconocido')
-}
-
-function blockedStepMessage(step) {
-  if (step === 2) return 'El brazo se está moviendo. Espera a que la calibración termine antes de capturar.'
-  if (step === 3) return 'Completa la lectura emocional para crear la propuesta artística antes de pintar.'
-  return 'Completa el paso anterior antes de continuar.'
 }
 
 export default App
