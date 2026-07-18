@@ -15,12 +15,12 @@ const pipelineSteps = [
   {
     title: 'Voz y pintor',
     text: 'La conversacion con el pintor elegido suma ritmo, palabras, intensidad y preferencias de color.',
-    metric: '60 segundos',
+    metric: '30 segundos',
   },
   {
     title: 'Plan artistico',
     text: 'El motor mezcla rostro, voz, movilidad y estilo para crear trazos, formas, presion y colores.',
-    metric: '5 estilos',
+    metric: '4 estilos',
   },
   {
     title: 'Robot A4',
@@ -30,13 +30,13 @@ const pipelineSteps = [
 ]
 
 const stats = [
-  ['Tiempo de observacion', '60 s'],
+  ['Tiempo de observacion', '30 s'],
   ['Formato de pintura', 'A4 horizontal'],
   ['Salida del robot', 'x / y / z / brush'],
   ['Privacidad visual', 'IA en navegador'],
 ]
 
-const artists = ['Kandinsky', 'Pollock', 'Rothko', 'Alma Thomas', 'De Kooning']
+const artists = ['Kandinsky', 'Pollock', 'Rothko', 'Alma Thomas']
 
 const robotCommands = [
   'paint_sequence_start',
@@ -54,7 +54,7 @@ function ProjectPage() {
 
   useEffect(() => {
     const previousTitle = document.title
-    document.title = 'E-motion Proyecto'
+    document.title = 'Inner Synergy Proyecto'
     return () => {
       document.title = previousTitle
     }
@@ -68,7 +68,7 @@ function ProjectPage() {
         <section className="project-hero" aria-labelledby="project-title">
           <ProjectRender />
           <div className="project-hero__content project-reveal is-visible">
-            <p className="project-kicker">E-motion</p>
+            <p className="project-kicker">Inner Synergy</p>
             <h1 id="project-title">Una camara que convierte emociones en pintura robotica</h1>
             <p className="project-hero__lead">
               Nuestro proyecto une vision artificial, voz en tiempo real, arte generativo y un brazo Arduino
@@ -204,8 +204,8 @@ function ProjectPage() {
       </main>
 
       <footer className="project-footer">
-        <img src="/e-motion-wordmark.png" alt="E-motion" />
-        <span>E-motion · IA emocional · arte generativo · robot A4</span>
+        <strong>Inner Synergy</strong>
+        <span>Inner Synergy · IA emocional · arte generativo · robot A4</span>
       </footer>
     </div>
   )
@@ -215,7 +215,7 @@ function ProjectNav() {
   return (
     <nav className="project-nav" aria-label="Navegacion del proyecto">
       <a className="project-brand" href="/">
-        <img src="/e-motion-wordmark.png" alt="E-motion" />
+        <span>Inner Synergy</span>
       </a>
       <div>
         <a href="#arquitectura">Arquitectura</a>

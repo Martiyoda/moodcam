@@ -53,13 +53,13 @@
   text-decoration: none;
 }
 
-.project-brand img {
-  width: 150px;
-  height: 44px;
-  border-radius: 6px;
-  object-fit: contain;
-  background: rgba(255, 255, 255, 0.06);
-  filter: brightness(1.28) contrast(1.12);
+.project-brand span,
+.project-footer strong {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .project-nav div a {
@@ -534,15 +534,6 @@
   text-align: center;
 }
 
-.project-footer img {
-  width: 150px;
-  height: 46px;
-  border-radius: 6px;
-  object-fit: contain;
-  background: rgba(255, 255, 255, 0.06);
-  filter: brightness(1.28) contrast(1.12);
-}
-
 .project-reveal {
   opacity: 0;
   transform: translateY(28px);
@@ -650,7 +641,9 @@
   }
 
   .project-brand span {
-    display: none;
+    max-width: 11ch;
+    font-size: 0.78rem;
+    line-height: 1.05;
   }
 
   .project-hero {

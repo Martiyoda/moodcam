@@ -570,7 +570,7 @@ function App() {
         </a>
         <div className="text-center">
           <div className="flex items-center justify-center gap-3">
-            <img src="/e-motion-wordmark.png" alt="E-motion" className="h-12 w-auto max-w-52.5 rounded-md object-contain shadow-md" />
+            <span className="text-xl sm:text-2xl font-semibold tracking-[0.18em] uppercase text-white">Inner Synergy</span>
           </div>
           <p className="text-xs text-zinc-500 mt-1">emoción · arte generativo · pintura A4</p>
         </div>
