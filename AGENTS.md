@@ -77,7 +77,7 @@ El servidor carga `.env.local` y `.env` sin sobreescribir variables ya presentes
 - `MQTT_DEVICE_ID` o `MOODCAM_DEVICE_ID`: pivote de todos los topics.
 - `MQTT_USERNAME`, `MQTT_PASSWORD`: credenciales opcionales del broker.
 - `MQTT_COMMAND_DELAY_MS`: pausa entre comandos publicados al robot, clamp `0..5000`, default `60`.
-- Overrides opcionales de topics: `MQTT_SESSION_START_TOPIC`, `MQTT_FACE_EMOTION_TOPIC`, `MQTT_SESSION_SUMMARY_TOPIC`, `MQTT_STROKE_PLAN_TOPIC`, `MQTT_ROBOT_COMMAND_TOPIC`, `MQTT_ROBOT_STATUS_TOPIC`, `MQTT_SYSTEM_ERROR_TOPIC`, `MQTT_MOODCAM_STATUS_TOPIC`, `MQTT_WEB_PRESENCE_TOPIC`, `MQTT_BRIDGE_PRESENCE_TOPIC`, `MQTT_ESP32_PRESENCE_TOPIC`.
+- Overrides opcionales de topics: `MQTT_SESSION_START_TOPIC`, `MQTT_FACE_EMOTION_TOPIC`, `MQTT_SESSION_SUMMARY_TOPIC`, `MQTT_SESSION_WINDOW_TOPIC`, `MQTT_SESSION_END_TOPIC`, `MQTT_STROKE_PLAN_TOPIC`, `MQTT_STROKE_CHUNK_TOPIC`, `MQTT_ROBOT_COMMAND_TOPIC`, `MQTT_ROBOT_STATUS_TOPIC`, `MQTT_SYSTEM_ERROR_TOPIC`, `MQTT_MOODCAM_STATUS_TOPIC`, `MQTT_WEB_PRESENCE_TOPIC`, `MQTT_BRIDGE_PRESENCE_TOPIC`, `MQTT_ESP32_PRESENCE_TOPIC`.
 
 Nunca escribas secretos reales en archivos versionados. `arduino/main/src/config.h` debe quedarse local; usa `config.example.h` como plantilla.
 
@@ -114,7 +114,10 @@ Topics por `deviceId` normalizado:
 - `moodcam/{deviceId}/session/start`
 - `moodcam/{deviceId}/emotion/face`
 - `moodcam/{deviceId}/session/summary`
+- `moodcam/{deviceId}/session/window`
+- `moodcam/{deviceId}/session/end`
 - `ai/{deviceId}/stroke_plan`
+- `ai/{deviceId}/stroke_chunk`
 - `robot/{deviceId}/command`
 - `robot/{deviceId}/status`
 - `system/{deviceId}/error`
@@ -130,6 +133,7 @@ Reglas:
 - Usar `createTopicMap`, `topicFor`, `createMqttClientId`, `createSessionId`, builders de payload y `createRobotCommandSequence`.
 - Si cambias topics, actualiza contrato, README, tests y firmware/configuracion relacionada.
 - La web publica presencia retenida cada 5 s; el bridge publica presencia retenida cada 5 s; el firmware publica presencia ESP32 por topic separado.
+- El firmware publica `queue_depth`, `queue_capacity`, `queue_full` y `queue_executing` en `robot/status`; el AI Bridge los usa para pausar ventanas cuando la FIFO se llena.
 
 Secuencia de comandos de robot:
 
@@ -144,14 +148,14 @@ Cada comando envuelto debe conservar `plan_id`, `session_id`, `artist`, `sequenc
 La UI esta centrada en una sesion artistica:
 
 1. Seleccion de pintor.
-2. Camara y, actualmente, voz habilitada (`VOICE_CAPTURE_ENABLED = true`).
+2. Camara y voz opcional con consentimiento explicito (`VOICE_CAPTURE_ENABLED = true`, pero el usuario debe activar microfono).
 3. Publicacion de `session_start`.
 4. Captura de muestras de cara cada aproximadamente `650 ms` durante la sesion.
-5. Fusion cara/voz al finalizar.
-6. Publicacion de `session_summary`.
-7. Espera de plan AI por MQTT hasta `AI_PLAN_WAIT_MS = 8000`.
-8. Si llega `ai/{deviceId}/stroke_plan` con el `session_id` actual, se usa ese plan; si no, se usa fallback local de `generateArtPlan`.
-9. Publicacion/envio de comandos al brazo desde la web o desde el bridge segun el flujo activo.
+5. Publicacion de `session/window` cada `SESSION_WINDOW_MS = 5000`, con resumen de cara, voz si hay consentimiento, transcript delta y receta de pintor.
+6. Recepcion de `ai/{deviceId}/stroke_chunk` y visualizacion del ultimo chunk en UI.
+7. Al finalizar, publicacion de ventana final, `session/end` y `session_summary` compatible.
+8. Espera de plan AI por MQTT hasta `AI_PLAN_WAIT_MS = 8000` cuando se solicita la obra completa.
+9. Si llega `ai/{deviceId}/stroke_plan` con el `session_id` actual, se usa ese plan; si no, se usa fallback local de `generateArtPlan`.
 
 Notas para agentes frontend:
 
@@ -172,11 +176,15 @@ Comportamiento:
 
 - Se conecta a MQTT con client id `emotion-ai-bridge-{deviceId}`.
 - Se suscribe a `session/start`, `emotion/face` y `session/summary`.
-- Recuerda la sesion y la ultima emocion facial por `session_id`.
+- Se suscribe tambien a `session/window`, `session/end` y `robot/status`.
+- Recuerda la sesion, ultima ventana, chunks publicados y ultimo estado de robot por `session_id`.
 - Al recibir `session_summary`, llama a `decideArtPlan`.
+- Al recibir `session/window`, llama a `decideArtChunk`; si `robot/status` indica `queue_full` o `queue_depth` alto, pausa esa ventana y publica error de bridge no-fallback.
+- Al recibir `session/end`, publica chunk final de limpieza/reposo.
 - Si `OPENAI_API_KEY` existe, pide una decision JSON estructurada a OpenAI Responses API.
 - Si falta la key o OpenAI falla/devuelve algo invalido, usa fallback local con `generateArtPlan`.
 - Publica el plan en `ai/{deviceId}/stroke_plan` con QoS 1.
+- Publica chunks en `ai/{deviceId}/stroke_chunk` con QoS 1.
 - Publica todos los comandos en `robot/{deviceId}/command` con QoS 1 y pausa `MQTT_COMMAND_DELAY_MS`.
 - Si uso fallback por error, publica `ai_bridge_error` en `system/{deviceId}/error` con `fallback: true`.
 
@@ -228,6 +236,8 @@ Principios de seguridad:
 - `STOP` detiene movimiento sin detach; `release_servos` detacha y marca posicion desconocida.
 - La interpolacion de calibracion es no bloqueante.
 - En modo real, `MotionTickCallback` deja servir MQTT/presencia entre pasos de `moveToPoseSafe`.
+- En modo real, los comandos se encolan en una FIFO acotada (`REAL_COMMAND_QUEUE_CAPACITY = 8`) y se drenan desde `loop()`, no dentro del callback MQTT.
+- `stop` activa parada de emergencia, limpia la FIFO y publica `queue_cleared`; para rearmar, enviar `set_operating_mode` a `real` tras confirmacion humana.
 - `MAX_COMMAND_LENGTH` esta en `2048`; no generes arrays de puntos enormes.
 - El servo de muneca SG90 tiene protecciones de velocidad; el codo extendido penaliza velocidad.
 - El pincel fisico puede estar deshabilitado por configuracion; revisa `robot_config.h` antes de asumir salida real.

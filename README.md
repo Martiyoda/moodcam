@@ -6,9 +6,9 @@ Proyecto para presentar en la WRO 2026 (categoria Future Innovators) que transfo
 
 E-motion es un sistema de extremo a extremo con tres capas:
 
-1. Capa web (captura y experiencia): analiza emocion facial en navegador, gestiona sesion y muestra el plan artistico.
-2. Capa de decision (AI Bridge): recibe resumen emocional por MQTT, genera una decision segura con OpenAI y publica comandos.
-3. Capa fisica (ESP32/Arduino): ejecuta movimientos del brazo dentro de limites seguros y reporta estado.
+1. Capa web (captura y experiencia): analiza emocion facial en navegador, usa voz solo con consentimiento, publica ventanas de sesion y muestra avatar/chunks/plan.
+2. Capa de decision (AI Bridge): recibe ventanas y resumen emocional por MQTT, genera directivas seguras con OpenAI o fallback local y publica chunks/comandos.
+3. Capa fisica (ESP32/Arduino): encola y ejecuta movimientos del brazo dentro de limites seguros, reportando estado, profundidad de cola y errores.
 
 El objetivo no es solo detectar emociones, sino convertirlas en una secuencia de acciones fisicas reproducibles y seguras.
 
@@ -19,15 +19,15 @@ Flujo unico soportado:
 
 Web -> MQTT (HiveMQ) -> AI Bridge -> MQTT -> Brazo fisico
 
-No hay modo simulador ni capa de avatar/video.
+No hay modo simulador que sustituya al brazo fisico. La experiencia web incluye un avatar 2D conversacional; el avatar 3D queda como mejora futura.
 
 ## Como funciona de extremo a extremo
 
 1. El usuario selecciona un pintor y arranca captura emocional en la web.
-2. La web publica observaciones y resumen en topics MQTT del device.
-3. AI Bridge consume el resumen y construye una decision artistica segura.
-4. El plan se publica en MQTT y se traduce en comandos para el robot.
-5. El firmware ejecuta movimientos y publica estado/errores.
+2. La web publica `session_start`, ventanas `session/window` cada 5 s, `session_end` y mantiene `session_summary` por compatibilidad.
+3. AI Bridge consume cada ventana, decide directivas artisticas seguras y genera chunks de trazos sin permitir que OpenAI controle coordenadas fisicas.
+4. Cada chunk se publica en MQTT y se traduce en comandos FIFO para el robot.
+5. El firmware encola comandos reales, ejecuta uno a uno y publica estado, `queue_depth`, `queue_full` y errores.
 6. La web monitoriza estado del sistema en tiempo real.
 
 ## Estructura minima
@@ -84,10 +84,11 @@ http://127.0.0.1:5173
 1. Seleccionar pintor.
 2. Iniciar camara.
 3. Iniciar captura emocional.
-4. Esperar resumen de emocion.
-5. Revisar plan artistico.
-6. Enviar plan al brazo.
-7. Supervisar estado MQTT y respuesta del robot.
+4. Activar voz solo si se acepta la captura de microfono; sin consentimiento la sesion sigue solo con rostro.
+5. Esperar chunks dinamicos y resumen de emocion.
+6. Revisar plan artistico/fallback si aplica.
+7. Enviar plan al brazo solo con supervision fisica directa.
+8. Supervisar estado MQTT, respuesta del robot y profundidad FIFO.
 
 ## Pasos seguidos para crear el proyecto
 
@@ -139,7 +140,10 @@ Topics base por device id:
 - moodcam/{deviceId}/session/start
 - moodcam/{deviceId}/emotion/face
 - moodcam/{deviceId}/session/summary
+- moodcam/{deviceId}/session/window
+- moodcam/{deviceId}/session/end
 - ai/{deviceId}/stroke_plan
+- ai/{deviceId}/stroke_chunk
 - robot/{deviceId}/command
 - robot/{deviceId}/status
 - system/{deviceId}/error
@@ -153,6 +157,7 @@ Reglas:
 - Mantener deviceId consistente entre web, bridge y firmware.
 - Publicar JSON valido en snake_case cuando aplique.
 - No cambiar topics sin actualizar contrato compartido.
+- `robot/{deviceId}/status` puede incluir `queue_depth`, `queue_capacity`, `queue_full` y `queue_executing`; AI Bridge usa esos campos para backpressure.
 
 ## Parametros de interfaz que se mantienen
 
@@ -233,6 +238,7 @@ No llega plan artistico:
 
 - Revisar OPENAI_API_KEY y logs de AI Bridge.
 - Confirmar que se publica session/summary.
+- Confirmar que se publican `session/window` y `session/end` si estas probando el flujo dinamico.
 
 Brazo no se mueve:
 
@@ -248,7 +254,8 @@ Checklist rapido:
 2. MQTT en estado conectado desde ajustes.
 3. AI Bridge activo y sin errores de credenciales.
 4. Llegan mensajes de estado del robot en robot/{deviceId}/status.
-5. Tras una sesion, aparece plan en ai/{deviceId}/stroke_plan.
+5. Durante una sesion, aparecen chunks en ai/{deviceId}/stroke_chunk.
+6. Al cierre, sigue disponible el plan/resumen compatible cuando corresponde.
 
 ## Notas de mantenimiento
 
