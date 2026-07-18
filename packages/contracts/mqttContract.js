@@ -7,13 +7,19 @@ export const ARM_CALIBRATION_COMMAND_TYPES = [
     'get_joint_state',
     'stop',
     'release_servos',
+    'set_operating_mode',
 ]
+
+export const ROBOT_OPERATING_MODES = ['calibration', 'real']
 
 export const TOPIC_KEYS = {
     sessionStart: 'sessionStart',
     faceEmotion: 'faceEmotion',
     sessionSummary: 'sessionSummary',
+    sessionWindow: 'sessionWindow',
+    sessionEnd: 'sessionEnd',
     strokePlan: 'strokePlan',
+    strokeChunk: 'strokeChunk',
     robotCommand: 'robotCommand',
     robotStatus: 'robotStatus',
     systemError: 'systemError',
@@ -27,7 +33,10 @@ export const TOPIC_TEMPLATES = {
     [TOPIC_KEYS.sessionStart]: 'moodcam/{deviceId}/session/start',
     [TOPIC_KEYS.faceEmotion]: 'moodcam/{deviceId}/emotion/face',
     [TOPIC_KEYS.sessionSummary]: 'moodcam/{deviceId}/session/summary',
+    [TOPIC_KEYS.sessionWindow]: 'moodcam/{deviceId}/session/window',
+    [TOPIC_KEYS.sessionEnd]: 'moodcam/{deviceId}/session/end',
     [TOPIC_KEYS.strokePlan]: 'ai/{deviceId}/stroke_plan',
+    [TOPIC_KEYS.strokeChunk]: 'ai/{deviceId}/stroke_chunk',
     [TOPIC_KEYS.robotCommand]: 'robot/{deviceId}/command',
     [TOPIC_KEYS.robotStatus]: 'robot/{deviceId}/status',
     [TOPIC_KEYS.systemError]: 'system/{deviceId}/error',
@@ -150,12 +159,85 @@ export function buildSessionSummaryPayload({ sessionId, deviceId, artist, faceSu
     })
 }
 
+export function buildSessionWindowPayload({ sessionId, deviceId, windowIndex, windowStartMs, windowEndMs, isFinalWindow = false, artist, artistRecipeId, artistRecipeVersion, faceSamples, faceSummary, voiceSamples, voiceSummary, combinedSummary, transcriptDelta, calibration, mobility, voiceConsent = false, conversationMode }) {
+    const timestamp = Date.now()
+    return compactObject({
+        type: 'emotion_window',
+        session_id: sessionId,
+        device_id: normalizeDeviceId(deviceId),
+        window_index: windowIndex,
+        window_start_ms: windowStartMs,
+        window_end_ms: windowEndMs,
+        is_final_window: Boolean(isFinalWindow),
+        artist_id: artist?.id || artist,
+        artist_name: artist?.name,
+        artist_recipe_id: artistRecipeId,
+        artist_recipe_version: artistRecipeVersion,
+        face_samples: faceSamples || [],
+        face_summary: faceSummary || [],
+        voice_samples: voiceSamples || [],
+        voice_summary: voiceSummary,
+        combined_summary: combinedSummary || [],
+        transcript_delta: transcriptDelta || [],
+        calibration,
+        mobility,
+        voice_consent: Boolean(voiceConsent),
+        conversation_mode: conversationMode || 'none',
+        timestamp,
+        detection_time: new Date(timestamp).toISOString(),
+    })
+}
+
+export function buildSessionEndPayload({ sessionId, deviceId, artist, totalWindows, durationMs, reason = 'completed', calibration, mobility }) {
+    const timestamp = Date.now()
+    return compactObject({
+        type: 'session_end',
+        session_id: sessionId,
+        device_id: normalizeDeviceId(deviceId),
+        artist_id: artist?.id || artist,
+        artist_name: artist?.name,
+        total_windows: totalWindows,
+        duration_ms: durationMs,
+        reason,
+        calibration,
+        mobility,
+        timestamp,
+        detection_time: new Date(timestamp).toISOString(),
+    })
+}
+
+export function buildStrokeChunkPayload({ sessionId, deviceId, chunkId, windowIndex, chunkIndex = 1, chunkTotal = 1, artist, decisionSource, directives, robotCommands, summary }) {
+    const timestamp = Date.now()
+    return compactObject({
+        type: 'stroke_chunk',
+        session_id: sessionId,
+        device_id: normalizeDeviceId(deviceId),
+        chunk_id: chunkId,
+        window_index: windowIndex,
+        chunk_index: chunkIndex,
+        chunk_total: chunkTotal,
+        artist_id: artist?.id || artist,
+        artist_name: artist?.name,
+        decision_source: decisionSource,
+        directives,
+        robot_commands: robotCommands || [],
+        command_count: Array.isArray(robotCommands) ? robotCommands.length : 0,
+        summary,
+        timestamp,
+    })
+}
+
 export function wrapRobotCommand(command, plan, index, total) {
     return {
         ...command,
         plan_id: plan.id || plan.plan_id,
         session_id: plan.session_id,
         artist: plan.artist,
+        chunk_id: plan.chunk_id,
+        window_index: plan.window_index,
+        chunk_index: plan.chunk_index,
+        chunk_total: plan.chunk_total,
+        queue_policy: plan.queue_policy,
         sequence_index: index + 1,
         sequence_total: total,
         timestamp: Date.now(),

@@ -17,11 +17,10 @@ export const DEFAULT_ROBOT_CALIBRATION = {
   water: { x: 330, y: 145, z: 2 },
   towel: { x: 330, y: 170, z: 8 },
   paints: [
-    { id: 'yellow', label: 'Amarillo', color: 'yellow', hex: '#f8d447', x: 330, y: 18, z: 2 },
-    { id: 'orange', label: 'Naranja', color: 'orange', hex: '#f97316', x: 330, y: 42, z: 2 },
-    { id: 'red', label: 'Rojo', color: 'red', hex: '#ef4444', x: 330, y: 66, z: 2 },
-    { id: 'blue', label: 'Azul', color: 'light_blue', hex: '#38bdf8', x: 330, y: 90, z: 2 },
-    { id: 'black', label: 'Negro', color: 'black', hex: '#111827', x: 330, y: 114, z: 2 },
+    { id: 'blue', label: 'Azul', color: 'blue', hex: '#2563eb', x: 330, y: 18, z: 2 },
+    { id: 'violet', label: 'Violeta', color: 'violet', hex: '#7c3aed', x: 330, y: 42, z: 2 },
+    { id: 'red', label: 'Rojo', color: 'red', hex: '#dc2626', x: 330, y: 66, z: 2 },
+    { id: 'yellow', label: 'Amarillo', color: 'yellow', hex: '#facc15', x: 330, y: 90, z: 2 },
   ],
 }
 

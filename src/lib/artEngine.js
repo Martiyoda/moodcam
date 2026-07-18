@@ -1,8 +1,12 @@
+import { getPainterRecipe, getPhysicalColor, getRecipeColorsForEmotion } from './painterRecipes.js'
+
 const CANVAS_WIDTH = 220
 const CANVAS_HEIGHT = 160
 const SAFE_MARGIN = 6
 const Z_UP = 28
 const Z_PAINT = 8
+
+let activeRandom = Math.random
 
 export const EMOTION_PROFILES = {
   happy: {
@@ -289,6 +293,104 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
   }
 }
 
+export function generateArtChunk({ windowSummary = [], artistId, recipe = null, sessionState = {}, calibration = null, mobility = 85, directives = {}, seed = '' }) {
+  const artist = getArtistById(artistId)
+  const resolvedRecipe = recipe || getPainterRecipe(artist.id)
+  const primary = windowSummary[0] || { emotion: 'neutral', percentage: 100, label: getEmotionLabel('neutral') }
+  const secondary = windowSummary[1] || primary
+  const primaryProfile = getProfile(primary.emotion)
+  const secondaryProfile = getProfile(secondary.emotion)
+  const movementLevel = clamp(mobility, 0, 100)
+  const resolvedCalibration = normalizeCalibration(calibration)
+  const chunkSeed = seed || `${sessionState.session_id || 'session'}:${sessionState.window_index || 0}:${resolvedRecipe.id}:${primary.emotion}`
+
+  return withDeterministicRandom(chunkSeed, () => {
+    const recipeColors = uniqueStrings([
+      ...(directives.palette_slots || []),
+      ...getRecipeColorsForEmotion(resolvedRecipe, primary.emotion),
+      ...getRecipeColorsForEmotion(resolvedRecipe, secondary.emotion),
+    ])
+    const baseColors = recipeColors.map((colorId) => {
+      const color = getPhysicalColor(colorId)
+      return { name: color.id, hex: color.hex }
+    })
+    const colors = selectPalette(baseColors, recipeColors, resolvedCalibration.paints).slice(0, 2)
+    const speed = clamp(
+      Math.round(weightedAverage(primaryProfile.speed, secondaryProfile.speed, primary.percentage) * 0.4 + artist.baseSpeed * 0.35 + movementLevel * 0.25),
+      resolvedRecipe.speed_range[0],
+      resolvedRecipe.speed_range[1]
+    )
+    const pressure = clamp(
+      Math.round(weightedAverage(primaryProfile.pressure, secondaryProfile.pressure, primary.percentage) * 0.55 + artist.basePressure * 0.45),
+      resolvedRecipe.pressure_range[0],
+      resolvedRecipe.pressure_range[1]
+    )
+    const density = clamp(
+      Math.round(weightedAverage(primaryProfile.density, secondaryProfile.density, primary.percentage) * 0.5 + artist.density * 0.35 + movementLevel * 0.15),
+      resolvedRecipe.density_range[0],
+      resolvedRecipe.density_range[1]
+    )
+    const randomness = clamp(directives.randomness ?? artist.randomness, 0, 100)
+    const strokeCount = clamp(
+      Math.round(1 + density / 28),
+      1,
+      resolvedRecipe.limits.max_strokes_per_chunk
+    )
+    const shapes = uniqueStrings([...(directives.gestures || []), ...resolvedRecipe.allowed_gestures, ...artist.shapes]).slice(0, 7)
+    const chunkId = sessionState.chunk_id || `${sessionState.session_id || 'session'}-window-${sessionState.window_index || 0}-chunk-${sessionState.chunk_index || 1}`
+
+    const rawStrokes = Array.from({ length: strokeCount }, (_, index) => createStroke({
+      index,
+      artist,
+      shapes,
+      colors,
+      speed,
+      pressure,
+      randomness,
+      movementLevel,
+      direction: index % 2 === 0 ? primaryProfile.direction : secondaryProfile.direction,
+    }))
+    const strokes = rawStrokes.map((stroke) => ({
+      ...stroke,
+      id: `${chunkId}-${stroke.id}`,
+      points: stroke.points
+        .slice(0, resolvedRecipe.limits.max_points_per_stroke)
+        .map((strokePoint) => projectPointToCanvas(strokePoint, resolvedCalibration)),
+    }))
+    const robotCommands = createRobotCommands(strokes, resolvedCalibration, { finishWithRest: false, cleanAtEnd: false })
+
+    return {
+      id: chunkId,
+      chunk_id: chunkId,
+      session_id: sessionState.session_id,
+      window_index: sessionState.window_index || 0,
+      chunk_index: sessionState.chunk_index || 1,
+      chunk_total: sessionState.chunk_total || 1,
+      artist: artist.id,
+      artist_name: artist.name,
+      recipe_id: resolvedRecipe.id,
+      recipe_version: resolvedRecipe.version,
+      main_emotion: primary.emotion,
+      secondary_emotion: secondary.emotion,
+      main_emotions: [primary, secondary],
+      colors: colors.map((color) => color.name),
+      palette: colors,
+      shapes,
+      speed,
+      pressure,
+      density,
+      randomness,
+      seed: chunkSeed,
+      canvas: { ...resolvedCalibration.canvas, unit: 'mm', orientation: 'horizontal-a4' },
+      calibration: resolvedCalibration,
+      strokes,
+      robot_commands: robotCommands,
+      queue_policy: 'enqueue',
+      close_session: Boolean(sessionState.close_session),
+    }
+  })
+}
+
 function getProfile(emotion) {
   return EMOTION_PROFILES[emotion] || EMOTION_PROFILES.neutral
 }
@@ -340,11 +442,10 @@ function normalizeCalibration(calibration) {
     water: calibration?.water || { x: canvas.originX + canvas.width + 33, y: canvas.originY + 145, z: z.dip },
     towel: calibration?.towel || { x: canvas.originX + canvas.width + 33, y: canvas.originY + 170, z: z.paint },
     paints: paints.length ? paints : [
-      { id: 'yellow', label: 'Amarillo', color: 'yellow', hex: '#f8d447', x: canvas.originX + canvas.width + 33, y: 18, z: z.dip },
-      { id: 'orange', label: 'Naranja', color: 'orange', hex: '#f97316', x: canvas.originX + canvas.width + 33, y: 42, z: z.dip },
-      { id: 'red', label: 'Rojo', color: 'red', hex: '#ef4444', x: canvas.originX + canvas.width + 33, y: 66, z: z.dip },
-      { id: 'blue', label: 'Azul', color: 'light_blue', hex: '#38bdf8', x: canvas.originX + canvas.width + 33, y: 90, z: z.dip },
-      { id: 'black', label: 'Negro', color: 'black', hex: '#111827', x: canvas.originX + canvas.width + 33, y: 114, z: z.dip },
+      { id: 'blue', label: 'Azul', color: 'blue', hex: '#2563eb', x: canvas.originX + canvas.width + 33, y: 18, z: z.dip },
+      { id: 'violet', label: 'Violeta', color: 'violet', hex: '#7c3aed', x: canvas.originX + canvas.width + 33, y: 42, z: z.dip },
+      { id: 'red', label: 'Rojo', color: 'red', hex: '#dc2626', x: canvas.originX + canvas.width + 33, y: 66, z: z.dip },
+      { id: 'yellow', label: 'Amarillo', color: 'yellow', hex: '#facc15', x: canvas.originX + canvas.width + 33, y: 90, z: z.dip },
     ],
   }
 }
@@ -392,7 +493,8 @@ function projectPointToCanvas(strokePoint, calibration) {
   }
 }
 
-function createRobotCommands(strokes, calibration) {
+function createRobotCommands(strokes, calibration, options = {}) {
+  const { finishWithRest = true, cleanAtEnd = true } = options
   const commands = []
   let currentPaintId = null
 
@@ -416,13 +518,15 @@ function createRobotCommands(strokes, calibration) {
     })
   })
 
-  if (currentPaintId) commands.push(...createBrushCleaningCommands(calibration))
-  commands.push({
-    type: 'move_to_rest',
-    points: [
-      { x: calibration.rest.x, y: calibration.rest.y, z: calibration.z.up, brush: 0 },
-    ],
-  })
+  if (currentPaintId && cleanAtEnd) commands.push(...createBrushCleaningCommands(calibration))
+  if (finishWithRest) {
+    commands.push({
+      type: 'move_to_rest',
+      points: [
+        { x: calibration.rest.x, y: calibration.rest.y, z: calibration.z.up, brush: 0 },
+      ],
+    })
+  }
 
   return commands
 }
@@ -717,7 +821,35 @@ function clamp(value, min, max) {
 }
 
 function randomBetween(min, max) {
-  return min + Math.random() * (max - min)
+  return min + activeRandom() * (max - min)
+}
+
+function withDeterministicRandom(seed, callback) {
+  const previousRandom = activeRandom
+  activeRandom = createSeededRandom(seed)
+  try {
+    return callback()
+  } finally {
+    activeRandom = previousRandom
+  }
+}
+
+function createSeededRandom(seed) {
+  let state = hashSeed(seed)
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0
+    return state / 4294967296
+  }
+}
+
+function hashSeed(seed) {
+  const text = String(seed || 'inner-synergy')
+  let hash = 2166136261
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
 }
 
 function round(value) {

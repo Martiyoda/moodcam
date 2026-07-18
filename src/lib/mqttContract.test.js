@@ -4,7 +4,10 @@ import {
   ARM_CALIBRATION_COMMAND_TYPES,
   buildFaceEmotionPayload,
   buildPresencePayload,
+  buildSessionEndPayload,
   buildSessionSummaryPayload,
+  buildSessionWindowPayload,
+  buildStrokeChunkPayload,
   calibrationTopicsFromMap,
   createMqttClientId,
   createRobotCommandSequence,
@@ -13,7 +16,7 @@ import {
 
 test('limita la calibración web a comandos aprobados', () => {
   assert.deepEqual(ARM_CALIBRATION_COMMAND_TYPES, [
-    'start_calibration', 'jog', 'set_angle', 'get_joint_state', 'stop', 'release_servos',
+    'start_calibration', 'jog', 'set_angle', 'get_joint_state', 'stop', 'release_servos', 'set_operating_mode',
   ])
   assert.equal(ARM_CALIBRATION_COMMAND_TYPES.includes('emotion_test'), false)
   assert.equal(ARM_CALIBRATION_COMMAND_TYPES.includes('pose_test'), false)
@@ -26,7 +29,10 @@ test('crea topics por deviceId para Moodcam, AI Bridge y robot', () => {
 
   assert.equal(topics.sessionStart, 'moodcam/robot-aula-1/session/start')
   assert.equal(topics.faceEmotion, 'moodcam/robot-aula-1/emotion/face')
+  assert.equal(topics.sessionWindow, 'moodcam/robot-aula-1/session/window')
+  assert.equal(topics.sessionEnd, 'moodcam/robot-aula-1/session/end')
   assert.equal(topics.strokePlan, 'ai/robot-aula-1/stroke_plan')
+  assert.equal(topics.strokeChunk, 'ai/robot-aula-1/stroke_chunk')
   assert.equal(topics.robotCommand, 'robot/robot-aula-1/command')
   assert.equal(topics.systemError, 'system/robot-aula-1/error')
   assert.equal(topics.webPresence, 'system/robot-aula-1/presence/web')
@@ -72,6 +78,57 @@ test('normaliza payloads de observacion y resumen de sesion', () => {
   assert.equal(summary.combined_emotions[0].emotion, 'happy')
 })
 
+test('crea payloads dinamicos de ventana, cierre y chunk', () => {
+  const windowPayload = buildSessionWindowPayload({
+    sessionId: 's1',
+    deviceId: 'robot aula 1',
+    windowIndex: 2,
+    windowStartMs: 5000,
+    windowEndMs: 10000,
+    artist: { id: 'pollock', name: 'Pollock' },
+    artistRecipeId: 'pollock-wro-v1',
+    artistRecipeVersion: '1.0.0',
+    faceSummary: [{ emotion: 'surprise', percentage: 60 }],
+    combinedSummary: [{ emotion: 'surprise', percentage: 60 }],
+    transcriptDelta: [{ speaker: 'user', text: 'rapido' }],
+    voiceConsent: true,
+  })
+
+  assert.equal(windowPayload.type, 'emotion_window')
+  assert.equal(windowPayload.device_id, 'robot-aula-1')
+  assert.equal(windowPayload.window_index, 2)
+  assert.equal(windowPayload.artist_recipe_id, 'pollock-wro-v1')
+  assert.equal(windowPayload.voice_consent, true)
+  assert.deepEqual(windowPayload.voice_samples, [])
+
+  const endPayload = buildSessionEndPayload({
+    sessionId: 's1',
+    deviceId: 'device1',
+    artist: 'pollock',
+    totalWindows: 6,
+    durationMs: 30000,
+  })
+
+  assert.equal(endPayload.type, 'session_end')
+  assert.equal(endPayload.reason, 'completed')
+  assert.equal(endPayload.total_windows, 6)
+
+  const chunkPayload = buildStrokeChunkPayload({
+    sessionId: 's1',
+    deviceId: 'device1',
+    chunkId: 's1-window-2-chunk-1',
+    windowIndex: 2,
+    artist: 'pollock',
+    decisionSource: 'local_fallback',
+    robotCommands: [{ type: 'stroke', points: [] }],
+  })
+
+  assert.equal(chunkPayload.type, 'stroke_chunk')
+  assert.equal(chunkPayload.command_count, 1)
+  assert.equal(chunkPayload.chunk_index, 1)
+  assert.equal(chunkPayload.chunk_total, 1)
+})
+
 test('crea payloads de presencia con formato compartido', () => {
   const presence = buildPresencePayload({
     deviceId: 'robot aula 1',
@@ -96,10 +153,16 @@ test('envuelve comandos de robot con inicio, indices y fin', () => {
     robot_commands: [
       { type: 'move_to_rest', points: [{ x: 1, y: 2, z: 3, brush: 0 }] },
     ],
+    chunk_id: 'chunk-1',
+    window_index: 0,
+    queue_policy: 'enqueue',
   })
 
   assert.equal(sequence[0].type, 'paint_sequence_start')
   assert.equal(sequence[1].sequence_index, 1)
   assert.equal(sequence[1].sequence_total, 1)
+  assert.equal(sequence[1].chunk_id, 'chunk-1')
+  assert.equal(sequence[1].window_index, 0)
+  assert.equal(sequence[1].queue_policy, 'enqueue')
   assert.equal(sequence.at(-1).type, 'paint_sequence_end')
 })
