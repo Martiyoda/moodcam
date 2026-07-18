@@ -6,8 +6,10 @@ import {
     TOPIC_KEYS,
     buildFaceEmotionPayload,
     buildPresencePayload,
+    buildSessionEndPayload,
     buildSessionStartPayload,
     buildSessionSummaryPayload,
+    buildSessionWindowPayload,
     createMqttClientId,
     createRobotCommandSequence,
     createTopicMap,
@@ -88,6 +90,7 @@ export default function useMqtt() {
     const [lastPublished, setLastPublished] = useState(null)
     const [lastRobotStatus, setLastRobotStatus] = useState(null)
     const [lastAiPlan, setLastAiPlan] = useState(null)
+    const [lastAiChunk, setLastAiChunk] = useState(null)
     const [lastSystemError, setLastSystemError] = useState(null)
     const [lastCalibrationStatus, setLastCalibrationStatus] = useState(null)
     const [lastCalibrationError, setLastCalibrationError] = useState(null)
@@ -212,6 +215,7 @@ export default function useMqtt() {
             client.subscribe([...new Set([
                 getTopic(configRef.current, TOPIC_KEYS.robotStatus),
                 getTopic(configRef.current, TOPIC_KEYS.strokePlan),
+                getTopic(configRef.current, TOPIC_KEYS.strokeChunk),
                 getTopic(configRef.current, TOPIC_KEYS.systemError),
             ])], { qos: 0 })
         })
@@ -227,6 +231,14 @@ export default function useMqtt() {
             }
             if (topic === getTopic(configRef.current, TOPIC_KEYS.strokePlan)) {
                 setLastAiPlan({
+                    topic,
+                    payload: parseJsonMessage(message),
+                    timestamp: Date.now(),
+                })
+                setLastSystemError(null)
+            }
+            if (topic === getTopic(configRef.current, TOPIC_KEYS.strokeChunk)) {
+                setLastAiChunk({
                     topic,
                     payload: parseJsonMessage(message),
                     timestamp: Date.now(),
@@ -359,6 +371,20 @@ export default function useMqtt() {
         }), { qos: 1 })
     ), [publishJson])
 
+    const publishSessionWindow = useCallback((windowPayload) => (
+        publishJson(TOPIC_KEYS.sessionWindow, buildSessionWindowPayload({
+            ...windowPayload,
+            deviceId: configRef.current.deviceId,
+        }), { qos: 1 })
+    ), [publishJson])
+
+    const publishSessionEnd = useCallback((payload) => (
+        publishJson(TOPIC_KEYS.sessionEnd, buildSessionEndPayload({
+            ...payload,
+            deviceId: configRef.current.deviceId,
+        }), { qos: 1 })
+    ), [publishJson])
+
     const publishRobotCommands = useCallback((plan) => {
         const client = clientRef.current
         const config = configRef.current
@@ -405,6 +431,7 @@ export default function useMqtt() {
         lastPublished,
         lastRobotStatus,
         lastAiPlan,
+        lastAiChunk,
         lastSystemError,
         lastCalibrationStatus,
         lastCalibrationError,
@@ -412,6 +439,8 @@ export default function useMqtt() {
         publishFaceEmotion,
         publishSessionStart,
         publishSessionSummary,
+        publishSessionWindow,
+        publishSessionEnd,
         publishArtPlan,
         publishRobotCommands,
         publishCalibrationCommand,

@@ -14,12 +14,15 @@ import { calculateEmotionSummary, generateArtPlan, getArtistById } from './lib/a
 import { DEFAULT_CONVERSATION_MODE, getConversationMode } from './lib/conversationModes'
 import { calibrationTopicsFromMap, createSessionId } from './lib/mqttContract'
 import { getPainterProfile } from './lib/painterProfiles'
+import { getPainterRecipe } from './lib/painterRecipes'
 import {
   DEFAULT_ROBOT_CALIBRATION,
   combineEmotionSummaries,
+  summarizeVoiceEmotion,
 } from './lib/voiceEngine'
 
 const DEFAULT_SESSION_MS = 30_000
+const SESSION_WINDOW_MS = 5_000
 const FACE_SAMPLE_INTERVAL_MS = 650
 const AI_PLAN_WAIT_MS = 8_000
 const VOICE_CAPTURE_ENABLED = true
@@ -52,6 +55,7 @@ function App() {
     lastPublished,
     lastRobotStatus,
     lastAiPlan,
+    lastAiChunk,
     lastSystemError,
     lastCalibrationStatus,
     lastCalibrationError,
@@ -59,6 +63,8 @@ function App() {
     publishFaceEmotion,
     publishSessionStart,
     publishSessionSummary,
+    publishSessionWindow,
+    publishSessionEnd,
     publishArtPlan,
     publishRobotCommands,
     publishCalibrationCommand,
@@ -94,6 +100,7 @@ function App() {
   const [armCalibrationState, setArmCalibrationState] = useState({ active: false, moving: false })
   const [aiPlanWaitExpired, setAiPlanWaitExpired] = useState(false)
   const [artworkRequested, setArtworkRequested] = useState(false)
+  const [voiceConsentGranted, setVoiceConsentGranted] = useState(false)
 
   const faceSamplesRef = useRef([])
   const voiceSamplesRef = useRef([])
@@ -101,10 +108,16 @@ function App() {
   const emotionsRef = useRef(null)
   const voiceSummaryRef = useRef(voiceSummary)
   const lastFaceSampleRef = useRef(0)
+  const lastWindowFaceCursorRef = useRef(0)
+  const lastWindowVoiceCursorRef = useRef(0)
+  const lastWindowTranscriptCursorRef = useRef(0)
+  const lastPublishedWindowIndexRef = useRef(-1)
 
   const selectedArtistInfo = useMemo(() => getArtistById(selectedArtist), [selectedArtist])
   const selectedPainterProfile = useMemo(() => getPainterProfile(selectedArtist), [selectedArtist])
+  const selectedPainterRecipe = useMemo(() => getPainterRecipe(selectedArtist), [selectedArtist])
   const conversationMode = useMemo(() => getConversationMode(conversationModeId), [conversationModeId])
+  const voiceCaptureActive = VOICE_CAPTURE_ENABLED && voiceConsentGranted
   const calibrationLocked = armCalibrationState.moving
   const captureDurationSeconds = Math.max(1, Number(detectionConfig.session?.captureSeconds) || 30)
   const captureDurationMs = captureDurationSeconds * 1000
@@ -117,10 +130,10 @@ function App() {
       artistId: selectedArtist,
       mobility,
       calibration: robotCalibration,
-      colorPreferences: VOICE_CAPTURE_ENABLED ? voiceSummary.color_preferences : [],
-      voiceSummary: VOICE_CAPTURE_ENABLED ? voiceSummary : null,
+      colorPreferences: voiceCaptureActive ? voiceSummary.color_preferences : [],
+      voiceSummary: voiceCaptureActive ? voiceSummary : null,
     })
-  }, [combinedEmotionSummary, mobility, robotCalibration, selectedArtist, voiceSummary])
+  }, [combinedEmotionSummary, mobility, robotCalibration, selectedArtist, voiceCaptureActive, voiceSummary])
   const aiArtPlan = lastAiPlan?.payload?.robot_commands && lastAiPlan.payload.session_id === sessionId ? lastAiPlan.payload : null
   const shouldWaitForAiPlan = artworkRequested && mqttConfig.enabled && connectionStatus === 'connected' && combinedEmotionSummary.length > 0 && !aiArtPlan
   const waitingForAiPlan = shouldWaitForAiPlan && !aiPlanWaitExpired
@@ -186,11 +199,61 @@ function App() {
     ])
   }, [dominant, emotions, sessionActive])
 
+  const publishEmotionWindow = useCallback(({ isFinalWindow = false, windowEndMs = null } = {}) => {
+    if (!sessionId || !sessionStartedAt) return false
+
+    const elapsedMs = windowEndMs ?? Math.max(0, Date.now() - sessionStartedAt)
+    const windowIndex = Math.max(0, Math.ceil(elapsedMs / SESSION_WINDOW_MS) - 1)
+    if (windowIndex <= lastPublishedWindowIndexRef.current) return false
+
+
+    const faceSamples = faceSamplesRef.current.slice(lastWindowFaceCursorRef.current)
+    const voiceWindowSamples = voiceSamplesRef.current.slice(lastWindowVoiceCursorRef.current)
+    const transcriptDelta = transcriptRef.current.slice(lastWindowTranscriptCursorRef.current)
+    const nextFaceSummary = calculateEmotionSummary(faceSamples)
+    const nextVoiceSummary = voiceCaptureActive
+      ? summarizeVoiceEmotion(voiceWindowSamples, transcriptDelta)
+      : { main_emotions: [], sample_count: 0, color_preferences: [], keywords: [] }
+    const nextCombinedSummary = voiceCaptureActive && (voiceWindowSamples.length || transcriptDelta.length)
+      ? combineEmotionSummaries(nextFaceSummary, nextVoiceSummary)
+      : nextFaceSummary
+
+    const published = publishSessionWindow({
+      sessionId,
+      windowIndex,
+      windowStartMs: Math.max(0, windowIndex * SESSION_WINDOW_MS),
+      windowEndMs: Math.min(captureDurationMs, Math.max(elapsedMs, (windowIndex + 1) * SESSION_WINDOW_MS)),
+      isFinalWindow,
+      artist: selectedArtistInfo,
+      artistRecipeId: selectedPainterRecipe.id,
+      artistRecipeVersion: selectedPainterRecipe.version,
+      faceSamples,
+      faceSummary: nextFaceSummary,
+      voiceSamples: voiceCaptureActive ? voiceWindowSamples : [],
+      voiceSummary: nextVoiceSummary,
+      combinedSummary: nextCombinedSummary,
+      transcriptDelta,
+      calibration: robotCalibration,
+      mobility,
+      voiceConsent: voiceCaptureActive,
+      conversationMode: voiceCaptureActive ? conversationMode.id : 'face_only',
+    })
+
+    if (published) {
+      lastPublishedWindowIndexRef.current = windowIndex
+      lastWindowFaceCursorRef.current = faceSamplesRef.current.length
+      lastWindowVoiceCursorRef.current = voiceSamplesRef.current.length
+      lastWindowTranscriptCursorRef.current = transcriptRef.current.length
+    }
+
+    return published
+  }, [captureDurationMs, conversationMode.id, mobility, publishSessionWindow, robotCalibration, selectedArtistInfo, selectedPainterRecipe.id, selectedPainterRecipe.version, sessionId, sessionStartedAt, voiceCaptureActive])
+
   const finishSession = useCallback(() => {
     const nextFaceSummary = calculateEmotionSummary(faceSamplesRef.current)
     const currentVoiceSummary = voiceSummaryRef.current
-    const fusedEmotion = VOICE_CAPTURE_ENABLED ? buildVoiceFusion(emotionsRef.current) : null
-    const nextVoiceSummary = VOICE_CAPTURE_ENABLED
+    const fusedEmotion = voiceCaptureActive ? buildVoiceFusion(emotionsRef.current) : null
+    const nextVoiceSummary = voiceCaptureActive
       ? {
         ...currentVoiceSummary,
         main_emotions: fusedEmotion.art_summary,
@@ -203,13 +266,14 @@ function App() {
         label: 'voz desactivada',
         confidence: 0,
       }
-    const nextCombinedSummary = VOICE_CAPTURE_ENABLED && fusedEmotion.art_summary?.length
+    const nextCombinedSummary = voiceCaptureActive && fusedEmotion.art_summary?.length
       ? fusedEmotion.art_summary
-      : VOICE_CAPTURE_ENABLED
+      : voiceCaptureActive
         ? combineEmotionSummaries(nextFaceSummary, nextVoiceSummary)
         : nextFaceSummary
 
     stopVoiceDetection()
+    publishEmotionWindow({ isFinalWindow: true, windowEndMs: captureDurationMs })
     setSessionActive(false)
     setRemainingMs(0)
     setFaceSummary(nextFaceSummary)
@@ -225,35 +289,56 @@ function App() {
         transcript: transcriptRef.current,
         calibration: robotCalibration,
         mobility,
-        conversationMode: VOICE_CAPTURE_ENABLED ? conversationMode.id : 'face_only',
+        conversationMode: voiceCaptureActive ? conversationMode.id : 'face_only',
       })
     }
 
+    publishSessionEnd({
+      sessionId,
+      artist: selectedArtistInfo,
+      totalWindows: Math.ceil(captureDurationMs / SESSION_WINDOW_MS),
+      durationMs: captureDurationMs,
+      reason: nextCombinedSummary.length > 0 ? 'completed' : 'insufficient_emotion_data',
+      calibration: robotCalibration,
+      mobility,
+    })
+
     setActionMessage(nextCombinedSummary.length > 0
-      ? 'Lectura emocional enviada. Preparando la propuesta artística.'
-      : `No hay suficientes datos de emoción. Repite la captura con cámara${VOICE_CAPTURE_ENABLED ? ' y micrófono' : ''} activos.`)
+      ? 'Lectura emocional enviada por ventanas. Preparando la propuesta artística.'
+      : `No hay suficientes datos de emoción. Repite la captura con cámara${voiceCaptureActive ? ' y micrófono' : ''} activos.`)
   }, [
     buildVoiceFusion,
     conversationMode.id,
+    captureDurationMs,
     mobility,
+    publishEmotionWindow,
+    publishSessionEnd,
     publishSessionSummary,
     robotCalibration,
     selectedArtistInfo,
     sessionId,
     stopVoiceDetection,
+    voiceCaptureActive,
   ])
 
   useEffect(() => {
     if (!sessionActive || !sessionStartedAt) return undefined
 
     const timer = window.setInterval(() => {
-      const remaining = Math.max(0, captureDurationMs - (Date.now() - sessionStartedAt))
+      const elapsed = Date.now() - sessionStartedAt
+      const remaining = Math.max(0, captureDurationMs - elapsed)
       setRemainingMs(remaining)
-      if (remaining <= 0) finishSession()
+      if (remaining <= 0) {
+        finishSession()
+        return
+      }
+      if (elapsed >= (lastPublishedWindowIndexRef.current + 1) * SESSION_WINDOW_MS + SESSION_WINDOW_MS) {
+        publishEmotionWindow()
+      }
     }, 250)
 
     return () => window.clearInterval(timer)
-  }, [captureDurationMs, finishSession, sessionActive, sessionStartedAt])
+  }, [captureDurationMs, finishSession, publishEmotionWindow, sessionActive, sessionStartedAt])
 
   useEffect(() => {
     if (!artworkRequested || waitingForAiPlan || currentStep !== 2 || combinedEmotionSummary.length === 0 || !artPlan) return
@@ -284,6 +369,10 @@ function App() {
     setAiPlanWaitExpired(false)
     setArtworkRequested(false)
     lastFaceSampleRef.current = 0
+    lastWindowFaceCursorRef.current = 0
+    lastWindowVoiceCursorRef.current = 0
+    lastWindowTranscriptCursorRef.current = 0
+    lastPublishedWindowIndexRef.current = -1
     faceSamplesRef.current = []
     resetVoiceDetection()
     const nextSessionId = createSessionId(mqttConfig.deviceId)
@@ -293,7 +382,7 @@ function App() {
     if (!ready) ready = await startCamera()
     if (!ready) return
 
-    if (VOICE_CAPTURE_ENABLED && conversationMode.id === 'voice_detector') {
+    if (voiceCaptureActive && conversationMode.id === 'voice_detector') {
       const started = await startVoiceDetection()
       if (!started) {
         setActionMessage('No se pudo activar el micrófono. La sesión puede continuar solo con rostro si lo deseas.')
@@ -305,7 +394,7 @@ function App() {
       artist: selectedArtistInfo,
       mobility,
       calibration: robotCalibration,
-      conversationMode: VOICE_CAPTURE_ENABLED ? conversationMode.id : 'face_only',
+      conversationMode: voiceCaptureActive ? conversationMode.id : 'face_only',
     })
 
     setRemainingMs(captureDurationMs)
@@ -325,6 +414,7 @@ function App() {
     startVoiceDetection,
     calibrationLocked,
     resetVoiceDetection,
+    voiceCaptureActive,
   ])
 
   const handleResetExperience = useCallback(() => {
@@ -333,6 +423,10 @@ function App() {
     voiceSamplesRef.current = []
     transcriptRef.current = []
     lastFaceSampleRef.current = 0
+    lastWindowFaceCursorRef.current = 0
+    lastWindowVoiceCursorRef.current = 0
+    lastWindowTranscriptCursorRef.current = 0
+    lastPublishedWindowIndexRef.current = -1
     setSessionActive(false)
     setSessionStartedAt(null)
     setRemainingMs(captureDurationMs)
@@ -533,10 +627,11 @@ function App() {
         <DemoReadinessPanel
           mqttStatus={connectionStatus}
           aiPlan={lastAiPlan}
+          aiChunk={lastAiChunk}
           hasEmotionSummary={combinedEmotionSummary.length > 0}
           robotStatus={lastCalibrationStatus || lastRobotStatus}
           voiceStatus={voiceStatus}
-          voiceEnabled={VOICE_CAPTURE_ENABLED}
+          voiceEnabled={voiceCaptureActive}
           painter={selectedPainterProfile}
           sessionActive={sessionActive}
           calibrationActive={false}
@@ -556,7 +651,7 @@ function App() {
         )}
 
         {currentStep === 2 && (
-          <Screen title={`2. Lee tu emoción con ${selectedArtistInfo.name}`} description="Moodcam observa el rostro y la voz para transformar la sesión en una propuesta artística.">
+          <Screen title={`2. Lee tu emoción con ${selectedArtistInfo.name}`} description={voiceCaptureActive ? 'Moodcam observa el rostro y la voz para transformar la sesión en una propuesta artística.' : 'Moodcam observa el rostro para transformar la sesión en una propuesta artística.'}>
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] gap-5">
               <div className="space-y-4">
                 <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
@@ -592,7 +687,10 @@ function App() {
                     error={voiceError}
                     transcript={transcript}
                     mode={conversationMode}
-                    voiceEnabled={VOICE_CAPTURE_ENABLED}
+                    voiceEnabled={voiceCaptureActive}
+                    voiceAvailable={VOICE_CAPTURE_ENABLED}
+                    voiceConsentGranted={voiceConsentGranted}
+                    onVoiceConsentChange={setVoiceConsentGranted}
                     remainingSeconds={remainingSeconds}
                     captureDurationSeconds={captureDurationSeconds}
                     progress={captureProgress}
@@ -649,6 +747,7 @@ function App() {
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-400 space-y-1">
             {actionMessage && <p>{actionMessage}</p>}
             {lastAiPlan && <p>Propuesta artística recibida: {lastAiPlan.payload?.id || lastAiPlan.payload?.plan_id || 'sin id'}</p>}
+            {lastAiChunk && <p>Chunk dinámico recibido: {lastAiChunk.payload?.chunk_id || lastAiChunk.payload?.id || 'sin id'}</p>}
             {lastPublished && <p>Último MQTT: {lastPublished.topic}</p>}
             {lastSystemError && <p className="text-amber-300">Sistema: {formatSystemError(lastSystemError.payload)}</p>}
             {lastError && <p className="text-red-300">MQTT: {lastError}</p>}
@@ -659,7 +758,7 @@ function App() {
       </main>
 
       <footer className="py-3 text-center text-xs text-zinc-600 border-t border-zinc-800">
-        {`Topics: moodcam/${mqttConfig.deviceId}/session · ai/${mqttConfig.deviceId}/stroke_plan · robot/${mqttConfig.deviceId}/command`}
+        {`Topics: moodcam/${mqttConfig.deviceId}/session · ai/${mqttConfig.deviceId}/stroke_chunk · robot/${mqttConfig.deviceId}/command`}
       </footer>
     </div>
   )
