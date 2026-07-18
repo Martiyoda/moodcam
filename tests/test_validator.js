@@ -82,7 +82,7 @@ test('rechaza acciones y campos inesperados peligrosos', () => {
 })
 
 test('rechaza campos obligatorios ausentes y valores no enteros', () => {
-  const { duration_ms, ...missingDuration } = validDecision
+  const { duration_ms: _duration_ms, ...missingDuration } = validDecision
   assert.match(validateDecision(missingDuration).error, /Faltan campos obligatorios: duration_ms/)
   assert.match(validateDecision({ ...validDecision, speed: 45.5 }).error, /speed debe ser un número entero/)
 })
