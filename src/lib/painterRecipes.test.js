@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
     WRO_PAINTER_RECIPES,
+    WRO_PRESENTATION_ARTIST_IDS,
     WRO_PHYSICAL_COLORS,
     getPainterRecipe,
     getRecipeColorsForEmotion,
@@ -10,12 +11,14 @@ import {
 } from './painterRecipes.js'
 
 test('define recetas WRO solo para los cuatro pintores de presentacion', () => {
-    assert.deepEqual(WRO_PAINTER_RECIPES.map((recipe) => recipe.artist_id), [
+    assert.deepEqual(WRO_PRESENTATION_ARTIST_IDS, [
         'kandinsky',
         'pollock',
         'rothko',
         'alma-thomas',
     ])
+
+    assert.deepEqual(WRO_PAINTER_RECIPES.map((recipe) => recipe.artist_id), WRO_PRESENTATION_ARTIST_IDS)
 
     assert.equal(WRO_PAINTER_RECIPES.some((recipe) => recipe.artist_id === 'de-kooning'), false)
 })

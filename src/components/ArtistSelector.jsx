@@ -1,4 +1,7 @@
 import { ARTISTS } from '../lib/artEngine'
+import { WRO_PRESENTATION_ARTIST_IDS } from '../lib/painterRecipes'
+
+const PRESENTATION_ARTISTS = ARTISTS.filter((artist) => WRO_PRESENTATION_ARTIST_IDS.includes(artist.id))
 
 export default function ArtistSelector({ selectedArtist, onSelect }) {
   return (
@@ -11,7 +14,7 @@ export default function ArtistSelector({ selectedArtist, onSelect }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {ARTISTS.map((artist) => {
+        {PRESENTATION_ARTISTS.map((artist) => {
           const active = selectedArtist === artist.id
 
           return (

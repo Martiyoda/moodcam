@@ -109,6 +109,8 @@ export const WRO_PAINTER_RECIPES = [
     },
 ]
 
+export const WRO_PRESENTATION_ARTIST_IDS = WRO_PAINTER_RECIPES.map((recipe) => recipe.artist_id)
+
 export function getPhysicalColor(colorId) {
     return WRO_PHYSICAL_COLORS.find((color) => color.id === colorId) || WRO_PHYSICAL_COLORS[0]
 }
