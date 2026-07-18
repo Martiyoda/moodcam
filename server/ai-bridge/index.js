@@ -2,8 +2,8 @@ import mqtt from 'mqtt'
 import { pathToFileURL } from 'node:url'
 import { TOPIC_KEYS, buildPresencePayload, parseJsonMessage } from '../../packages/contracts/mqttContract.js'
 import { buildMqttOptions, loadBridgeConfig } from './config.js'
-import { decideArtPlan } from './providers/artDecisionProvider.js'
-import { publishBridgeError, publishPlanAndCommands } from './providers/robotCommandPublisher.js'
+import { createSessionEndChunk, decideArtChunk, decideArtPlan } from './providers/artDecisionProvider.js'
+import { publishBridgeError, publishChunkAndCommands, publishPlanAndCommands } from './providers/robotCommandPublisher.js'
 
 const sessions = new Map()
 const BRIDGE_PRESENCE_INTERVAL_MS = 5000
@@ -25,6 +25,9 @@ export function startAiBridge(config = loadBridgeConfig()) {
       config.topics[TOPIC_KEYS.sessionStart],
       config.topics[TOPIC_KEYS.faceEmotion],
       config.topics[TOPIC_KEYS.sessionSummary],
+      config.topics[TOPIC_KEYS.sessionWindow],
+      config.topics[TOPIC_KEYS.sessionEnd],
+      config.topics[TOPIC_KEYS.robotStatus],
     ], { qos: 1 })
   })
 
@@ -40,6 +43,10 @@ export function startAiBridge(config = loadBridgeConfig()) {
 
       if (topic === config.topics[TOPIC_KEYS.faceEmotion]) {
         rememberFaceEmotion(payload)
+      }
+
+      if (topic === config.topics[TOPIC_KEYS.robotStatus]) {
+        rememberRobotStatus(payload)
       }
 
       if (topic === config.topics[TOPIC_KEYS.sessionSummary]) {
@@ -61,6 +68,49 @@ export function startAiBridge(config = loadBridgeConfig()) {
         if (decision.reason) {
           console.warn(`Motivo ${decision.source}: ${decision.reason}`)
         }
+      }
+
+      if (topic === config.topics[TOPIC_KEYS.sessionWindow]) {
+        rememberSessionWindow(payload)
+        const sessionState = getSession(payload.session_id) || {}
+        const queueBlockReason = queueBackpressureReason(sessionState.latestRobotStatus, config)
+        if (queueBlockReason) {
+          publishBridgeError(client, config, {
+            session_id: payload.session_id,
+            severity: 'warning',
+            message: queueBlockReason,
+            fallback: false,
+          })
+          console.warn(`Ventana ${payload.window_index} pausada: ${queueBlockReason}`)
+          return
+        }
+
+        const decision = await decideArtChunk({ emotionWindow: payload, sessionState, config })
+        const publishResult = await publishChunkAndCommands(client, config, decision.chunk)
+
+        if (decision.source === 'local_fallback') {
+          publishBridgeError(client, config, {
+            session_id: payload.session_id,
+            severity: 'warning',
+            message: decision.reason,
+            fallback: true,
+          })
+        }
+
+        rememberPublishedChunk(decision.chunk)
+        console.log(`Chunk ${decision.chunk.chunk_id} publicado (${decision.source}) con ${publishResult.commandCount} mensajes.`)
+        if (decision.reason) {
+          console.warn(`Motivo ${decision.source}: ${decision.reason}`)
+        }
+      }
+
+      if (topic === config.topics[TOPIC_KEYS.sessionEnd]) {
+        rememberSession(payload)
+        const sessionState = getSession(payload.session_id) || {}
+        const chunk = createSessionEndChunk({ sessionEnd: payload, sessionState })
+        const publishResult = await publishChunkAndCommands(client, config, chunk)
+        rememberPublishedChunk(chunk)
+        console.log(`Cierre ${chunk.chunk_id} publicado con ${publishResult.commandCount} mensajes.`)
       }
     } catch (error) {
       publishBridgeError(client, config, {
@@ -111,8 +161,64 @@ function rememberFaceEmotion(payload) {
   })
 }
 
+function rememberSessionWindow(payload) {
+  const key = payload.session_id || 'latest'
+  const previous = getSession(key)
+  sessions.set(key, {
+    ...previous,
+    session: previous?.session || payload,
+    artist_id: payload.artist_id || previous?.artist_id,
+    calibration: payload.calibration || previous?.calibration,
+    mobility: payload.mobility || previous?.mobility,
+    latestWindow: payload,
+  })
+}
+
+function rememberRobotStatus(payload) {
+  const key = payload.session_id || 'latest'
+  const previous = getSession(key)
+  const next = {
+    ...previous,
+    latestRobotStatus: payload,
+  }
+  sessions.set(key, next)
+
+  if (key !== 'latest') {
+    sessions.set('latest', {
+      ...getSession('latest'),
+      latestRobotStatus: payload,
+    })
+  }
+}
+
+function rememberPublishedChunk(chunk) {
+  const key = chunk.session_id || 'latest'
+  const previous = getSession(key)
+  const chunks = previous?.chunks || []
+  sessions.set(key, {
+    ...previous,
+    chunks: [...chunks, {
+      chunk_id: chunk.chunk_id,
+      window_index: chunk.window_index,
+      command_count: Array.isArray(chunk.robot_commands) ? chunk.robot_commands.length : 0,
+      timestamp: Date.now(),
+    }],
+  })
+}
+
+function queueBackpressureReason(robotStatus, config) {
+  if (!robotStatus || typeof robotStatus !== 'object') return ''
+  if (robotStatus.queue_full === true || robotStatus.status === 'queue_full') return 'ESP32 informa queue_full; AI Bridge pausa la ventana.'
+  const queueDepth = Number(robotStatus.queue_depth)
+  if (Number.isFinite(queueDepth) && queueDepth >= config.queueHighWaterMark) {
+    return `ESP32 queue_depth=${queueDepth} supera umbral ${config.queueHighWaterMark}; AI Bridge pausa la ventana.`
+  }
+  return ''
+}
+
 function getSession(sessionId) {
-  return sessions.get(sessionId || 'latest') || null
+  const key = sessionId || 'latest'
+  return sessions.get(key) || (key !== 'latest' ? sessions.get('latest') : null) || null
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

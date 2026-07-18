@@ -16,6 +16,7 @@ export function loadBridgeConfig(env = process.env) {
     openaiApiKey: env.OPENAI_API_KEY || '',
     openaiModel: env.OPENAI_DECISION_MODEL || 'gpt-4.1-mini',
     commandDelayMs: clampNumber(env.MQTT_COMMAND_DELAY_MS, 0, 5000, 60),
+    queueHighWaterMark: clampNumber(env.MQTT_QUEUE_HIGH_WATERMARK, 1, 50, 4),
     topics,
   }
 }
@@ -55,7 +56,10 @@ function applyTopicOverrides(topics, env) {
     sessionStart: env.MQTT_SESSION_START_TOPIC,
     faceEmotion: env.MQTT_FACE_EMOTION_TOPIC,
     sessionSummary: env.MQTT_SESSION_SUMMARY_TOPIC,
+    sessionWindow: env.MQTT_SESSION_WINDOW_TOPIC,
+    sessionEnd: env.MQTT_SESSION_END_TOPIC,
     strokePlan: env.MQTT_STROKE_PLAN_TOPIC,
+    strokeChunk: env.MQTT_STROKE_CHUNK_TOPIC,
     robotCommand: env.MQTT_ROBOT_COMMAND_TOPIC,
     robotStatus: env.MQTT_ROBOT_STATUS_TOPIC,
     systemError: env.MQTT_SYSTEM_ERROR_TOPIC,
