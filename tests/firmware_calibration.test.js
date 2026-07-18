@@ -148,3 +148,17 @@ test('aplica protecciones especificas para el servo SG90 de la muneca y el codo 
   assert.match(execute, /target\.elbow > ELBOW_EXTENSION_THRESHOLD_DEG/)
   assert.match(execute, /dynamicSpeed - ELBOW_EXTENSION_SPEED_PENALTY/)
 })
+
+test('modo real usa FIFO acotado y publica backpressure para el AI Bridge', () => {
+  assert.match(main, /constexpr size_t REAL_COMMAND_QUEUE_CAPACITY = 8/)
+  assert.match(main, /struct QueuedRealCommand/)
+  assert.match(main, /QueuedRealCommand realCommandQueue\[REAL_COMMAND_QUEUE_CAPACITY\]/)
+  assert.match(main, /bool enqueueRealCommand\(const String& json, const String& type\)/)
+  assert.match(main, /void serviceRealCommandQueue\(\)/)
+  assert.match(main, /void clearRealCommandQueue\(\)/)
+  assert.match(main, /publishQueueStatus\("queue_full"/)
+  assert.match(main, /\\"queue_depth\\":/)
+  assert.match(main, /\\"queue_full\\":/)
+  assert.match(main, /clearRealCommandQueue\(\)[\s\S]*publishStopped/)
+  assert.match(main, /mqttClient\.loop\(\);[\s\S]*publishPresence\(\);[\s\S]*serviceRealCommandQueue\(\)/)
+})

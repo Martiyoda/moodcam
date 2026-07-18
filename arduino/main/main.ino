@@ -63,7 +63,13 @@ struct RealCommandProfile {
   bool forceBrushDown;
 };
 
+struct QueuedRealCommand {
+  String json;
+  String type;
+};
+
 constexpr size_t MAX_REAL_PATH_POINTS = 96;
+constexpr size_t REAL_COMMAND_QUEUE_CAPACITY = 8;
 constexpr float PATH_MIN_X = 0.0f;
 constexpr float PATH_MAX_X = 297.0f;
 constexpr float PATH_MIN_Y = 0.0f;
@@ -110,6 +116,12 @@ constexpr int ELBOW_EXTENSION_SPEED_PENALTY = 3;
 // Periodo maximo de delay sin servir MQTT durante un paso de moveToPoseSafe.
 constexpr unsigned long MOTION_TICK_SERVICE_MS = 8;
 
+QueuedRealCommand realCommandQueue[REAL_COMMAND_QUEUE_CAPACITY];
+size_t realCommandQueueHead = 0;
+size_t realCommandQueueTail = 0;
+size_t realCommandQueueDepth = 0;
+bool realCommandExecuting = false;
+
 void printHelp();
 void printStatus();
 void connectWiFi();
@@ -120,8 +132,13 @@ void publishStatus(const char* status, const char* detail);
 void publishError(const char* detail);
 void publishJointState();
 void publishStopped(const char* source);
+void publishQueueStatus(const char* status, const char* detail);
 void printHeartbeat();
 void publishPresence(bool force = false);
+void serviceRealCommandQueue();
+bool enqueueRealCommand(const String& json, const String& type);
+bool dequeueRealCommand(QueuedRealCommand& command);
+void clearRealCommandQueue();
 void handleInputCommand(const String& json, bool fromMqtt);
 void handleEmotionCommand(const String& json, bool fromMqtt);
 void handleOperatingModeCommand(const String& json, bool fromMqtt);
@@ -208,6 +225,7 @@ void loop() {
     } else {
       mqttClient.loop();
       publishPresence();
+      serviceRealCommandQueue();
     }
   }
 
@@ -607,6 +625,10 @@ void publishJointState() {
 }
 
 void publishStopped(const char* source) {
+  requestEmergencyStop();
+  clearRealCommandQueue();
+  stopBrush();
+  stopMotors();
   const char* stoppedServo = nullptr;
   int stoppedAngle = -1;
   stopCalibrationMotion(stoppedServo, stoppedAngle);
@@ -615,7 +637,96 @@ void publishStopped(const char* source) {
     detail += String(" servo=") + stoppedServo + " commanded_angle=" + stoppedAngle;
   }
   publishStatus("stopped", detail.c_str());
+  publishQueueStatus("queue_cleared", "stop_command");
   publishJointState();
+}
+
+void publishQueueStatus(const char* status, const char* detail) {
+  const bool queueFull = realCommandQueueDepth >= REAL_COMMAND_QUEUE_CAPACITY;
+  String payload = String("{\"status\":\"") + status
+    + "\",\"detail\":\"" + detail
+    + "\",\"operating_mode\":\"" + operatingModeText()
+    + "\",\"queue_depth\":" + String(static_cast<unsigned int>(realCommandQueueDepth))
+    + ",\"queue_capacity\":" + String(static_cast<unsigned int>(REAL_COMMAND_QUEUE_CAPACITY))
+    + ",\"queue_full\":" + (queueFull ? "true" : "false")
+    + ",\"queue_executing\":" + (realCommandExecuting ? "true" : "false")
+    + "}";
+  Serial.println(payload);
+  if (NETWORK_ENABLED && mqttClient.connected()) {
+    mqttClient.publish(TOPIC_ROBOT_STATUS, payload.c_str());
+  }
+}
+
+bool enqueueRealCommand(const String& json, const String& type) {
+  if (realCommandQueueDepth >= REAL_COMMAND_QUEUE_CAPACITY) {
+    publishQueueStatus("queue_full", type.c_str());
+    return false;
+  }
+
+  realCommandQueue[realCommandQueueTail].json = json;
+  realCommandQueue[realCommandQueueTail].type = type;
+  realCommandQueueTail = (realCommandQueueTail + 1) % REAL_COMMAND_QUEUE_CAPACITY;
+  realCommandQueueDepth++;
+  publishQueueStatus("queued", type.c_str());
+  return true;
+}
+
+bool dequeueRealCommand(QueuedRealCommand& command) {
+  if (realCommandQueueDepth == 0) {
+    return false;
+  }
+
+  command = realCommandQueue[realCommandQueueHead];
+  realCommandQueue[realCommandQueueHead].json = "";
+  realCommandQueue[realCommandQueueHead].type = "";
+  realCommandQueueHead = (realCommandQueueHead + 1) % REAL_COMMAND_QUEUE_CAPACITY;
+  realCommandQueueDepth--;
+  return true;
+}
+
+void clearRealCommandQueue() {
+  for (size_t index = 0; index < REAL_COMMAND_QUEUE_CAPACITY; index++) {
+    realCommandQueue[index].json = "";
+    realCommandQueue[index].type = "";
+  }
+  realCommandQueueHead = 0;
+  realCommandQueueTail = 0;
+  realCommandQueueDepth = 0;
+}
+
+void serviceRealCommandQueue() {
+  if (realCommandExecuting || realCommandQueueDepth == 0 || isCalibrationMode()) {
+    return;
+  }
+
+  QueuedRealCommand command;
+  if (!dequeueRealCommand(command)) {
+    return;
+  }
+
+  realCommandExecuting = true;
+  publishQueueStatus("queue_draining", command.type.c_str());
+
+  if (command.type == "paint_sequence_start" || command.type == "paint_sequence_end") {
+    String sequenceDetail = String("type=") + command.type + " execution=ack";
+    publishStatus("real_command_received", sequenceDetail.c_str());
+  } else {
+    String startedDetail = String("type=") + command.type + " execution=started";
+    publishStatus("real_command_received", startedDetail.c_str());
+
+    if (executeRealPathCommand(command.json, command.type)) {
+      String completedDetail = String("type=") + command.type + " execution=completed";
+      publishStatus("real_command_executed", completedDetail.c_str());
+    }
+  }
+
+  realCommandExecuting = false;
+  if (isEmergencyStopped()) {
+    clearRealCommandQueue();
+    publishQueueStatus("queue_cleared", "emergency_stop");
+    return;
+  }
+  publishQueueStatus(realCommandQueueDepth == 0 ? "queue_idle" : "queue_ready", "command_finished");
 }
 
 void printServoConfig(const RobotServoConfig& servo) {
@@ -691,6 +802,10 @@ void handleOperatingModeCommand(const String& json, bool fromMqtt) {
 
   const String modeValue = extractStringValue(json, "mode");
   if ((modeValue == "calibration" && isCalibrationMode()) || (modeValue == "real" && !isCalibrationMode())) {
+    if (modeValue == "real") {
+      syncPoseToCommandedAngles();
+      clearEmergencyStop();
+    }
     String detail = String("mode=") + operatingModeText() + " source=" + (fromMqtt ? "mqtt" : "serial");
     publishStatus("mode_unchanged", detail.c_str());
     publishJointState();
@@ -707,6 +822,7 @@ void handleOperatingModeCommand(const String& json, bool fromMqtt) {
   // por calibracion para evitar saltos bruscos en el primer movimiento.
   if (!isCalibrationMode()) {
     syncPoseToCommandedAngles();
+    clearEmergencyStop();
   }
 
   String detail = String("mode=") + operatingModeText() + " source=" + (fromMqtt ? "mqtt" : "serial");
@@ -821,21 +937,9 @@ void handleRealModeCommand(const String& json, const String& type) {
     return;
   }
 
-  if (type == "paint_sequence_start" || type == "paint_sequence_end") {
-    String sequenceDetail = String("type=") + type + " execution=ack";
-    publishStatus("real_command_received", sequenceDetail.c_str());
-    return;
+  if (!enqueueRealCommand(json, type)) {
+    publishError("queue_full");
   }
-
-  String startedDetail = String("type=") + type + " execution=started";
-  publishStatus("real_command_received", startedDetail.c_str());
-
-  if (!executeRealPathCommand(json, type)) {
-    return;
-  }
-
-  String completedDetail = String("type=") + type + " execution=completed";
-  publishStatus("real_command_executed", completedDetail.c_str());
 }
 
 bool executeRealPathCommand(const String& json, const String& type) {
