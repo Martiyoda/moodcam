@@ -145,9 +145,9 @@ export function combineEmotionSummaries(faceSummary, voiceSummary, weights = { f
     totals[item.emotion] = (totals[item.emotion] || 0) + normalizeScore(item.percentage) * weights.face
   })
 
-  ;(voiceSummary.main_emotions || []).forEach((item) => {
-    totals[item.emotion] = (totals[item.emotion] || 0) + normalizeScore(item.percentage) * weights.voice
-  })
+    ; (voiceSummary.main_emotions || []).forEach((item) => {
+      totals[item.emotion] = (totals[item.emotion] || 0) + normalizeScore(item.percentage) * weights.voice
+    })
 
   return scoresToSummary(totals)
 }
