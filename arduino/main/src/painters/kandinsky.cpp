@@ -16,7 +16,7 @@ void runKandinskyPattern(const ServoPose poses[], size_t count, int speed, int i
 // Lineas geometricas con amplitud regulada por la intensidad.
 void kandinskyLines(int speed, int intensity, int durationMs, int pressure) {
   const int span = map(constrain(intensity, 0, 100), 0, 100, 8, 28);
-  const ServoPose poses[] = {{90 - span, 82, 90}, {90 + span, 98, 90}};
+  const ServoPose poses[] = {{90, 90 - span, 82, 90}, {90, 90 + span, 98, 90}};
   runKandinskyPattern(poses, 2, speed, intensity, durationMs, pressure);
 }
 
@@ -24,8 +24,8 @@ void kandinskyLines(int speed, int intensity, int durationMs, int pressure) {
 void kandinskyCircles(int speed, int intensity, int durationMs, int pressure) {
   const int span = map(constrain(intensity, 0, 100), 0, 100, 8, 22);
   const ServoPose poses[] = {
-    {90, 90 - span, 90}, {90 + span, 90, 96}, {90, 90 + span, 90},
-    {90 - span, 90, 84}, {90, 90 - span, 90}
+    {90, 90, 90 - span, 90}, {90, 90 + span, 90, 96}, {90, 90, 90 + span, 90},
+    {90, 90 - span, 90, 84}, {90, 90, 90 - span, 90}
   };
   runKandinskyPattern(poses, 5, speed, intensity, durationMs, pressure);
 }
@@ -33,14 +33,14 @@ void kandinskyCircles(int speed, int intensity, int durationMs, int pressure) {
 // Zigzag geometrico con cambios de direccion desacelerados por la capa de motores.
 void kandinskyZigZag(int speed, int intensity, int durationMs, int pressure) {
   const int span = map(constrain(intensity, 0, 100), 0, 100, 7, 20);
-  const ServoPose poses[] = {{90 - span, 82, 88}, {90 + span, 92, 96}, {90 - span, 102, 84}, {90 + span, 112, 92}};
+  const ServoPose poses[] = {{90, 90 - span, 82, 88}, {90, 90 + span, 92, 96}, {90, 90 - span, 102, 84}, {90, 90 + span, 112, 92}};
   runKandinskyPattern(poses, 4, speed, intensity, durationMs, pressure);
 }
 
 // Mezcla corta de linea, angulo y arco para composiciones abstractas.
 void kandinskyGeometricMix(int speed, int intensity, int durationMs, int pressure) {
   const int span = map(constrain(intensity, 0, 100), 0, 100, 8, 24);
-  const ServoPose poses[] = {{90 - span, 86, 90}, {90, 76, 100}, {90 + span, 90, 90}, {90, 104, 80}, {90 - span, 86, 90}};
+  const ServoPose poses[] = {{90, 90 - span, 86, 90}, {90, 90, 76, 100}, {90, 90 + span, 90, 90}, {90, 90, 104, 80}, {90, 90 - span, 86, 90}};
   runKandinskyPattern(poses, 5, speed, intensity, durationMs, pressure);
 }
 

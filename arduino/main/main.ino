@@ -13,14 +13,15 @@
 #include "src/core/safety.h"
 #include "src/robot_config.h"
 
-// Build de calibracion segura:
-// - No acepta base_function.
-// - No acepta stroke_id.
-// - No ejecuta funciones artisticas.
-// - Solo mueve una articulacion por comando de calibracion.
+// Firmware con modo operativo runtime:
+// - calibration: comandos de calibracion segura por articulacion.
+// - real: ejecuta comandos de secuencia artistica por MQTT usando trayectorias por puntos.
+// - set_operating_mode permite cambiar sin reflashear, con validaciones de seguridad.
 
 constexpr int SERIAL_BAUD = 115200;
-constexpr size_t MAX_COMMAND_LENGTH = 320;
+// Payload generoso para comandos con arrays "points" largos sin rechazos
+// silenciosos. Ajustado al heap real del ESP32 (queda margen amplio).
+constexpr size_t MAX_COMMAND_LENGTH = 2048;
 constexpr unsigned long WIFI_RETRY_MS = 8000;
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
 constexpr unsigned long WIFI_STATUS_LOG_MS = 5000;
@@ -40,6 +41,75 @@ unsigned long lastHeartbeatLog = 0;
 unsigned long lastMqttPresence = 0;
 bool wifiAttemptInProgress = false;
 
+enum OperatingMode {
+  OPERATING_MODE_CALIBRATION,
+  OPERATING_MODE_REAL,
+};
+
+OperatingMode operatingMode = CALIBRATION_MODE ? OPERATING_MODE_CALIBRATION : OPERATING_MODE_REAL;
+
+struct PathPoint {
+  float x;
+  float y;
+  float z;
+  int brush;
+};
+
+struct RealCommandProfile {
+  int speed;
+  int pressure;
+  unsigned long minPauseMs;
+  bool forceBrushUp;
+  bool forceBrushDown;
+};
+
+constexpr size_t MAX_REAL_PATH_POINTS = 96;
+constexpr float PATH_MIN_X = 0.0f;
+constexpr float PATH_MAX_X = 297.0f;
+constexpr float PATH_MIN_Y = 0.0f;
+constexpr float PATH_MAX_Y = 210.0f;
+constexpr float PATH_MIN_Z = 0.0f;
+constexpr float PATH_MAX_Z = 35.0f;
+
+// Geometria medida del brazo impreso 3D (aprox):
+// - hombro -> codo: 230 mm
+// - codo -> muneca: 180 mm
+// - diametro superior de base: 110 mm
+constexpr float ARM_SHOULDER_TO_ELBOW_MM = 230.0f;
+constexpr float ARM_ELBOW_TO_WRIST_MM = 180.0f;
+constexpr float ARM_BASE_TOP_DIAMETER_MM = 110.0f;
+
+// Margenes de seguridad para no usar extremos mecanicos en brazo ad-hoc 3D.
+constexpr int SHOULDER_SAFE_MARGIN_DEG = 6;
+constexpr int ELBOW_SAFE_MARGIN_DEG = 6;
+constexpr int WRIST_SAFE_MARGIN_DEG = 10;
+
+// Perfil base calibrable en campo para ejecucion artistica real.
+constexpr int REAL_SPEED_STROKE_DEFAULT = 18;
+constexpr int REAL_SPEED_CONTACT_DEFAULT = 14;
+constexpr int REAL_SPEED_TRANSIT_DEFAULT = 22;
+constexpr int REAL_PRESSURE_STROKE_DEFAULT = 28;
+constexpr int REAL_PRESSURE_CONTACT_DEFAULT = 38;
+constexpr int REAL_PRESSURE_TRANSIT_DEFAULT = 16;
+constexpr int REAL_MIN_PAUSE_STROKE_MS = 22;
+constexpr int REAL_MIN_PAUSE_CONTACT_MS = 36;
+constexpr int REAL_MIN_PAUSE_TRANSIT_MS = 14;
+constexpr int REAL_MIN_STEP_PAUSE_MS = 1;
+constexpr int REAL_MAX_STEP_PAUSE_MS = 2000;
+
+// Limites especificos para el servo de muneca (SG90 9g, plastico, bajo par):
+// no debe ejecutarse a la velocidad maxima cuando hay desplazamiento angular
+// significativo, y el deadband ~1 grado hace inutiles los movimientos < 2.
+constexpr int WRIST_REAL_MAX_SPEED = 12;
+constexpr int WRIST_SIGNIFICANT_DELTA_DEG = 5;
+// Cuando el codo trabaja muy extendido el par requerido al hombro crece
+// rapidamente; aplicamos una penalizacion de velocidad para compensar la
+// flexion del PLA y la limitacion mecanica de los servos del BQ Zum.
+constexpr int ELBOW_EXTENSION_THRESHOLD_DEG = 110;
+constexpr int ELBOW_EXTENSION_SPEED_PENALTY = 3;
+// Periodo maximo de delay sin servir MQTT durante un paso de moveToPoseSafe.
+constexpr unsigned long MOTION_TICK_SERVICE_MS = 8;
+
 void printHelp();
 void printStatus();
 void connectWiFi();
@@ -54,12 +124,25 @@ void printHeartbeat();
 void publishPresence(bool force = false);
 void handleInputCommand(const String& json, bool fromMqtt);
 void handleEmotionCommand(const String& json, bool fromMqtt);
+void handleOperatingModeCommand(const String& json, bool fromMqtt);
 void handleCalibrationCommand(const String& json, const String& type);
+void handleRealModeCommand(const String& json, const String& type);
+bool executeRealPathCommand(const String& json, const String& type);
+bool parsePathPoints(const String& json, PathPoint* points, size_t& pointCount, size_t maxPoints);
+bool extractFloatValue(const String& json, const char* key, float& value);
+float mapFloatRange(float value, float inMin, float inMax, float outMin, float outMax);
+ServoPose mapPointToPose(const PathPoint& point);
+RealCommandProfile buildRealCommandProfile(const String& type, const String& json);
+void serviceMotionTick(unsigned long durationMs);
 void printServoConfig(const RobotServoConfig& servo);
 bool isForbiddenRobotCommand(const String& json);
+bool isRealModeCommandType(const String& type);
 bool validCalibrationServo(const String& servoName, const RobotServoConfig*& servoConfig);
 bool validJogDelta(int delta);
 bool beginCalibrationMove(const RobotServoConfig& servo, int targetAngle, int durationMs);
+bool setOperatingMode(const String& modeValue, const char*& errorDetail);
+const char* operatingModeText();
+bool isCalibrationMode();
 const char* wifiStatusText(wl_status_t status);
 const char* wifiAuthText(wifi_auth_mode_t mode);
 const char* mqttStateText(int state);
@@ -75,6 +158,9 @@ void setup() {
   beginMotors();
   beginBrush();
   clearEmergencyStop();
+  // Permite que moveToPoseSafe siga procesando MQTT entre pasos de
+  // interpolacion para no perder presencia durante un stroke largo.
+  setMotionTickCallback(serviceMotionTick);
 
   Serial.println("E-motion ESP32: modo prueba MQTT segura.");
   printHelp();
@@ -193,13 +279,34 @@ void publishPresence(bool force) {
   mqttClient.publish(TOPIC_ESP32_PRESENCE, payload.c_str(), true);
 }
 
+void serviceMotionTick(unsigned long durationMs) {
+  // Sustituye al delay() bloqueante interno de moveToPoseSafe: durante la
+  // espera entre pasos sigue procesando MQTT/WiFi para que la conexion no
+  // caiga durante strokes largos del modo real.
+  const unsigned long start = millis();
+  while (millis() - start < durationMs) {
+    if (NETWORK_ENABLED && mqttClient.connected()) {
+      mqttClient.loop();
+      publishPresence();
+    }
+    const unsigned long elapsed = millis() - start;
+    const unsigned long remaining = durationMs > elapsed ? durationMs - elapsed : 0;
+    const unsigned long sliceMs = remaining < MOTION_TICK_SERVICE_MS ? remaining : MOTION_TICK_SERVICE_MS;
+    if (sliceMs == 0) {
+      break;
+    }
+    delay(sliceMs);
+  }
+}
+
 void printHelp() {
   Serial.println("Comandos seguros:");
   Serial.println("  STATUS - muestra estado");
   Serial.println("  STOP   - cancela movimiento y mantiene servos adjuntos");
+  Serial.println("  MQTT set_operating_mode - mode=calibration|real");
   Serial.print("  MQTT ");
   Serial.print(TOPIC_ROBOT_COMMAND);
-  Serial.println(" - start_calibration, jog, set_angle, get_joint_state, stop, release_servos");
+  Serial.println(" - get_joint_state, stop, set_operating_mode, start_calibration, jog, set_angle, release_servos");
 }
 
 void printStatus() {
@@ -217,6 +324,8 @@ void printStatus() {
   Serial.println(CALIBRATION_MODE ? "true" : "false");
   Serial.print("FINAL_ARM_MODE: ");
   Serial.println(FINAL_ARM_MODE ? "true" : "false");
+  Serial.print("operating_mode: ");
+  Serial.println(operatingModeText());
   Serial.print("MOTOR_OUTPUT_ENABLED: ");
   Serial.println(MOTOR_OUTPUT_ENABLED ? "true" : "false");
   Serial.print("BRUSH_OUTPUT_ENABLED: ");
@@ -451,24 +560,33 @@ void publishStatus(const char* status, const char* detail) {
   Serial.print(status);
   Serial.print("\",\"detail\":\"");
   Serial.print(detail);
+  Serial.print("\",\"operating_mode\":\"");
+  Serial.print(operatingModeText());
   Serial.println("\"}");
 
   if (!NETWORK_ENABLED || !mqttClient.connected()) {
     return;
   }
-  String payload = String("{\"status\":\"") + status + "\",\"detail\":\"" + detail + "\"}";
+  String payload = String("{\"status\":\"") + status
+    + "\",\"detail\":\"" + detail
+    + "\",\"operating_mode\":\"" + operatingModeText()
+    + "\"}";
   mqttClient.publish(TOPIC_ROBOT_STATUS, payload.c_str());
 }
 
 void publishError(const char* detail) {
   Serial.print("{\"status\":\"error\",\"detail\":\"");
   Serial.print(detail);
+  Serial.print("\",\"operating_mode\":\"");
+  Serial.print(operatingModeText());
   Serial.println("\"}");
 
   if (!NETWORK_ENABLED || !mqttClient.connected()) {
     return;
   }
-  String payload = String("{\"status\":\"error\",\"detail\":\"") + detail + "\"}";
+  String payload = String("{\"status\":\"error\",\"detail\":\"") + detail
+    + "\",\"operating_mode\":\"" + operatingModeText()
+    + "\"}";
   mqttClient.publish(TOPIC_ROBOT_ERROR, payload.c_str());
 }
 
@@ -480,6 +598,7 @@ void publishJointState() {
     + ",\"wrist\":" + state.wrist
     + ",\"position_known\":" + (state.positionKnown ? "true" : "false")
     + ",\"moving\":" + (state.moving ? "true" : "false")
+    + ",\"operating_mode\":\"" + operatingModeText() + "\""
     + ",\"angles_are_commanded\":true}";
   Serial.println(payload);
   if (NETWORK_ENABLED && mqttClient.connected()) {
@@ -522,35 +641,80 @@ void handleInputCommand(const String& json, bool fromMqtt) {
 
   const String type = extractStringValue(json, "type");
 
-  if (calibrationMotionActive() && type != "stop" && type != "get_joint_state") {
+  if (calibrationMotionActive() && type != "stop" && type != "get_joint_state" && type != "set_operating_mode") {
     publishError("robot_busy");
     return;
   }
 
-  if (isForbiddenRobotCommand(json)) {
-    publishError("base_function y stroke_id no permitidos en calibracion");
-    return;
-  }
-
-  if (!CALIBRATION_MODE || !SAFE_TEST_MODE) {
-    publishError("calibration_mode_disabled");
-    return;
-  }
-
-  handleCalibrationCommand(json, type);
-}
-
-void handleCalibrationCommand(const String& json, const String& type) {
   if (type == "get_joint_state") {
     publishJointState();
     return;
   }
 
   if (type == "stop") {
-    publishStopped("mqtt");
+    publishStopped(fromMqtt ? "mqtt" : "serial");
     return;
   }
 
+  if (type == "set_operating_mode") {
+    handleOperatingModeCommand(json, fromMqtt);
+    return;
+  }
+
+  if (isCalibrationMode()) {
+    if (isForbiddenRobotCommand(json)) {
+      publishError("base_function y stroke_id no permitidos en calibracion");
+      return;
+    }
+
+    if (!SAFE_TEST_MODE) {
+      publishError("safe_test_mode_required");
+      return;
+    }
+
+    handleCalibrationCommand(json, type);
+    return;
+  }
+
+  handleRealModeCommand(json, type);
+}
+
+void handleOperatingModeCommand(const String& json, bool fromMqtt) {
+  if (fromMqtt && (!NETWORK_ENABLED || WiFi.status() != WL_CONNECTED || !mqttClient.connected())) {
+    publishError("wifi o mqtt no conectado");
+    return;
+  }
+  if (calibrationMotionActive()) {
+    publishError("robot_busy");
+    return;
+  }
+
+  const String modeValue = extractStringValue(json, "mode");
+  if ((modeValue == "calibration" && isCalibrationMode()) || (modeValue == "real" && !isCalibrationMode())) {
+    String detail = String("mode=") + operatingModeText() + " source=" + (fromMqtt ? "mqtt" : "serial");
+    publishStatus("mode_unchanged", detail.c_str());
+    publishJointState();
+    return;
+  }
+
+  const char* errorDetail = nullptr;
+  if (!setOperatingMode(modeValue, errorDetail)) {
+    publishError(errorDetail == nullptr ? "modo invalido" : errorDetail);
+    return;
+  }
+
+  // Al pasar a real alineamos la pose interna con los angulos comandados
+  // por calibracion para evitar saltos bruscos en el primer movimiento.
+  if (!isCalibrationMode()) {
+    syncPoseToCommandedAngles();
+  }
+
+  String detail = String("mode=") + operatingModeText() + " source=" + (fromMqtt ? "mqtt" : "serial");
+  publishStatus("operating_mode_changed", detail.c_str());
+  publishJointState();
+}
+
+void handleCalibrationCommand(const String& json, const String& type) {
   if (type == "start_calibration") {
     if (!extractBoolValue(json, "assume_home", false)) {
       publishError("start_calibration requiere assume_home=true y confirmacion fisica de HOME");
@@ -636,6 +800,323 @@ void handleCalibrationCommand(const String& json, const String& type) {
   }
 }
 
+void handleRealModeCommand(const String& json, const String& type) {
+  if (!FINAL_ARM_MODE) {
+    publishError("real_mode_disabled_in_build");
+    return;
+  }
+
+  if (type.length() == 0) {
+    publishError("tipo de comando requerido");
+    return;
+  }
+
+  if (isForbiddenRobotCommand(json)) {
+    publishError("comando heredado no permitido en modo real");
+    return;
+  }
+
+  if (!isRealModeCommandType(type)) {
+    publishError("comando de obra recibido en modo real pero no soportado");
+    return;
+  }
+
+  if (type == "paint_sequence_start" || type == "paint_sequence_end") {
+    String sequenceDetail = String("type=") + type + " execution=ack";
+    publishStatus("real_command_received", sequenceDetail.c_str());
+    return;
+  }
+
+  String startedDetail = String("type=") + type + " execution=started";
+  publishStatus("real_command_received", startedDetail.c_str());
+
+  if (!executeRealPathCommand(json, type)) {
+    return;
+  }
+
+  String completedDetail = String("type=") + type + " execution=completed";
+  publishStatus("real_command_executed", completedDetail.c_str());
+}
+
+bool executeRealPathCommand(const String& json, const String& type) {
+  PathPoint points[MAX_REAL_PATH_POINTS];
+  size_t pointCount = 0;
+  if (!parsePathPoints(json, points, pointCount, MAX_REAL_PATH_POINTS) || pointCount == 0) {
+    publishError("points invalidos o vacios en modo real");
+    return false;
+  }
+
+  const RealCommandProfile profile = buildRealCommandProfile(type, json);
+  const MotionParameters safe = sanitizeMotionParameters(
+    profile.speed,
+    extractIntValue(json, "intensity", 40),
+    extractIntValue(json, "duration_ms", 1200),
+    profile.pressure
+  );
+
+  const unsigned long pausePerPoint = max(
+    profile.minPauseMs,
+    static_cast<unsigned long>(safe.durationMs) / max(static_cast<size_t>(1), pointCount)
+  );
+
+  const float armReachMm = ARM_SHOULDER_TO_ELBOW_MM + ARM_ELBOW_TO_WRIST_MM;
+  const float canvasDiagonalMm = sqrt(PATH_MAX_X * PATH_MAX_X + PATH_MAX_Y * PATH_MAX_Y);
+  const float reachToCanvasRatio = canvasDiagonalMm <= 0.0f ? 1.0f : armReachMm / canvasDiagonalMm;
+
+  for (size_t index = 0; index < pointCount; index++) {
+    if (isEmergencyStopped()) {
+      stopBrush();
+      stopMotors();
+      publishError("ejecucion interrumpida por parada de emergencia");
+      return false;
+    }
+
+    const ServoPose target = mapPointToPose(points[index]);
+    if (profile.forceBrushUp) {
+      liftBrush();
+    } else if (profile.forceBrushDown || points[index].brush > 0) {
+      setBrushPressureSafe(safe.pressure);
+    } else {
+      liftBrush();
+    }
+
+    const float minEdgeDistance = min(
+      min(points[index].x - PATH_MIN_X, PATH_MAX_X - points[index].x),
+      min(points[index].y - PATH_MIN_Y, PATH_MAX_Y - points[index].y)
+    );
+    const bool nearEdge = minEdgeDistance < 18.0f;
+    int dynamicSpeed = safe.speed;
+    if (nearEdge) {
+      dynamicSpeed = max(SAFE_MIN_SPEED, safe.speed - 4);
+    }
+    if (reachToCanvasRatio > 1.08f) {
+      dynamicSpeed = max(SAFE_MIN_SPEED, dynamicSpeed - 2);
+    }
+    // Penalizacion adicional cuando el codo trabaja muy extendido para
+    // proteger al servo del hombro (BQ Zum ~3.5 kg.cm) contra picos de par.
+    const ServoPose previousPose = currentPose();
+    if (target.elbow > ELBOW_EXTENSION_THRESHOLD_DEG
+        || previousPose.elbow > ELBOW_EXTENSION_THRESHOLD_DEG) {
+      dynamicSpeed = max(SAFE_MIN_SPEED, dynamicSpeed - ELBOW_EXTENSION_SPEED_PENALTY);
+    }
+    // El SG90 de la muneca no tolera la velocidad maxima si tiene que recorrer
+    // varios grados en un solo paso; limitamos la velocidad efectiva.
+    if (abs(target.wrist - previousPose.wrist) > WRIST_SIGNIFICANT_DELTA_DEG) {
+      dynamicSpeed = min(dynamicSpeed, WRIST_REAL_MAX_SPEED);
+    }
+
+    if (!moveToPoseSafe(target, dynamicSpeed)) {
+      stopBrush();
+      stopMotors();
+      publishError("fallo al mover pose en modo real");
+      return false;
+    }
+
+    if (!waitSafely(pausePerPoint)) {
+      stopBrush();
+      stopMotors();
+      publishError("ejecucion interrumpida durante espera segura");
+      return false;
+    }
+  }
+
+  liftBrush();
+  return true;
+}
+
+RealCommandProfile buildRealCommandProfile(const String& type, const String& json) {
+  const bool isStroke = type == "stroke";
+  const bool isPaintLoad = type == "dip_paint";
+  const bool isWater = type == "rinse_brush";
+  const bool isTowel = type == "dry_brush";
+  const bool isTransit = type == "move_to_paint"
+    || type == "move_to_water"
+    || type == "move_to_towel"
+    || type == "move_to_rest";
+
+  const int defaultSpeed = isStroke
+    ? REAL_SPEED_STROKE_DEFAULT
+    : ((isPaintLoad || isWater || isTowel) ? REAL_SPEED_CONTACT_DEFAULT : REAL_SPEED_TRANSIT_DEFAULT);
+  const int defaultPressure = isStroke
+    ? REAL_PRESSURE_STROKE_DEFAULT
+    : ((isPaintLoad || isWater || isTowel) ? REAL_PRESSURE_CONTACT_DEFAULT : REAL_PRESSURE_TRANSIT_DEFAULT);
+  const int defaultPause = isStroke
+    ? REAL_MIN_PAUSE_STROKE_MS
+    : ((isPaintLoad || isWater || isTowel) ? REAL_MIN_PAUSE_CONTACT_MS : REAL_MIN_PAUSE_TRANSIT_MS);
+  const int requestedPause = constrain(
+    extractIntValue(json, "step_pause_ms", defaultPause),
+    REAL_MIN_STEP_PAUSE_MS,
+    REAL_MAX_STEP_PAUSE_MS
+  );
+
+  return {
+    extractIntValue(json, "speed", defaultSpeed),
+    extractIntValue(json, "pressure", defaultPressure),
+    static_cast<unsigned long>(requestedPause),
+    isTransit,
+    isPaintLoad || isWater || isTowel
+  };
+}
+
+bool parsePathPoints(const String& json, PathPoint* points, size_t& pointCount, size_t maxPoints) {
+  pointCount = 0;
+  const int pointsKey = json.indexOf("\"points\"");
+  if (pointsKey < 0) {
+    return false;
+  }
+  const int arrayStart = json.indexOf('[', pointsKey);
+  if (arrayStart < 0) {
+    return false;
+  }
+
+  int depth = 0;
+  int objectStart = -1;
+  for (int index = arrayStart + 1; index < json.length(); index++) {
+    const char ch = json.charAt(index);
+    if (ch == ']') {
+      break;
+    }
+    if (ch == '{') {
+      if (depth == 0) {
+        objectStart = index;
+      }
+      depth++;
+      continue;
+    }
+    if (ch != '}') {
+      continue;
+    }
+    depth--;
+    if (depth != 0 || objectStart < 0) {
+      continue;
+    }
+    if (pointCount >= maxPoints) {
+      return false;
+    }
+
+    const String objectJson = json.substring(objectStart, index + 1);
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = PATH_MAX_Z;
+    if (!extractFloatValue(objectJson, "x", x) || !extractFloatValue(objectJson, "y", y)) {
+      return false;
+    }
+    if (!extractFloatValue(objectJson, "z", z)) {
+      z = PATH_MAX_Z;
+    }
+    const int brush = extractIntValue(objectJson, "brush", 0);
+    points[pointCount++] = {x, y, z, brush};
+    objectStart = -1;
+  }
+
+  return pointCount > 0;
+}
+
+bool extractFloatValue(const String& json, const char* key, float& value) {
+  String pattern = String("\"") + key + "\"";
+  const int keyIndex = json.indexOf(pattern);
+  if (keyIndex < 0) {
+    return false;
+  }
+  const int colon = json.indexOf(':', keyIndex + pattern.length());
+  if (colon < 0) {
+    return false;
+  }
+
+  int start = colon + 1;
+  while (start < json.length() && json.charAt(start) == ' ') {
+    start++;
+  }
+
+  int end = start;
+  if (end < json.length() && json.charAt(end) == '-') {
+    end++;
+  }
+  while (end < json.length()) {
+    const char ch = json.charAt(end);
+    if (!(isDigit(ch) || ch == '.')) {
+      break;
+    }
+    end++;
+  }
+  if (end <= start) {
+    return false;
+  }
+
+  value = json.substring(start, end).toFloat();
+  return true;
+}
+
+float mapFloatRange(float value, float inMin, float inMax, float outMin, float outMax) {
+  if (inMax <= inMin) {
+    return outMin;
+  }
+  const float ratio = (value - inMin) / (inMax - inMin);
+  return outMin + ratio * (outMax - outMin);
+}
+
+ServoPose mapPointToPose(const PathPoint& point) {
+  const float safeX = constrain(point.x, PATH_MIN_X, PATH_MAX_X);
+  const float safeY = constrain(point.y, PATH_MIN_Y, PATH_MAX_Y);
+  const float safeZ = constrain(point.z, PATH_MIN_Z, PATH_MAX_Z);
+
+  // Mapeo aproximado (lineal, no IK estricta) pensado para el brazo
+  // articulado 3D actual: la base rotatoria recorre el eje X del lienzo,
+  // hombro+codo abren/cierran el alcance en Y, muneca ajusta pitch (Z).
+  // Se aplican margenes mecanicos por servo para no tocar topes.
+  const int baseMin = BASE_SERVO_CONFIG.minAngle;
+  const int baseMax = BASE_SERVO_CONFIG.maxAngle;
+  const int shoulderMin = SHOULDER_SERVO_CONFIG.minAngle + SHOULDER_SAFE_MARGIN_DEG;
+  const int shoulderMax = SHOULDER_SERVO_CONFIG.maxAngle - SHOULDER_SAFE_MARGIN_DEG;
+  const int elbowMin = ELBOW_SERVO_CONFIG.minAngle + ELBOW_SAFE_MARGIN_DEG;
+  const int elbowMax = ELBOW_SERVO_CONFIG.maxAngle - ELBOW_SAFE_MARGIN_DEG;
+  const int wristMin = WRIST_SERVO_CONFIG.minAngle + WRIST_SAFE_MARGIN_DEG;
+  const int wristMax = WRIST_SERVO_CONFIG.maxAngle - WRIST_SAFE_MARGIN_DEG;
+
+  // X del lienzo (0..PATH_MAX_X) -> rotacion de base. La proyeccion natural
+  // es: X=0 mira al lado izquierdo del operador (base hacia maxAngle),
+  // X=PATH_MAX_X al derecho (base hacia minAngle). Ajustar si el montaje
+  // fisico queda espejado.
+  const int base = static_cast<int>(mapFloatRange(
+    safeX,
+    PATH_MIN_X,
+    PATH_MAX_X,
+    static_cast<float>(baseMax),
+    static_cast<float>(baseMin)
+  ));
+  // Y (cerca del operador..lejos) -> hombro mas elevado..mas extendido.
+  const int shoulder = static_cast<int>(mapFloatRange(
+    safeY,
+    PATH_MIN_Y,
+    PATH_MAX_Y,
+    static_cast<float>(shoulderMax),
+    static_cast<float>(shoulderMin)
+  ));
+  // Y -> codo abre conforme aumenta el alcance requerido.
+  const int elbow = static_cast<int>(mapFloatRange(
+    safeY,
+    PATH_MIN_Y,
+    PATH_MAX_Y,
+    static_cast<float>(elbowMin),
+    static_cast<float>(elbowMax)
+  ));
+  // Z (altura del pincel) -> pitch de la muneca (rango efectivo reducido).
+  const int wrist = static_cast<int>(mapFloatRange(
+    safeZ,
+    PATH_MIN_Z,
+    PATH_MAX_Z,
+    static_cast<float>(wristMin),
+    static_cast<float>(wristMax)
+  ));
+
+  return {
+    constrain(base, baseMin, baseMax),
+    constrain(shoulder, shoulderMin, shoulderMax),
+    constrain(elbow, elbowMin, elbowMax),
+    constrain(wrist, wristMin, wristMax)
+  };
+}
+
 void handleEmotionCommand(const String& json, bool fromMqtt) {
   (void)json;
   (void)fromMqtt;
@@ -643,11 +1124,58 @@ void handleEmotionCommand(const String& json, bool fromMqtt) {
     publishError("robot_busy");
     return;
   }
-  publishError("emotion_test bloqueado mientras CALIBRATION_MODE esta activo");
+  if (isCalibrationMode()) {
+    publishError("emotion_test bloqueado mientras CALIBRATION_MODE esta activo");
+    return;
+  }
+  publishStatus("emotion_received", "modo real activo; ejecucion artistica pendiente");
 }
 
 bool isForbiddenRobotCommand(const String& json) {
   return json.indexOf("\"base_function\"") >= 0 || json.indexOf("\"stroke_id\"") >= 0;
+}
+
+bool isRealModeCommandType(const String& type) {
+  return type == "paint_sequence_start"
+    || type == "paint_sequence_end"
+    || type == "stroke"
+    || type == "move_to_paint"
+    || type == "dip_paint"
+    || type == "move_to_water"
+    || type == "rinse_brush"
+    || type == "move_to_towel"
+    || type == "dry_brush"
+    || type == "move_to_rest";
+}
+
+bool setOperatingMode(const String& modeValue, const char*& errorDetail) {
+  errorDetail = nullptr;
+  if (modeValue == "calibration") {
+    if (!SAFE_TEST_MODE) {
+      errorDetail = "safe_test_mode_required";
+      return false;
+    }
+    operatingMode = OPERATING_MODE_CALIBRATION;
+    return true;
+  }
+  if (modeValue == "real") {
+    if (!FINAL_ARM_MODE) {
+      errorDetail = "real_mode_disabled_in_build";
+      return false;
+    }
+    operatingMode = OPERATING_MODE_REAL;
+    return true;
+  }
+  errorDetail = "modo invalido: usa calibration o real";
+  return false;
+}
+
+const char* operatingModeText() {
+  return isCalibrationMode() ? "calibration" : "real";
+}
+
+bool isCalibrationMode() {
+  return operatingMode == OPERATING_MODE_CALIBRATION;
 }
 
 bool validCalibrationServo(const String& servoName, const RobotServoConfig*& servoConfig) {

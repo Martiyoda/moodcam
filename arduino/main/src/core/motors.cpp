@@ -39,11 +39,13 @@ CalibrationMotion calibrationMotion = {nullptr, 0, 0, 0, 0, false};
 bool positionKnown = false;
 
 ServoPose pose = {
+  BASE_SERVO_CONFIG.homeAngle,
   SHOULDER_SERVO_CONFIG.homeAngle,
   ELBOW_SERVO_CONFIG.homeAngle,
   WRIST_SERVO_CONFIG.homeAngle
 };
 bool finalArmAttached = false;
+MotionTickCallback motionTickCallback = nullptr;
 
 bool validPin(int pin) {
   return pin >= 0;
@@ -79,9 +81,18 @@ void writePose(const ServoPose& nextPose) {
   if (!finalArmAttached) {
     return;
   }
+  baseServo.write(pose.base);
   shoulderServo.write(pose.shoulder);
   elbowServo.write(pose.elbow);
   wristServo.write(pose.wrist);
+}
+
+void waitWithMotionTick(unsigned long durationMs) {
+  if (motionTickCallback != nullptr) {
+    motionTickCallback(durationMs);
+    return;
+  }
+  delay(durationMs);
 }
 }
 
@@ -340,16 +351,21 @@ bool moveToPoseSafe(const ServoPose& target, int speed) {
   }
 
   const ServoPose safeTarget = {
+    constrain(target.base, BASE_SERVO_CONFIG.minAngle, BASE_SERVO_CONFIG.maxAngle),
     constrain(target.shoulder, SHOULDER_SERVO_CONFIG.minAngle, SHOULDER_SERVO_CONFIG.maxAngle),
     constrain(target.elbow, ELBOW_SERVO_CONFIG.minAngle, ELBOW_SERVO_CONFIG.maxAngle),
     constrain(target.wrist, WRIST_SERVO_CONFIG.minAngle, WRIST_SERVO_CONFIG.maxAngle)
   };
   const int maxDelta = max(
-    abs(safeTarget.shoulder - pose.shoulder),
-    max(abs(safeTarget.elbow - pose.elbow), abs(safeTarget.wrist - pose.wrist))
+    abs(safeTarget.base - pose.base),
+    max(
+      abs(safeTarget.shoulder - pose.shoulder),
+      max(abs(safeTarget.elbow - pose.elbow), abs(safeTarget.wrist - pose.wrist))
+    )
   );
   const ServoPose start = pose;
   const int steps = max(1, maxDelta);
+  const unsigned long stepWaitMs = stepDelayForSpeed(speed);
 
   for (int step = 1; step <= steps; step++) {
     if (isEmergencyStopped()) {
@@ -357,12 +373,13 @@ bool moveToPoseSafe(const ServoPose& target, int speed) {
       return false;
     }
     const ServoPose nextPose = {
+      start.base + ((safeTarget.base - start.base) * step) / steps,
       start.shoulder + ((safeTarget.shoulder - start.shoulder) * step) / steps,
       start.elbow + ((safeTarget.elbow - start.elbow) * step) / steps,
       start.wrist + ((safeTarget.wrist - start.wrist) * step) / steps
     };
     writePose(nextPose);
-    delay(stepDelayForSpeed(speed));
+    waitWithMotionTick(stepWaitMs);
   }
   return true;
 }
@@ -387,7 +404,23 @@ bool runPoseSequence(const ServoPose poses[], size_t poseCount, int speed, int d
 }
 
 void returnToNeutral() {
-  moveToPoseSafe({90, 90, 90}, 20);
+  moveToPoseSafe({BASE_SERVO_CONFIG.homeAngle, 90, 90, 90}, 20);
+}
+
+void setMotionTickCallback(MotionTickCallback callback) {
+  motionTickCallback = callback;
+}
+
+void syncPoseToCommandedAngles() {
+  // Alinea la pose interna con los angulos comandados por calibracion
+  // para que el primer moveToPoseSafe del modo real no genere un salto
+  // brusco partiendo de la pose logica anterior.
+  pose = {
+    baseJoint.commandedAngle,
+    shoulderJoint.commandedAngle,
+    elbowJoint.commandedAngle,
+    wristJoint.commandedAngle
+  };
 }
 
 void stopMotors() {

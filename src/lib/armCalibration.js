@@ -1,8 +1,10 @@
 export const ARM_SERVOS = [
-  { id: 'base', label: 'Base', gpio: 26, minAngle: 80, maxAngle: 110 },
-  { id: 'shoulder', label: 'Hombro', gpio: 25, minAngle: 80, maxAngle: 110 },
-  { id: 'elbow', label: 'Codo', gpio: 33, minAngle: 80, maxAngle: 110 },
-  { id: 'wrist', label: 'Muñeca', gpio: 32, minAngle: 80, maxAngle: 110 },
+  // Rango conservador ampliado para brazo impreso 3D (23cm + 18cm):
+  // evita extremos mecanicos pero permite cubrir mejor el plano A4.
+  { id: 'base', label: 'Base', gpio: 26, minAngle: 75, maxAngle: 115 },
+  { id: 'shoulder', label: 'Hombro', gpio: 25, minAngle: 65, maxAngle: 125 },
+  { id: 'elbow', label: 'Codo', gpio: 33, minAngle: 65, maxAngle: 125 },
+  { id: 'wrist', label: 'Muñeca', gpio: 32, minAngle: 70, maxAngle: 120 },
 ]
 
 export const INITIAL_JOINT_STATE = {
@@ -42,6 +44,14 @@ export function buildSetAngleCommand(servo, angle, durationMs) {
     throw new Error('La duración debe estar entre 200 y 5000 ms')
   }
   return { type: 'set_angle', servo, angle, duration_ms: durationMs }
+}
+
+export function buildSetOperatingModeCommand(mode) {
+  const normalized = String(mode || '').trim().toLowerCase()
+  if (!['calibration', 'real'].includes(normalized)) {
+    throw new Error('Modo no permitido. Usa calibration o real')
+  }
+  return { type: 'set_operating_mode', mode: normalized }
 }
 
 export function jointStateFromPayload(payload, previous = INITIAL_JOINT_STATE) {

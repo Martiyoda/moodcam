@@ -351,7 +351,7 @@ function App() {
   }, [handleResetExperience, stopCamera])
 
   const robotPaintBlockedReason = isCalibrationOnlyRobotError(lastSystemError?.payload)
-    ? 'El ESP32 conectado está en modo calibración segura. Flashea un firmware con FINAL_ARM_MODE activo para pintar.'
+    ? 'El ESP32 está en modo calibración. Cambia a modo real desde el panel de robot para pintar.'
     : ''
   const robotPaintDisabled = calibrationLocked || Boolean(robotPaintBlockedReason)
 

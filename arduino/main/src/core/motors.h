@@ -4,6 +4,7 @@
 #include "../robot_config.h"
 
 struct ServoPose {
+  int base;
   int shoulder;
   int elbow;
   int wrist;
@@ -17,6 +18,10 @@ struct JointCommandState {
   bool positionKnown;
   bool moving;
 };
+
+// Hook opcional para servir MQTT/WiFi mientras moveToPoseSafe interpola
+// pasos largos en modo real. Si no se registra, se usa delay() bloqueante.
+typedef void (*MotionTickCallback)(unsigned long durationMs);
 
 void beginMotors();
 bool motorsConfigured();
@@ -39,3 +44,5 @@ bool runPoseSequence(const ServoPose poses[], size_t poseCount, int speed, int d
 void returnToNeutral();
 void stopMotors();
 ServoPose currentPose();
+void setMotionTickCallback(MotionTickCallback callback);
+void syncPoseToCommandedAngles();

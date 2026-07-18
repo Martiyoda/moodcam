@@ -9,6 +9,7 @@
     "dev:server": "node server/index.js",
     "ai:bridge": "node server/ai-bridge/index.js",
     "demo:session": "node scripts/mqtt-smoke-session.mjs",
+    "robot:bringup": "node scripts/real-mode-bringup.mjs",
     "test:emotion-bridge": "node examples/emotion_to_hardware_test.mjs",
     "test:publish-emotion": "node examples/publish_emotion_input.mjs",
     "build": "vite build",

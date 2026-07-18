@@ -18,10 +18,10 @@ function functionBody(source, name, nextName) {
 test('configura el mapa definitivo y los limites de calibracion', () => {
   assert.match(config, /#define CALIBRATION_MODE true/)
   assert.match(config, /static_assert\(!CALIBRATION_MODE \|\| SAFE_TEST_MODE/)
-  assert.match(config, /SERVO_BASE, "base", 26, true, 80, 110, 90/)
-  assert.match(config, /SERVO_SHOULDER, "shoulder", 25, true, 80, 110, 90/)
-  assert.match(config, /SERVO_ELBOW, "elbow", 33, true, 80, 110, 90/)
-  assert.match(config, /SERVO_WRIST, "wrist", 32, true, 80, 110, 90/)
+  assert.match(config, /SERVO_BASE, "base", 26, true, 75, 115, 90/)
+  assert.match(config, /SERVO_SHOULDER, "shoulder", 25, true, 65, 125, 90/)
+  assert.match(config, /SERVO_ELBOW, "elbow", 33, true, 65, 125, 90/)
+  assert.match(config, /SERVO_WRIST, "wrist", 32, true, 70, 120, 90/)
   assert.match(config, /SERVO_BRUSH, "brush", -1, false/)
   assert.match(config, /CALIBRATION_MIN_DURATION_MS = 200/)
   assert.match(config, /CALIBRATION_MAX_DURATION_MS = 5000/)
@@ -53,9 +53,18 @@ test('jog y set_angle rechazan valores invalidos sin limitarlos', () => {
 })
 
 test('movimiento activo solo permite stop y get_joint_state', () => {
-  assert.match(main, /calibrationMotionActive\(\) && type != "stop" && type != "get_joint_state"/)
+  assert.match(main, /calibrationMotionActive\(\) && type != "stop" && type != "get_joint_state" && type != "set_operating_mode"/)
   assert.match(main, /publishError\("robot_busy"\)/)
   assert.match(main, /!mqttClient\.connected\(\)[\s\S]*!calibrationMotionActive\(\)[\s\S]*connectMQTT\(\)/)
+})
+
+test('soporta cambio de modo operativo en runtime por MQTT', () => {
+  assert.match(main, /"set_operating_mode"/)
+  assert.match(main, /handleOperatingModeCommand\(json, fromMqtt\)/)
+  assert.match(main, /operating_mode_changed/)
+  assert.match(main, /operating_mode/)
+  assert.match(main, /modeValue == "calibration"/)
+  assert.match(main, /modeValue == "real"/)
 })
 
 test('STOP conserva attach y release detacha con posicion desconocida', () => {
@@ -85,4 +94,57 @@ test('publica presencia MQTT periodica separada del estado del robot', () => {
   assert.match(main, /mqttClient\.publish\(TOPIC_ESP32_PRESENCE, payload\.c_str\(\), true\)/)
   assert.match(main, /publishPresence\(true\)/)
   assert.match(main, /mqttClient\.loop\(\);[\s\S]*publishPresence\(\)/)
+})
+
+test('payload MQTT permite comandos largos con arrays de puntos', () => {
+  assert.match(main, /constexpr size_t MAX_COMMAND_LENGTH = 2048/)
+})
+
+test('mapPointToPose usa la base para el eje X del lienzo', () => {
+  const body = functionBody(main, 'ServoPose mapPointToPose(const PathPoint& point) {', 'void handleEmotionCommand(const String& json, bool fromMqtt) {')
+  assert.match(body, /BASE_SERVO_CONFIG\.minAngle/)
+  assert.match(body, /BASE_SERVO_CONFIG\.maxAngle/)
+  assert.match(body, /safeX,[\s\S]*PATH_MIN_X,[\s\S]*PATH_MAX_X/)
+  assert.match(body, /return \{[\s\S]*constrain\(base/)
+})
+
+test('ServoPose incluye base y moveToPoseSafe interpola los cuatro servos', () => {
+  const motorsHeader = readFileSync(new URL('../arduino/main/src/core/motors.h', import.meta.url), 'utf8')
+  assert.match(motorsHeader, /struct ServoPose \{\s*int base;\s*int shoulder;\s*int elbow;\s*int wrist;\s*\}/)
+  const move = functionBody(motors, 'bool moveToPoseSafe(const ServoPose& target, int speed) {', 'bool runPoseSequence(')
+  assert.match(move, /constrain\(target\.base, BASE_SERVO_CONFIG\.minAngle, BASE_SERVO_CONFIG\.maxAngle\)/)
+  assert.match(move, /abs\(safeTarget\.base - pose\.base\)/)
+  assert.match(move, /start\.base \+ \(\(safeTarget\.base - start\.base\) \* step\)/)
+})
+
+test('moveToPoseSafe libera MQTT entre pasos via callback en lugar de delay bloqueante', () => {
+  const motorsHeader = readFileSync(new URL('../arduino/main/src/core/motors.h', import.meta.url), 'utf8')
+  assert.match(motorsHeader, /typedef void \(\*MotionTickCallback\)\(unsigned long durationMs\)/)
+  assert.match(motorsHeader, /void setMotionTickCallback\(MotionTickCallback callback\)/)
+  const move = functionBody(motors, 'bool moveToPoseSafe(const ServoPose& target, int speed) {', 'bool runPoseSequence(')
+  assert.match(move, /waitWithMotionTick\(stepWaitMs\)/)
+  assert.doesNotMatch(move, /delay\(stepDelayForSpeed/)
+  assert.match(main, /setMotionTickCallback\(serviceMotionTick\)/)
+  assert.match(main, /void serviceMotionTick\(unsigned long durationMs\)/)
+  assert.match(main, /while \(millis\(\) - start < durationMs\)[\s\S]*mqttClient\.loop\(\)/)
+})
+
+test('al pasar a modo real sincroniza la pose interna con los angulos comandados', () => {
+  const motorsHeader = readFileSync(new URL('../arduino/main/src/core/motors.h', import.meta.url), 'utf8')
+  assert.match(motorsHeader, /void syncPoseToCommandedAngles\(\)/)
+  assert.match(motors, /void syncPoseToCommandedAngles\(\) \{[\s\S]*baseJoint\.commandedAngle/)
+  const handler = functionBody(main, 'void handleOperatingModeCommand(const String& json, bool fromMqtt) {', 'void handleCalibrationCommand(const String& json, const String& type) {')
+  assert.match(handler, /if \(!isCalibrationMode\(\)\) \{\s*syncPoseToCommandedAngles\(\);/)
+})
+
+test('aplica protecciones especificas para el servo SG90 de la muneca y el codo extendido', () => {
+  assert.match(main, /WRIST_REAL_MAX_SPEED = 12/)
+  assert.match(main, /WRIST_SIGNIFICANT_DELTA_DEG = 5/)
+  assert.match(main, /ELBOW_EXTENSION_THRESHOLD_DEG = 110/)
+  assert.match(main, /ELBOW_EXTENSION_SPEED_PENALTY = 3/)
+  const execute = functionBody(main, 'bool executeRealPathCommand(const String& json, const String& type) {', 'RealCommandProfile buildRealCommandProfile(const String& type, const String& json) {')
+  assert.match(execute, /abs\(target\.wrist - previousPose\.wrist\) > WRIST_SIGNIFICANT_DELTA_DEG/)
+  assert.match(execute, /dynamicSpeed = min\(dynamicSpeed, WRIST_REAL_MAX_SPEED\)/)
+  assert.match(execute, /target\.elbow > ELBOW_EXTENSION_THRESHOLD_DEG/)
+  assert.match(execute, /dynamicSpeed - ELBOW_EXTENSION_SPEED_PENALTY/)
 })

@@ -37,19 +37,19 @@ struct RobotServoConfig {
 
 // Definitive physical pin map. Limits remain conservative until calibration.
 constexpr RobotServoConfig BASE_SERVO_CONFIG = {
-  SERVO_BASE, "base", 26, true, 80, 110, 90, DEFAULT_SAFE_SPEED
+  SERVO_BASE, "base", 26, true, 75, 115, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig SHOULDER_SERVO_CONFIG = {
-  SERVO_SHOULDER, "shoulder", 25, true, 80, 110, 90, DEFAULT_SAFE_SPEED
+  SERVO_SHOULDER, "shoulder", 25, true, 65, 125, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig ELBOW_SERVO_CONFIG = {
-  SERVO_ELBOW, "elbow", 33, true, 80, 110, 90, DEFAULT_SAFE_SPEED
+  SERVO_ELBOW, "elbow", 33, true, 65, 125, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig WRIST_SERVO_CONFIG = {
-  SERVO_WRIST, "wrist", 32, true, 80, 110, 90, DEFAULT_SAFE_SPEED
+  SERVO_WRIST, "wrist", 32, true, 70, 120, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig BRUSH_SERVO_CONFIG = {

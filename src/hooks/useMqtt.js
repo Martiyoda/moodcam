@@ -420,6 +420,7 @@ export default function useMqtt() {
 
 function isCalibrationStatus(payload) {
     return [
+        'completed',
         'joint_state',
         'calibration_started',
         'moving',
@@ -427,10 +428,15 @@ function isCalibrationStatus(payload) {
         'stopped',
         'servos_released',
         'servo_attaching',
+        'operating_mode_changed',
+        'mode_unchanged',
+        'real_command_received',
     ].includes(payload?.status)
 }
 
 function isCalibrationOnlyRobotError(payload) {
     const detail = typeof payload === 'string' ? payload : payload?.detail || payload?.message || payload?.error || ''
-    return String(detail).toLowerCase().includes('tipo de comando de calibracion desconocido')
+    const normalized = String(detail).toLowerCase()
+    return normalized.includes('tipo de comando de calibracion desconocido')
+        || normalized.includes('comando de obra recibido en modo calibracion')
 }

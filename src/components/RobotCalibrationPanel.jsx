@@ -5,6 +5,7 @@ import {
   INITIAL_ATTACHED_STATE,
   INITIAL_JOINT_STATE,
   buildJogCommand,
+  buildSetOperatingModeCommand,
   buildSetAngleCommand,
   buildStartCalibrationCommand,
   jointStateFromPayload,
@@ -28,6 +29,7 @@ export default function RobotCalibrationPanel({
   const [selectedServo, setSelectedServo] = useState('shoulder')
   const [directAngle, setDirectAngle] = useState(90)
   const [durationMs, setDurationMs] = useState(500)
+  const [operatingMode, setOperatingMode] = useState('calibration')
   const [localError, setLocalError] = useState('')
   const [clock, setClock] = useState(Date.now())
 
@@ -35,13 +37,35 @@ export default function RobotCalibrationPanel({
   const esp32Available = mqttConnected
     && lastStatus?.timestamp
     && clock - lastStatus.timestamp < RESPONSE_TIMEOUT_MS
-  const controlsBlocked = !mqttConnected || !jointState.positionKnown || jointState.moving
+  const calibrationModeActive = operatingMode === 'calibration'
+  const controlsBlocked = !mqttConnected || !calibrationModeActive || !jointState.positionKnown || jointState.moving
   const guideSteps = [
     { label: 'Conectar MQTT', done: mqttConnected, detail: mqttConnected ? 'Conectado' : 'Actívalo desde configuración' },
     { label: 'Confirmar ESP32', done: esp32Available, detail: esp32Available ? 'Estado recibido' : `Esperando ${topics.status}` },
-    { label: 'Colocar HOME', done: jointState.positionKnown, detail: jointState.positionKnown ? 'Posición conocida' : 'Coloca el brazo y confirma HOME' },
-    { label: 'Probar articulaciones', done: jointState.positionKnown && !jointState.moving, detail: jointState.moving ? 'Movimiento en curso' : 'Mueve un servo cada vez' },
-    { label: 'Continuar', done: jointState.positionKnown && esp32Available && !jointState.moving, detail: 'Brazo listo para el plan' },
+    {
+      label: 'Modo operativo',
+      done: true,
+      detail: calibrationModeActive ? 'Calibración segura activa' : 'Modo real activo',
+    },
+    {
+      label: 'Colocar HOME',
+      done: !calibrationModeActive || jointState.positionKnown,
+      detail: calibrationModeActive
+        ? (jointState.positionKnown ? 'Posición conocida' : 'Coloca el brazo y confirma HOME')
+        : 'No aplica en modo real',
+    },
+    {
+      label: 'Probar articulaciones',
+      done: !calibrationModeActive || (jointState.positionKnown && !jointState.moving),
+      detail: calibrationModeActive
+        ? (jointState.moving ? 'Movimiento en curso' : 'Mueve un servo cada vez')
+        : 'Controles de calibración bloqueados',
+    },
+    {
+      label: 'Continuar',
+      done: esp32Available && !jointState.moving,
+      detail: calibrationModeActive ? 'Brazo listo para el plan' : 'Listo para comandos de obra',
+    },
   ]
   const selectedConfig = ARM_SERVOS.find((servo) => servo.id === selectedServo)
   const statusDetail = useMemo(() => parseDetail(lastStatus?.payload?.detail), [lastStatus])
@@ -62,6 +86,10 @@ export default function RobotCalibrationPanel({
   useEffect(() => {
     const payload = lastStatus?.payload
     if (!payload || typeof payload !== 'object') return
+
+    if (payload.operating_mode === 'calibration' || payload.operating_mode === 'real') {
+      setOperatingMode(payload.operating_mode)
+    }
 
     setJointState((previous) => {
       let next = jointStateFromPayload(payload, previous)
@@ -84,8 +112,9 @@ export default function RobotCalibrationPanel({
     onCalibrationStateChange?.({
       active: jointState.positionKnown,
       moving: jointState.moving,
+      operatingMode,
     })
-  }, [jointState.moving, jointState.positionKnown, onCalibrationStateChange])
+  }, [jointState.moving, jointState.positionKnown, operatingMode, onCalibrationStateChange])
 
   const sendCommand = (payload) => {
     setLocalError('')
@@ -101,6 +130,10 @@ export default function RobotCalibrationPanel({
   }
 
   const startCalibration = () => {
+    if (!calibrationModeActive) {
+      setLocalError('Cambia a modo calibración para iniciar HOME seguro.')
+      return
+    }
     if (!window.confirm('Coloca físicamente el brazo en la posición HOME antes de continuar. ¿Confirmas que ya está colocado?')) return
     sendCommand(buildStartCalibrationCommand())
   }
@@ -127,9 +160,27 @@ export default function RobotCalibrationPanel({
   }
 
   const releaseServos = () => {
+    if (!calibrationModeActive) return
     if (!jointState.positionKnown || jointState.moving) return
     if (!window.confirm('El brazo puede caer o moverse por gravedad al liberar los servos. ¿Quieres continuar?')) return
     sendCommand({ type: 'release_servos' })
+  }
+
+  const changeOperatingMode = (nextMode) => {
+    if (!['calibration', 'real'].includes(nextMode)) return
+    if (nextMode === operatingMode) return
+    if (jointState.moving) {
+      setLocalError('Espera a que termine el movimiento antes de cambiar de modo.')
+      return
+    }
+    if (nextMode === 'real' && !window.confirm('Vas a pasar a modo real. Se bloquearán controles de calibración. ¿Continuar?')) {
+      return
+    }
+    try {
+      sendCommand(buildSetOperatingModeCommand(nextMode))
+    } catch (error) {
+      setLocalError(error.message)
+    }
   }
 
   return (
@@ -141,18 +192,46 @@ export default function RobotCalibrationPanel({
             Control angular directo. HiveMQ transporta los comandos automáticamente; no necesitas abrir su cliente web.
           </p>
         </div>
-        <div className={`rounded-md border px-3 py-2 text-xs ${jointState.moving ? 'border-amber-400/30 bg-amber-400/10 text-amber-100' : jointState.positionKnown ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>
-          {jointState.moving ? 'Movimientos artísticos bloqueados durante el movimiento' : jointState.positionKnown ? 'Brazo listo para continuar' : 'Calibración pendiente'}
+        <div className={`rounded-md border px-3 py-2 text-xs ${jointState.moving ? 'border-amber-400/30 bg-amber-400/10 text-amber-100' : calibrationModeActive ? (jointState.positionKnown ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-zinc-700 bg-zinc-900 text-zinc-300') : 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100'}`}>
+          {jointState.moving
+            ? 'Movimientos artísticos bloqueados durante el movimiento'
+            : calibrationModeActive
+              ? (jointState.positionKnown ? 'Brazo listo para continuar' : 'Calibración pendiente')
+              : 'Modo real activo'}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
         <StatusItem label="MQTT" value={mqttConnected ? 'Conectado' : 'Desconectado'} state={mqttConnected ? 'ok' : 'error'} />
         <StatusItem label="ESP32" value={esp32Available ? 'Disponible' : 'Sin respuesta'} state={esp32Available ? 'ok' : 'warning'} />
+        <StatusItem label="Modo" value={calibrationModeActive ? 'Calibración' : 'Real'} state={calibrationModeActive ? 'idle' : 'ok'} />
         <StatusItem label="Calibración" value={jointState.positionKnown ? 'Activa' : 'Inactiva'} state={jointState.positionKnown ? 'ok' : 'idle'} />
         <StatusItem label="Posición" value={jointState.positionKnown ? 'Conocida' : 'Desconocida'} state={jointState.positionKnown ? 'ok' : 'warning'} />
         <StatusItem label="Movimiento" value={jointState.moving ? 'Activo' : 'Detenido'} state={jointState.moving ? 'warning' : 'ok'} />
       </div>
+
+      <section className="rounded-md border border-zinc-800 bg-zinc-900/60 p-4">
+        <p className="text-sm font-semibold text-white">Modo del robot</p>
+        <p className="mt-1 text-xs text-zinc-500">Cambia entre calibración segura y modo real sin reflashear la ESP32.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => changeOperatingMode('calibration')}
+            disabled={!mqttConnected || jointState.moving || calibrationModeActive}
+            className="rounded-md border border-amber-500/50 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Activar calibración
+          </button>
+          <button
+            type="button"
+            onClick={() => changeOperatingMode('real')}
+            disabled={!mqttConnected || jointState.moving || !calibrationModeActive}
+            className="rounded-md border border-cyan-400/50 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Activar modo real
+          </button>
+        </div>
+      </section>
 
       <section className="rounded-md border border-zinc-800 bg-zinc-900/60 p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -199,11 +278,15 @@ export default function RobotCalibrationPanel({
 
       <section className="border-y border-zinc-800 py-4">
         <p className="text-sm font-semibold text-white">Inicio seguro</p>
-        <p className="mt-1 text-sm text-amber-200">Coloca físicamente el brazo en la posición HOME antes de continuar.</p>
+        <p className="mt-1 text-sm text-amber-200">
+          {calibrationModeActive
+            ? 'Coloca físicamente el brazo en la posición HOME antes de continuar.'
+            : 'En modo real no se permiten comandos de calibración.'}
+        </p>
         <button
           type="button"
           onClick={startCalibration}
-          disabled={!mqttConnected || jointState.moving || jointState.positionKnown}
+          disabled={!mqttConnected || jointState.moving || jointState.positionKnown || !calibrationModeActive}
           className="mt-3 rounded-md bg-amber-400 px-4 py-2.5 text-sm font-bold text-zinc-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Confirmar brazo en HOME e iniciar calibración
@@ -213,7 +296,11 @@ export default function RobotCalibrationPanel({
       <section className="space-y-3">
         <div>
           <p className="text-sm font-semibold text-white">Prueba por articulación</p>
-          <p className="mt-1 text-xs text-zinc-500">Usa pasos pequeños primero. Los controles se activan después de confirmar HOME.</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            {calibrationModeActive
+              ? 'Usa pasos pequeños primero. Los controles se activan después de confirmar HOME.'
+              : 'Los controles de calibración están desactivados en modo real.'}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -234,15 +321,15 @@ export default function RobotCalibrationPanel({
         <summary className="cursor-pointer text-sm font-semibold text-zinc-200">Controles avanzados</summary>
         <form onSubmit={setAngle} className="mt-4 grid gap-3 border-t border-zinc-800 pt-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
           <Field label="Servo">
-            <select value={selectedServo} onChange={(event) => setSelectedServo(event.target.value)} className={inputClass} disabled={jointState.moving}>
+            <select value={selectedServo} onChange={(event) => setSelectedServo(event.target.value)} className={inputClass} disabled={jointState.moving || !calibrationModeActive}>
               {ARM_SERVOS.map((servo) => <option key={servo.id} value={servo.id}>{servo.label}</option>)}
             </select>
           </Field>
           <Field label={`Ángulo (${selectedConfig.minAngle}°–${selectedConfig.maxAngle}°)`}>
-            <input type="number" min={selectedConfig.minAngle} max={selectedConfig.maxAngle} step="1" value={directAngle} onChange={(event) => setDirectAngle(event.target.value)} className={inputClass} />
+            <input type="number" min={selectedConfig.minAngle} max={selectedConfig.maxAngle} step="1" value={directAngle} onChange={(event) => setDirectAngle(event.target.value)} className={inputClass} disabled={!calibrationModeActive} />
           </Field>
           <Field label="Duración (200–5000 ms)">
-            <input type="number" min="200" max="5000" step="50" value={durationMs} onChange={(event) => setDurationMs(event.target.value)} className={inputClass} />
+            <input type="number" min="200" max="5000" step="50" value={durationMs} onChange={(event) => setDurationMs(event.target.value)} className={inputClass} disabled={!calibrationModeActive} />
           </Field>
           <button type="submit" disabled={controlsBlocked} className="h-10 rounded-md bg-cyan-300 px-4 text-sm font-bold text-zinc-950 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40">
             Mover

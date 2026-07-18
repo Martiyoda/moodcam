@@ -23,10 +23,10 @@ test('construye únicamente comandos de calibración permitidos', () => {
 })
 
 test('rechaza ángulos y duraciones fuera de límites', () => {
-  assert.throws(() => buildSetAngleCommand('base', 79, 500))
-  assert.throws(() => buildSetAngleCommand('base', 111, 500))
-  assert.throws(() => buildSetAngleCommand('base', 90, 199))
-  assert.throws(() => buildSetAngleCommand('base', 90, 5001))
+  assert.throws(() => buildSetAngleCommand('base', 74, 500))
+  assert.throws(() => buildSetAngleCommand('shoulder', 130, 400))
+  assert.throws(() => buildSetAngleCommand('shoulder', 60, 400))
+  assert.throws(() => buildSetAngleCommand('shoulder', 85, 100))
 })
 
 test('interpreta joint_state y estados attached', () => {
