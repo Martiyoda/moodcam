@@ -38,7 +38,6 @@ function App() {
     error,
     loading,
     startCamera,
-    stopCamera,
     detectionConfig,
     updateConfig,
     resetConfig,
@@ -55,6 +54,7 @@ function App() {
     lastAiPlan,
     lastAiChunk,
     lastSystemError,
+    lastBridgePresence,
     lastCalibrationStatus,
     lastCalibrationError,
     lastCalibrationCommand,
@@ -110,7 +110,11 @@ function App() {
   const selectedPainterProfile = useMemo(() => getPainterProfile(selectedArtist), [selectedArtist])
   const selectedPainterRecipe = useMemo(() => getPainterRecipe(selectedArtist), [selectedArtist])
   const conversationMode = useMemo(() => getConversationMode(conversationModeId), [conversationModeId])
-  const voiceCaptureActive = VOICE_CAPTURE_ENABLED && voiceConsentGranted
+  const bridgeOpenAiConfigured = connectionStatus === 'connected'
+    && lastBridgePresence?.payload?.status === 'online'
+    && lastBridgePresence.payload?.openai_configured === true
+  const voiceAvailable = VOICE_CAPTURE_ENABLED && bridgeOpenAiConfigured
+  const voiceCaptureActive = voiceAvailable && voiceConsentGranted
   const calibrationLocked = armCalibrationState.moving
   const captureDurationSeconds = Math.max(1, Number(detectionConfig.session?.captureSeconds) || 30)
   const captureDurationMs = captureDurationSeconds * 1000
@@ -374,31 +378,6 @@ function App() {
     voiceCaptureActive,
   ])
 
-  const handleResetExperience = useCallback(() => {
-    resetVoiceDetection()
-    faceSamplesRef.current = []
-    voiceSamplesRef.current = []
-    transcriptRef.current = []
-    lastFaceSampleRef.current = 0
-    lastWindowFaceCursorRef.current = 0
-    lastWindowVoiceCursorRef.current = 0
-    lastWindowTranscriptCursorRef.current = 0
-    lastPublishedWindowIndexRef.current = -1
-    setSessionActive(false)
-    setSessionStartedAt(null)
-    setRemainingMs(captureDurationMs)
-    setFaceEmotionSamples([])
-    setFaceSummary([])
-    setCombinedEmotionSummary([])
-    setActionMessage(null)
-    setSessionId(null)
-  }, [captureDurationMs, resetVoiceDetection])
-
-  const handleStopCamera = useCallback(() => {
-    handleResetExperience()
-    stopCamera()
-  }, [handleResetExperience, stopCamera])
-
   const handleCalibrationStateChange = useCallback((nextState) => {
     setArmCalibrationState(nextState)
   }, [])
@@ -494,93 +473,102 @@ function App() {
           />
         ) : (
           <>
-            <DemoReadinessPanel
-              mqttStatus={connectionStatus}
-              aiPlan={lastAiPlan}
-              aiChunk={lastAiChunk}
-              hasEmotionSummary={combinedEmotionSummary.length > 0}
-              robotStatus={lastCalibrationStatus || lastRobotStatus}
-              voiceStatus={voiceStatus}
-              voiceEnabled={voiceCaptureActive}
-              painter={selectedPainterProfile}
-              sessionActive={sessionActive}
-              calibrationActive={false}
-              calibrationLocked={calibrationLocked}
-              calibrationMoving={armCalibrationState.moving}
-            />
-
-          <Screen title="Crea una obra dinámica" description={voiceCaptureActive ? 'Elige un estilo, captura rostro y voz, y deja que AI Bridge genere chunks en tiempo real.' : 'Elige un estilo, captura el rostro y deja que AI Bridge genere chunks en tiempo real.'}>
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] gap-5">
-              <div className="space-y-4">
-                <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-                  <PainterSelector selectedArtist={selectedArtist} onSelect={handleSelectArtist} />
-                </div>
-                <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  {!cameraActive ? (
-                    <button
-                      onClick={startCamera}
-                      disabled={!modelsLoaded || loading}
-                      className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-cyan-300 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-cyan-200 transition-colors"
-                    >
-                      {loading ? 'Cargando modelos...' : 'Iniciar cámara'}
-                    </button>
-                  ) : (
-                    <button onClick={handleStopCamera} className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-red-500 hover:bg-red-400 text-white transition-colors">
-                      Detener
-                    </button>
-                  )}
-                  <button
-                    onClick={handleStartSession}
-                    disabled={!modelsLoaded || loading || sessionActive}
-                    className="px-5 py-2.5 rounded-lg font-semibold text-sm bg-amber-400 text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors"
-                  >
-                    Iniciar captura
-                  </button>
-                </div>
-                {error && <div className="bg-red-950/40 border border-red-700 text-red-200 rounded-lg p-3 text-sm text-center">{error}</div>}
+            <section className="space-y-4">
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+                <PainterSelector selectedArtist={selectedArtist} onSelect={handleSelectArtist} />
               </div>
-              <div className="space-y-4">
-                <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-                  <ConversationPanel
-                    artist={selectedArtistInfo}
-                    status={voiceStatus}
-                    error={voiceError}
-                    transcript={transcript}
-                    mode={conversationMode}
-                    voiceEnabled={voiceCaptureActive}
-                    voiceAvailable={VOICE_CAPTURE_ENABLED}
-                    voiceConsentGranted={voiceConsentGranted}
-                    onVoiceConsentChange={setVoiceConsentGranted}
-                    remainingSeconds={remainingSeconds}
-                    captureDurationSeconds={captureDurationSeconds}
-                    progress={captureProgress}
-                    sessionActive={sessionActive}
-                    captureComplete={combinedEmotionSummary.length > 0}
-                    onReset={handleResetExperience}
-                  />
+
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-3 lg:items-stretch">
+                <VoiceConsentPanel
+                  voiceAvailable={voiceAvailable}
+                  voiceConsentGranted={voiceConsentGranted}
+                  sessionActive={sessionActive}
+                  onVoiceConsentChange={setVoiceConsentGranted}
+                />
+                <button
+                  onClick={sessionActive ? finishSession : handleStartSession}
+                  disabled={!sessionActive && (!modelsLoaded || loading || calibrationLocked)}
+                  className={`min-h-16 px-8 rounded-lg font-semibold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    sessionActive
+                      ? 'bg-red-500 text-white hover:bg-red-400'
+                      : 'bg-amber-400 text-zinc-950 hover:bg-amber-300'
+                  }`}
+                >
+                  {sessionActive ? 'Detener' : loading ? 'Cargando modelos...' : 'Iniciar'}
+                </button>
+              </div>
+
+              {error && <div className="bg-red-950/40 border border-red-700 text-red-200 rounded-lg p-3 text-sm text-center">{error}</div>}
+
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] gap-4">
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 md:p-4">
+                  <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
                 </div>
-                {combinedEmotionSummary.length > 0 ? (
-                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
-                    <VoiceEmotionPanel
-                      latestSample={latestVoiceSample}
-                      summary={voiceSummary}
-                      combinedSummary={combinedEmotionSummary}
-                      faceSummary={displayedFaceSummary}
-                      title="Resumen de emociones"
-                      description={`Lectura capturada durante ${captureDurationSeconds} segundos.`}
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+                    <ConversationPanel
+                      artist={selectedArtistInfo}
+                      status={voiceStatus}
+                      error={voiceError}
+                      transcript={transcript}
+                      mode={conversationMode}
+                      voiceEnabled={voiceCaptureActive}
+                      remainingSeconds={remainingSeconds}
+                      captureDurationSeconds={captureDurationSeconds}
+                      progress={captureProgress}
+                      sessionActive={sessionActive}
+                      captureComplete={combinedEmotionSummary.length > 0}
                     />
                   </div>
-                ) : (
+
                   <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
-                    <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emoción en vivo</h2>
-                    <EmotionDisplay emotions={emotions} dominant={dominant} age={age} gender={gender} />
+                    {combinedEmotionSummary.length > 0 ? (
+                      <VoiceEmotionPanel
+                        latestSample={latestVoiceSample}
+                        summary={voiceSummary}
+                        combinedSummary={combinedEmotionSummary}
+                        faceSummary={displayedFaceSummary}
+                        title="Resumen de emociones"
+                        description={`Lectura capturada durante ${captureDurationSeconds} segundos.`}
+                      />
+                    ) : (
+                      <>
+                        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emoción en vivo</h2>
+                        <EmotionDisplay emotions={emotions} dominant={dominant} age={age} gender={gender} />
+                      </>
+                    )}
                   </div>
-                )}
-                <DynamicArtworkStatus aiChunk={lastAiChunk} aiPlan={lastAiPlan} robotStatus={robotStatusPayload} sessionActive={sessionActive} />
+
+                  <div className="md:col-span-2 xl:col-span-1">
+                    <VoiceCaptureStatus
+                      enabled={voiceCaptureActive}
+                      status={voiceStatus}
+                      error={voiceError}
+                      latestSample={latestVoiceSample}
+                      transcript={transcript}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          </Screen>
+
+              <DynamicArtworkStatus aiChunk={lastAiChunk} aiPlan={lastAiPlan} robotStatus={robotStatusPayload} sessionActive={sessionActive} />
+
+              <DemoReadinessPanel
+                mqttStatus={connectionStatus}
+                aiPlan={lastAiPlan}
+                aiChunk={lastAiChunk}
+                hasEmotionSummary={combinedEmotionSummary.length > 0}
+                robotStatus={lastCalibrationStatus || lastRobotStatus}
+                voiceStatus={voiceStatus}
+                voiceEnabled={voiceCaptureActive}
+                painter={selectedPainterProfile}
+                sessionActive={sessionActive}
+                calibrationActive={false}
+                calibrationLocked={calibrationLocked}
+                calibrationMoving={armCalibrationState.moving}
+              />
+            </section>
 
             {(actionMessage || lastPublished || lastError || lastSystemError || lastAiPlan) && (
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-400 space-y-1">
@@ -600,18 +588,6 @@ function App() {
         {`Topics: moodcam/${mqttConfig.deviceId}/session · ai/${mqttConfig.deviceId}/stroke_chunk · robot/${mqttConfig.deviceId}/command`}
       </footer>
     </div>
-  )
-}
-
-function Screen({ title, description, children }) {
-  return (
-    <section className="min-h-[calc(100vh-220px)] rounded-lg border border-zinc-800 bg-zinc-950/30 p-4 md:p-5 space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-white">{title}</h2>
-        <p className="text-sm text-zinc-500 mt-1">{description}</p>
-      </div>
-      {children}
-    </section>
   )
 }
 
@@ -638,6 +614,64 @@ function DynamicArtworkStatus({ aiChunk, aiPlan, robotStatus, sessionActive }) {
       )}
     </div>
   )
+}
+
+function VoiceConsentPanel({ voiceAvailable, voiceConsentGranted, sessionActive, onVoiceConsentChange }) {
+  if (!voiceAvailable) {
+    return (
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-500">
+        La captura de voz estará disponible cuando el servicio artístico con IA esté preparado.
+      </div>
+    )
+  }
+
+  return (
+    <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-300">
+      <input
+        type="checkbox"
+        checked={voiceConsentGranted}
+        disabled={sessionActive}
+        onChange={(event) => onVoiceConsentChange(event.target.checked)}
+        className="mt-1 h-4 w-4 shrink-0 accent-amber-300 disabled:opacity-40"
+      />
+      <span>
+        <span className="block font-semibold text-zinc-100">Activar captura de voz</span>
+        <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
+          Al activar la voz, su transcripción temporal puede enviarse a OpenAI para ayudar a crear la obra. No guardamos ni enviamos audio o vídeo. Sin voz, la sesión usa solo la cámara.
+        </span>
+      </span>
+    </label>
+  )
+}
+
+function VoiceCaptureStatus({ enabled, status, error, latestSample, transcript }) {
+  const intensity = latestSample?.intensity ?? 0
+  const label = enabled ? voiceCaptureLabel(status) : 'desactivada'
+
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Captura de voz</h2>
+          <p className="text-xs text-gray-500 mt-1">{enabled ? 'Señal vocal y transcript durante la sesión.' : 'Sólo se está usando emoción facial.'}</p>
+        </div>
+        <span className="rounded-md bg-zinc-950 px-2 py-1 text-xs font-semibold text-zinc-300">{label}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <StatusMetric label="Intensidad" value={enabled ? `${intensity}%` : '-'} />
+        <StatusMetric label="Transcript" value={enabled ? `${transcript.length} entradas` : '-'} />
+      </div>
+      {error && <p className="text-xs text-red-300">{error}</p>}
+    </div>
+  )
+}
+
+function voiceCaptureLabel(status) {
+  if (status === 'listening' || status === 'live') return 'escuchando'
+  if (status === 'starting' || status === 'connecting') return 'iniciando'
+  if (status === 'ended') return 'analizada'
+  if (status === 'error') return 'error'
+  return 'lista'
 }
 
 function StatusMetric({ label, value }) {

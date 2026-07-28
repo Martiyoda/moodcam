@@ -5,15 +5,11 @@ export default function ConversationPanel({
   transcript,
   mode,
   voiceEnabled,
-  voiceAvailable,
-  voiceConsentGranted,
   remainingSeconds,
   captureDurationSeconds,
   progress,
   sessionActive,
   captureComplete,
-  onVoiceConsentChange,
-  onReset,
 }) {
   const progressValue = Math.max(0, Math.min(100, progress || 0))
   const progressStyle = sessionActive
@@ -28,7 +24,7 @@ export default function ConversationPanel({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">2. Lee tu emoción con {artist.name}</h2>
+          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Avatar</h2>
           <p className="text-xs text-gray-500 mt-1">{modeDescription}</p>
         </div>
         <StatusBadge status={status} mode={mode} voiceEnabled={voiceEnabled} />
@@ -52,26 +48,6 @@ export default function ConversationPanel({
             className="h-full w-full origin-left bg-linear-to-r from-cyan-300 via-amber-300 to-rose-400"
             style={progressStyle}
           />
-        </div>
-        {voiceAvailable && (
-          <label className="flex items-center justify-between gap-3 rounded-md border border-gray-800 bg-gray-950/70 px-3 py-2 text-xs text-gray-400">
-            <span>Permitir captura de voz</span>
-            <input
-              type="checkbox"
-              checked={voiceConsentGranted}
-              disabled={sessionActive}
-              onChange={(event) => onVoiceConsentChange(event.target.checked)}
-              className="h-4 w-4 accent-amber-300 disabled:opacity-40"
-            />
-          </label>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={onReset}
-            className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-800 text-gray-400 hover:text-white hover:border-gray-700 transition-colors"
-          >
-            Reiniciar
-          </button>
         </div>
       </div>
 

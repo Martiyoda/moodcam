@@ -549,6 +549,7 @@
   0% {
     transform: translateX(-120%);
   }
+
   100% {
     transform: translateX(120%);
   }
@@ -559,6 +560,7 @@
     transform: scaleX(0);
     transform-origin: left;
   }
+
   100% {
     transform: scaleX(1);
     transform-origin: left;
@@ -566,10 +568,12 @@
 }
 
 @keyframes drawStroke {
+
   0%,
   100% {
     clip-path: inset(0 100% 0 0);
   }
+
   45%,
   78% {
     clip-path: inset(0 0 0 0);
@@ -580,15 +584,19 @@
   0% {
     transform: translate(0, 0) rotate(28deg);
   }
+
   28% {
     transform: translate(230px, 54px) rotate(34deg);
   }
+
   54% {
     transform: translate(92px, 190px) rotate(16deg);
   }
+
   78% {
     transform: translate(300px, 236px) rotate(38deg);
   }
+
   100% {
     transform: translate(0, 0) rotate(28deg);
   }
@@ -598,6 +606,7 @@
   0% {
     transform: translateX(0);
   }
+
   100% {
     transform: translateX(-82px);
   }
@@ -728,6 +737,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .project-page *,
   .project-page *::before,
   .project-page *::after {

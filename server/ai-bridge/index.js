@@ -142,6 +142,9 @@ function publishBridgePresence(client, config, startedAt) {
     component: 'ai-bridge',
     uptimeMs: Date.now() - startedAt,
     intervalMs: BRIDGE_PRESENCE_INTERVAL_MS,
+    extra: {
+      openai_configured: Boolean(config.openaiApiKey),
+    },
   })), { qos: 0, retain: true })
 }
 

@@ -92,6 +92,7 @@ export default function useMqtt() {
     const [lastAiPlan, setLastAiPlan] = useState(null)
     const [lastAiChunk, setLastAiChunk] = useState(null)
     const [lastSystemError, setLastSystemError] = useState(null)
+    const [lastBridgePresence, setLastBridgePresence] = useState(null)
     const [lastCalibrationStatus, setLastCalibrationStatus] = useState(null)
     const [lastCalibrationError, setLastCalibrationError] = useState(null)
     const [lastCalibrationCommand, setLastCalibrationCommand] = useState(null)
@@ -217,6 +218,7 @@ export default function useMqtt() {
                 getTopic(configRef.current, TOPIC_KEYS.strokePlan),
                 getTopic(configRef.current, TOPIC_KEYS.strokeChunk),
                 getTopic(configRef.current, TOPIC_KEYS.systemError),
+                getTopic(configRef.current, TOPIC_KEYS.bridgePresence),
             ])], { qos: 0 })
         })
 
@@ -254,6 +256,9 @@ export default function useMqtt() {
                 if (parsedPayload?.type !== 'ai_bridge_error' && parsedPayload?.type !== 'bridge_offline' && !isCalibrationOnlyRobotError(parsedPayload)) {
                     setLastCalibrationError(receivedMessage)
                 }
+            }
+            if (topic === getTopic(configRef.current, TOPIC_KEYS.bridgePresence)) {
+                setLastBridgePresence(receivedMessage)
             }
         })
 
@@ -433,6 +438,7 @@ export default function useMqtt() {
         lastAiPlan,
         lastAiChunk,
         lastSystemError,
+        lastBridgePresence,
         lastCalibrationStatus,
         lastCalibrationError,
         lastCalibrationCommand,

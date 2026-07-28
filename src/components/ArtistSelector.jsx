@@ -5,15 +5,13 @@ const PRESENTATION_ARTISTS = ARTISTS.filter((artist) => WRO_PRESENTATION_ARTIST_
 
 export default function ArtistSelector({ selectedArtist, onSelect }) {
   return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">1. Elige el estilo</h2>
-        <p className="text-xs text-gray-500 mt-1">
-          Es la primera selección: define el estilo, los trazos y la forma en que pintará el brazo.
-        </p>
+    <div className="space-y-3 lg:flex lg:items-center lg:gap-4 lg:space-y-0">
+      <div className="lg:w-44 lg:shrink-0">
+        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Elige el pintor</h2>
+        <p className="text-xs text-gray-500 mt-1">Define estilo, trazos y receta del brazo.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:flex-1">
         {PRESENTATION_ARTISTS.map((artist) => {
           const active = selectedArtist === artist.id
 
@@ -21,7 +19,7 @@ export default function ArtistSelector({ selectedArtist, onSelect }) {
             <button
               key={artist.id}
               onClick={() => onSelect(artist.id)}
-              className={`text-left p-3 rounded-lg border transition-colors ${
+              className={`min-h-24 text-left p-3 rounded-lg border transition-colors ${
                 active
                   ? 'border-amber-400 bg-amber-400/10 text-white'
                   : 'border-gray-800 bg-gray-900/70 text-gray-300 hover:border-gray-700 hover:bg-gray-800/70'
@@ -29,7 +27,6 @@ export default function ArtistSelector({ selectedArtist, onSelect }) {
             >
               <span className="block text-sm font-semibold">{artist.name}</span>
               <span className="block text-xs text-gray-500 mt-0.5">{artist.label}</span>
-              <span className="block text-[11px] text-gray-500 mt-2 leading-relaxed">{artist.summary}</span>
             </button>
           )
         })}

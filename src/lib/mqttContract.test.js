@@ -135,6 +135,7 @@ test('crea payloads de presencia con formato compartido', () => {
     component: 'ai-bridge',
     uptimeMs: 1234,
     intervalMs: 5000,
+    extra: { openai_configured: true },
   })
 
   assert.equal(presence.type, 'presence')
@@ -143,6 +144,7 @@ test('crea payloads de presencia con formato compartido', () => {
   assert.equal(presence.status, 'online')
   assert.equal(presence.uptime_ms, 1234)
   assert.equal(presence.interval_ms, 5000)
+  assert.equal(presence.openai_configured, true)
 })
 
 test('envuelve comandos de robot con inicio, indices y fin', () => {
