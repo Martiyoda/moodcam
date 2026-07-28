@@ -179,7 +179,7 @@ void setup() {
   // interpolacion para no perder presencia durante un stroke largo.
   setMotionTickCallback(serviceMotionTick);
 
-  Serial.println("E-motion ESP32: modo prueba MQTT segura.");
+  Serial.println("Inner Synergy ESP32: modo prueba MQTT segura.");
   printHelp();
   printStatus();
 

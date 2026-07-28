@@ -1,7 +1,7 @@
 # Protocolo de puesta en marcha del modo real
 
 Documento operativo para validar el brazo robot fisico (3D printed, 4 servos)
-antes y durante el primer arranque del modo real del firmware E-motion.
+antes y durante el primer arranque del modo real del firmware Inner Synergy.
 
 > Este protocolo se ejecuta **una sola vez** despues de cualquier cambio que
 > afecte al hardware o al firmware (reflasheo, cambio de servo, sustitucion
@@ -153,7 +153,7 @@ Variables relevantes (leidas de `.env` y de la env):
 
 - `MQTT_URL` o `MQTT_BROKER_URL` (default: `wss://broker.hivemq.com:8884/mqtt`).
 - `MQTT_USERNAME`, `MQTT_PASSWORD` (si el broker los requiere).
-- `MQTT_DEVICE_ID` o `MOODCAM_DEVICE_ID` (default `moodcam_dev`).
+- `MQTT_DEVICE_ID` o `MOODCAM_DEVICE_ID` (default `device1`).
 - `MQTT_ROBOT_COMMAND_TOPIC` (opcional, sobreescribe el calculado por
   `createTopicMap`).
 

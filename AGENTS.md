@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Contexto operativo para agentes de IA que trabajen en E-motion. Este archivo complementa al README: aqui van las reglas, mapas mentales y verificaciones que un agente necesita para cambiar el proyecto sin romper el flujo fisico.
+Contexto operativo para agentes de IA que trabajen en Inner Synergy. Este archivo complementa al README: aqui van las reglas, mapas mentales y verificaciones que un agente necesita para cambiar el proyecto sin romper el flujo fisico.
 
 ## Vision del proyecto
 
-E-motion transforma emocion detectada en navegador en una decision artistica y comandos seguros para un brazo robotico ESP32/Arduino. El flujo soportado es unico:
+Inner Synergy transforma emocion detectada en navegador en una decision artistica y comandos seguros para un brazo robotico ESP32/Arduino. El flujo soportado es unico:
 
 ```text
 Web React -> MQTT -> AI Bridge Node -> MQTT -> ESP32/Arduino -> brazo fisico
@@ -74,7 +74,7 @@ El servidor carga `.env.local` y `.env` sin sobreescribir variables ya presentes
 - `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_VOICE`, `OPENAI_TRANSCRIBE_MODEL`: conversacion de voz web.
 - `MOODCAM_API_PORT`: puerto de Express local, default `8787`.
 - `MQTT_URL` o `MQTT_BROKER_URL`: broker MQTT websocket.
-- `MQTT_DEVICE_ID` o `MOODCAM_DEVICE_ID`: pivote de todos los topics.
+- `MQTT_DEVICE_ID` o `MOODCAM_DEVICE_ID`: pivote de todos los topics; default `device1`.
 - `MQTT_USERNAME`, `MQTT_PASSWORD`: credenciales opcionales del broker.
 - `MQTT_COMMAND_DELAY_MS`: pausa entre comandos publicados al robot, clamp `0..5000`, default `60`.
 - Overrides opcionales de topics: `MQTT_SESSION_START_TOPIC`, `MQTT_FACE_EMOTION_TOPIC`, `MQTT_SESSION_SUMMARY_TOPIC`, `MQTT_SESSION_WINDOW_TOPIC`, `MQTT_SESSION_END_TOPIC`, `MQTT_STROKE_PLAN_TOPIC`, `MQTT_STROKE_CHUNK_TOPIC`, `MQTT_ROBOT_COMMAND_TOPIC`, `MQTT_ROBOT_STATUS_TOPIC`, `MQTT_SYSTEM_ERROR_TOPIC`, `MQTT_MOODCAM_STATUS_TOPIC`, `MQTT_WEB_PRESENCE_TOPIC`, `MQTT_BRIDGE_PRESENCE_TOPIC`, `MQTT_ESP32_PRESENCE_TOPIC`.
@@ -133,6 +133,7 @@ Reglas:
 - Usar `createTopicMap`, `topicFor`, `createMqttClientId`, `createSessionId`, builders de payload y `createRobotCommandSequence`.
 - Si cambias topics, actualiza contrato, README, tests y firmware/configuracion relacionada.
 - La web publica presencia retenida cada 5 s; el bridge publica presencia retenida cada 5 s; el firmware publica presencia ESP32 por topic separado.
+- La presencia del bridge incluye `openai_configured`. La web solo habilita voz cuando este campo es `true`.
 - El firmware publica `queue_depth`, `queue_capacity`, `queue_full` y `queue_executing` en `robot/status`; el AI Bridge los usa para pausar ventanas cuando la FIFO se llena.
 
 Secuencia de comandos de robot:
@@ -148,10 +149,10 @@ Cada comando envuelto debe conservar `plan_id`, `session_id`, `artist`, `sequenc
 La UI esta centrada en una sesion artistica:
 
 1. Una sola pantalla operativa combina seleccion de pintor, camara, consentimiento de voz, captura y estado de obra dinamica.
-2. Camara y voz opcional con consentimiento explicito (`VOICE_CAPTURE_ENABLED = true`, pero el usuario debe activar microfono).
+2. La cámara procesa la detección localmente en el navegador. La voz es opcional y solo se habilita con consentimiento explícito cuando el bridge publica `openai_configured=true`.
 3. Publicacion de `session_start` al iniciar captura.
 4. Captura de muestras de cara cada aproximadamente `650 ms` durante la sesion.
-5. Publicacion de `session/window` cada `SESSION_WINDOW_MS = 5000`, con resumen de cara, voz si hay consentimiento, transcript delta y receta de pintor.
+5. Publicacion de `session/window` cada `SESSION_WINDOW_MS = 5000`, con resumen de cara, voz si hay consentimiento, `transcript_delta` temporal y receta de pintor.
 6. Recepcion de `ai/{deviceId}/stroke_chunk` y visualizacion del ultimo chunk, ventana, comandos y cola de robot en UI.
 7. Al finalizar, publicacion de ventana final, `session/end` y `session_summary` compatible.
 8. No hay paso final separado para mostrar la obra: la obra se genera por chunks durante la captura.
@@ -161,6 +162,7 @@ Notas para agentes frontend:
 - No agregues controles avanzados de baja utilidad a la operacion normal si no son imprescindibles.
 - Mantener visibles estado MQTT, errores del sistema, ultimo chunk y estado/calibracion del robot.
 - La configuracion MQTT de la web se persiste en `localStorage` bajo `moodcam-mqtt-config`.
+- MQTT no transporta imagen ni audio. Con voz aceptada, la transcripcion temporal puede llegar al AI Bridge y a OpenAI para generar directivas artisticas; no debe persistirse tras la sesion.
 - Si cambias payloads publicados desde la web, actualiza tests de contrato y el bridge.
 
 ## AI Bridge y decision artistica
@@ -180,8 +182,9 @@ Comportamiento:
 - Al recibir `session_summary`, llama a `decideArtPlan`.
 - Al recibir `session/window`, llama a `decideArtChunk`; si `robot/status` indica `queue_full` o `queue_depth` alto, pausa esa ventana y publica error de bridge no-fallback.
 - Al recibir `session/end`, publica chunk final de limpieza/reposo.
-- Si `OPENAI_API_KEY` existe, pide una decision JSON estructurada a OpenAI Responses API.
+- Si `OPENAI_API_KEY` existe, pide una decision JSON estructurada a OpenAI Responses API y anuncia `openai_configured=true` en presencia.
 - Si falta la key o OpenAI falla/devuelve algo invalido, usa fallback local con `generateArtPlan`.
+- Sin `OPENAI_API_KEY`, la web debe mantener la voz desactivada para no publicar transcripciones que no se usaran en la decision artistica.
 - Publica el plan en `ai/{deviceId}/stroke_plan` con QoS 1.
 - Publica chunks en `ai/{deviceId}/stroke_chunk` con QoS 1.
 - Publica todos los comandos en `robot/{deviceId}/command` con QoS 1 y pausa `MQTT_COMMAND_DELAY_MS`.

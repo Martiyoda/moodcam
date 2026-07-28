@@ -273,7 +273,7 @@ async function requestOpenAiDecision({ artist, sessionSummary, mainEmotions, con
         {
           role: 'system',
           content: [
-            'Eres el cerebro artistico de Moodcam para un robot pintor ESP32.',
+            'Eres el cerebro artistico de Inner Synergy para un robot pintor ESP32.',
             'Devuelve solo una decision JSON estructurada.',
             'No inventes coordenadas fisicas: el servidor las validara despues.',
             'Prioriza seguridad: movimientos dentro de A4, cambios de color limpios y estilo del pintor elegido.',

@@ -1,12 +1,12 @@
-# E-motion
+# Inner Synergy
 
-Proyecto para presentar en la WRO 2026 (categoria Future Innovators) que transforma emocion detectada en la web en un plan artistico y comandos para un brazo fisico ESP32/Arduino.
+Proyecto para presentar en la WRO 2026 (categoria Future Innovators) que transforma señales emocionales en una propuesta artistica y comandos seguros para un brazo fisico ESP32/Arduino.
 
 ## Vision general del proyecto
 
-E-motion es un sistema de extremo a extremo con tres capas:
+Inner Synergy es un sistema de extremo a extremo con tres capas:
 
-1. Capa web (captura y experiencia): analiza emocion facial en navegador, usa voz solo con consentimiento, publica ventanas de sesion y muestra avatar/chunks/plan.
+1. Capa web (Moodcam y experiencia): analiza emocion facial en navegador, usa voz solo con consentimientos explicitos, publica ventanas de sesion y muestra avatar/chunks/plan.
 2. Capa de decision (AI Bridge): recibe ventanas y resumen emocional por MQTT, genera directivas seguras con OpenAI o fallback local y publica chunks/comandos.
 3. Capa fisica (ESP32/Arduino): encola y ejecuta movimientos del brazo dentro de limites seguros, reportando estado, profundidad de cola y errores.
 
@@ -19,7 +19,7 @@ Flujo unico soportado:
 
 Web -> MQTT (HiveMQ) -> AI Bridge -> MQTT -> Brazo fisico
 
-No hay modo simulador que sustituya al brazo fisico. La experiencia web incluye un avatar 2D conversacional; el avatar 3D queda como mejora futura.
+No hay modo simulador que sustituya al brazo fisico. Moodcam es el nombre tecnico del modulo web de captura. La experiencia web incluye un avatar 2D; el avatar 3D queda como mejora futura.
 
 ## Como funciona de extremo a extremo
 
@@ -59,9 +59,11 @@ cp .env.example .env
 
 ## Variables de entorno clave
 
-- OPENAI_API_KEY: clave para generar plan artistico en AI Bridge.
+- OPENAI_API_KEY: habilita la decision artistica con OpenAI en AI Bridge. Sin ella, el bridge usa fallback local y la captura de voz permanece desactivada.
+- OPENAI_DECISION_MODEL: modelo de decision artistica; por defecto `gpt-4.1-mini`.
+- OPENAI_REALTIME_MODEL, OPENAI_REALTIME_VOICE y OPENAI_TRANSCRIBE_MODEL: configuracion preparada para conversaciones Realtime; no forman parte del flujo de voz activo.
 - MQTT_URL: URL websocket del broker MQTT.
-- MQTT_DEVICE_ID: identificador unico del dispositivo.
+- MQTT_DEVICE_ID: identificador unico del dispositivo; por defecto `device1`.
 - MQTT_USERNAME y MQTT_PASSWORD: solo si tu broker las exige.
 - MQTT_COMMAND_DELAY_MS: separacion entre comandos enviados al robot.
 
@@ -83,12 +85,20 @@ http://127.0.0.1:5173
 
 La aplicacion usa una sola pantalla operativa:
 
-1. Seleccionar pintor.
-2. Activar camara.
-3. Activar voz solo si se acepta la captura de microfono; sin consentimiento la sesion sigue solo con rostro.
-4. Iniciar captura emocional.
-5. Durante la sesion, la web publica ventanas y AI Bridge genera chunks dinamicos para la obra.
-6. Supervisar ultimo chunk, estado MQTT, respuesta del robot y profundidad FIFO.
+1. Confirmar que una persona adulta responsable autoriza la sesion.
+2. Seleccionar pintor.
+3. Activar camara.
+4. Activar voz solo cuando el AI Bridge confirme que OpenAI esta configurado. La transcripcion temporal puede enviarse a OpenAI para orientar la obra; no se envia ni guarda audio o video. Sin voz, la sesion usa solo camara.
+5. Iniciar captura emocional.
+6. Durante la sesion, la web publica ventanas y AI Bridge genera chunks dinamicos para la obra.
+7. Supervisar ultimo chunk, estado MQTT, respuesta del robot y profundidad FIFO.
+
+## Privacidad y consentimiento
+
+- La deteccion facial se procesa en el navegador. MQTT no transporta imagen ni audio.
+- Si se activa voz tras los consentimientos requeridos, Moodcam crea una transcripcion temporal. El AI Bridge puede enviar fragmentos recientes a OpenAI para obtener directivas artisticas cuando `OPENAI_API_KEY` esta configurada.
+- La aplicacion no conserva imagenes, audio, transcripciones ni resumenes emocionales al terminar la sesion.
+- Inner Synergy no diagnostica emociones ni sustituye el acompanamiento profesional.
 
 ## Pasos seguidos para crear el proyecto
 
@@ -158,6 +168,7 @@ Reglas:
 - Publicar JSON valido en snake_case cuando aplique.
 - No cambiar topics sin actualizar contrato compartido.
 - `robot/{deviceId}/status` puede incluir `queue_depth`, `queue_capacity`, `queue_full` y `queue_executing`; AI Bridge usa esos campos para backpressure.
+- La presencia retenida de `system/{deviceId}/presence/ai-bridge` incluye `openai_configured`; la web la usa para habilitar voz solo cuando puede emplearse para la decision artistica.
 
 ## Parametros de interfaz que se mantienen
 
@@ -258,5 +269,5 @@ Checklist rapido:
 
 ## Notas de mantenimiento
 
-- Este repositorio mantiene una unica documentacion operativa en este archivo.
-- Cualquier cambio de flujo, contrato MQTT o seguridad debe actualizar este README en la misma tarea.
+- [AGENTS.md](AGENTS.md) contiene el contexto para agentes y [docs/real-mode-bringup.md](docs/real-mode-bringup.md) es el protocolo fisico supervisado.
+- Cualquier cambio de flujo, consentimiento, contrato MQTT o seguridad debe actualizar la documentacion afectada en la misma tarea.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://e-motion.local/schemas/robot-decision.schema.json",
-  "title": "E-motion validated stroke decision",
+  "$id": "https://inner-synergy.local/schemas/robot-decision.schema.json",
+  "title": "Inner Synergy validated stroke decision",
   "description": "Decisión propuesta antes de validarse contra una receta aprobada de /strokes.",
   "type": "object",
   "additionalProperties": false,
@@ -47,12 +47,20 @@
       "items": {
         "type": "string",
         "enum": [
-          "red", "rojo",
-          "yellow", "amarillo",
-          "orange", "naranja",
-          "blue", "azul",
-          "violet", "violeta", "morado", "purple",
-          "black", "negro"
+          "red",
+          "rojo",
+          "yellow",
+          "amarillo",
+          "orange",
+          "naranja",
+          "blue",
+          "azul",
+          "violet",
+          "violeta",
+          "morado",
+          "purple",
+          "black",
+          "negro"
         ]
       }
     }

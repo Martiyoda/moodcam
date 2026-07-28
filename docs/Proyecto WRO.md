@@ -1,64 +1,21 @@
-portada
+# Inner Synergy
 
+**Where inner worlds become art**
 
-## ÍNDICE
+Esplubot Nazaret Jr. | Colegio Nazaret, Esplugues de Llobregat
 
-## Contenido
+WRO Future Innovators 2026 | Cocreación: humanos, robots e IA
 
-[1. Presentación del equipo](#page-0)
+## Índice
 
-[2. Resumen de la idea del proyecto](#page-0)
-
-[1](#page-0)
-
-[2](#page-0)
-
-3. Investigación y desarrollo de la idea ...................................... pág. ___
-
-3.1. Contexto del problema y por qué es importante 3.2. Necesidades detectadas en los usuarios o en la comunidad 3.3. Investigación realizada y datos relevantes 3.4. Soluciones existentes o proyectos similares 3.5. Diferencias y valor añadido de nuestra propuesta
-
-3.6. Evolución de la idea inicial hasta el prototipo final
-
-- 4. Presentación de la solución robótica (bloque 3–5: máx. 12 páginas)
-
-............................................................................................. pág. ___
-
-4.1. Objetivo y funcionamiento general del robot 4.2. Caso de uso: cómo se utilizaría en una situación real 4.3. Decisiones autónomas que realiza la solución 4.4. Diagrama general de funcionamiento
-
-5. Desarrollo técnico del prototipo .............................................. pág. ___
-
-- 5.1. Diseño y construcción mecánica
-
-5.1.1. Estructura del robot y materiales utilizados 5.1.2. Mecanismos y movimientos principales 5.1.3. Sensores, motores, actuadores y controlador 5.1.4. Justificación de las decisiones de ingeniería 5.1.5. Fotografías o planos del prototipo
-
-- 5.2. Programación y automatización
-
-5.2.1. Lenguaje, plataforma y entorno de programación 5.2.2. Lógica de funcionamiento del programa 5.2.3. Uso de sensores para tomar decisiones 5.2.4. Fragmentos de código más importantes
-
-5.2.5. Automatización y eficiencia del sistema
-
-5.3. Pruebas, dificultades y mejoras
-
-5.3.1. Pruebas realizadas al prototipo 5.3.2. Resultados obtenidos 5.3.3. Problemas técnicos encontrados
-
-
-- 5.3.4. Soluciones aplicadas durante el desarrollo
-
-- 5.3.5. Fiabilidad de la demostración y mejoras pendientes
-
-6. Impacto social, innovación y emprendimiento (máx. 6 páginas) ............................................................................................. pág. ___
-
-- 6.1. Personas o comunidades beneficiarias 6.2. Impacto cultural, educativo o social de la solución 6.3. Posibles efectos negativos, riesgos o limitaciones 6.4. Ejemplo práctico de aplicación real 6.5. Relación con los Objetivos de Desarrollo Sostenible 6.6. Innovación clave: qué hace especial al proyecto 6.7. Posibles mejoras y desarrollo futuro 6.8. Viabilidad del proyecto y espíritu empresarial 6.8.1. Costes aproximados del prototipo real 6.8.2. Recursos necesarios 6.8.3. Posibles socios o instituciones colaboradoras 6.8.4. Posibles formas de financiación o sostenibilidad 6.9. Declaración del uso de inteligencia artificial en el proyecto
-
-7. Lista de fuentes ............................................................................ pág. ___
-
-- 7.1. Documentos y normativa WRO consultados 7.2. Páginas web y fuentes de investigación 7.3. Expertos, docentes o personas entrevistadas 7.4. Recursos visuales, imágenes y materiales externos utilizados
-
-## Anexos (solo si queda espacio dentro del límite de páginas) ........ pág. ___
-
-- A. Tabla de pruebas completa B. Diagramas técnicos adicionales C. Capturas complementarias del código
-
-- D. Bocetos o versiones anteriores del prototipo
+1. Presentación del equipo
+2. Resumen de la idea del proyecto
+3. Investigación y desarrollo de la idea
+4. Presentación de la solución robótica
+5. Desarrollo técnico del prototipo
+6. Impacto social, innovación y emprendimiento
+7. Lista de fuentes
+8. Anexos
 
 
 ## 1. Presentación del equipo
@@ -81,9 +38,6 @@ La investigación del problema, la búsqueda de información, la toma de decisio
 
 Lo que mejor define a nuestro equipo es que combinamos perfiles diferentes para construir una misma idea. Podemos discutir, equivocarnos, cambiar de opinión o llegar un poco justos de tiempo, pero cuando trabajamos juntos conseguimos transformar una idea en un prototipo real.
 
-[Insertar aquí una fotografía del equipo con el prototipo o trabajando en el proyecto]
-
-
 ## 2. Resumen de la idea del proyecto
 
 Nuestro proyecto se desarrolla dentro del área “Cocreación: humanos, robots e IA” del reto WRO Future Innovators 2026. La propuesta consiste en crear una solución robótica que ayude a niños de edades tempranas y a personas autistas, o con otras necesidades de apoyo en la expresión emocional, a comunicar lo que sienten mediante una experiencia artística interactiva.
@@ -101,7 +55,7 @@ Eslogan: Where inner worlds become art.
 
 ## 3. Investigación y desarrollo de la idea
 
-## a. Definición del problema
+### 3.1. Definición del problema
 
 El primer paso para desarrollar nuestro proyecto fue analizar el tema de la WRO Future Innovators 2026: “Robots y cultura” y explorar las tres áreas propuestas por el reto.
 
@@ -124,7 +78,7 @@ A partir de esta reflexión nació Inner Synergy, una solución de cocreación a
 
 persona, una inteligencia artificial y un brazo robótico colaboran para crear una pintura.
 
-## b. Investigación de soluciones robóticas relacionadas con el arte
+### 3.2. Investigación de soluciones robóticas relacionadas con el arte
 
 Uno de los proyectos más significativos en este ámbito es Ai-Da, descrita como la “primera artista robot humanoide ultra realista del mundo”. Su nombre hace referencia a Ada Lovelace, considerada una figura pionera en la historia de la programación. Ai-Da se presenta como un proyecto artístico y tecnológico diseñado para generar debate sobre la creatividad, la autoría, la ética de los avances tecnológicos y el papel de la inteligencia artificial en la sociedad contemporánea.
 
@@ -147,7 +101,7 @@ El desarrollo de DOUG ha pasado por varias generaciones. En DOUG_1, el sistema s
 
 El reconocimiento internacional de este proyecto confirma su relevancia. La obra MEMORY (DOUG_2) fue el primer modelo de inteligencia artificial incorporado a la colección permanente del Victoria and Albert Museum de Londres. Además, Chung ha recibido premios por su excelencia en la colaboración entre humanos y robots.
 
-## c. Investigación sobre expresión emocional y arte en la infancia
+### 3.3. Investigación sobre expresión emocional y arte en la infancia
 
 Durante la investigación del proyecto, una de las líneas que consideramos más importantes fue el papel del arte en la expresión emocional durante la infancia.
 
@@ -166,7 +120,7 @@ La repetición de trazos, formas o movimientos también puede tener un valor exp
 
 Otro beneficio importante es el fortalecimiento de la autoestima. Cuando un niño crea algo propio, observa que su experiencia interna puede adquirir forma, color y presencia. La obra se convierte en una representación personal que puede compartir con otras personas si lo desea. Esto refuerza su identidad, su confianza y la percepción de que aquello que siente tiene valor.
 
-## d. Investigación sobre arte, autismo y comunicación emocional
+### 3.4. Investigación sobre arte, autismo y comunicación emocional
 
 El Trastorno del Espectro Autista (TEA) se define como un trastorno del desarrollo neuropsicológico caracterizado por dificultades persistentes en la comunicación y la interacción social, así como por patrones de comportamiento restrictivos y repetitivos. Desde una perspectiva clínica, el autismo puede implicar dificultades en la posibilidad de compartir, reconocer y experimentar emociones con los demás de manera espontánea. En este contexto, la arteterapia adquiere un papel relevante, como herramienta capaz de mediar en el mundo emocional de estas personas.
 
@@ -189,7 +143,9 @@ En conjunto, los programas de arteterapia en contextos educativos, las iniciativ
 
 final.
 
-- 4. Presentación de la solución robótica
+## 4. Presentación de la solución robótica
+
+### 4.1. Objetivo y funcionamiento general
 
 Inner Synergy es una solución robótica de cocreación artística que permite transformar señales emocionales en una obra pictórica realizada por un brazo robótico. El proyecto está pensado especialmente para niños de edades tempranas y personas autistas o con otras necesidades de apoyo en la comunicación emocional, aunque también puede ser utilizado por cualquier persona que quiera expresar su mundo interior mediante el arte.
 
@@ -210,13 +166,34 @@ En Inner Synergy, el usuario no es un espectador pasivo. Su participación es es
 
 Esta participación convierte la experiencia en un proceso de cocreación. El usuario aporta su mundo interior, la inteligencia artificial interpreta los datos emocionales y artísticos, y el brazo robótico transforma esa información en una creación visual. Por tanto, la obra final no pertenece únicamente al robot ni al sistema, sino que surge de la colaboración entre la persona y la tecnología.
 
+### 4.2. Caso de uso: experiencia artística guiada y referentes pictóricos
+
 Además, el proyecto prevé que la experiencia no termine mientras el brazo robótico está pintando. Durante el tiempo de creación de la obra, el usuario podrá seguir interactuando con la tecnología mediante recursos audiovisuales relacionados con el artista escogido. También se plantea la posibilidad de acceder a una experiencia de realidad virtual basada en una de sus obras, de manera que el usuario pueda aprender más sobre el referente artístico seleccionado mientras observa cómo su propia pintura está siendo creada.
 
 De esta forma, Inner Synergy combina expresión emocional, aprendizaje artístico e interacción tecnológica. El usuario no solo obtiene una pintura final, sino que participa en una experiencia completa donde sus emociones, su elección artística y la acción del robot se unen para convertir su mundo interior en arte.
 
-## 5. Referentes pictóricos seleccionados
+### 4.3. Decisiones autónomas y supervisión humana
 
-## a. Wassily Kandinsky: color, forma y mundo interior
+Inner Synergy estima emociones, combina parámetros visuales y genera directivas de color, densidad y gesto según el artista elegido. El generador local transforma esas directivas en trayectorias limitadas para el lienzo A4. La persona participante elige el referente artístico; el operador calibra el brazo, supervisa su movimiento y puede detenerlo; y la voz solo se activa con consentimiento explícito. La IA no recibe control de coordenadas físicas, límites de servos ni comandos directos del robot.
+
+### 4.4. Diagrama general de funcionamiento
+
+```text
+Persona + selección de artista
+			|
+			v
+Moodcam en navegador -> datos emocionales derivados -> MQTT -> AI Bridge
+			|                                               |
+			|                                               v
+			+---------------- estado y chunks <----- directivas artísticas
+															|
+															v
+											 ESP32 + brazo robótico -> pintura A4
+```
+
+#### Referentes pictóricos seleccionados
+
+##### Wassily Kandinsky: color, forma y mundo interior
 
 Wassily Kandinsky ha sido seleccionado como uno de los referentes pictóricos porque su obra establece una relación directa entre arte abstracto, emoción y mundo interior. Para Kandinsky, la pintura no debía limitarse a imitar la realidad visible, sino convertirse en una forma de expresar la vida interior del artista y provocar una respuesta emocional en el espectador.
 
@@ -229,7 +206,7 @@ La forma también tiene un papel esencial en su lenguaje visual. El triángulo s
 
 Otro elemento importante en su obra es la densidad visual. Las composiciones con acumulación de formas generan una sensación más activa, intensa o dramática. En cambio, las composiciones con menos elementos y mayor espacio visual, transmiten calma, silencio o contemplación.
 
-## b. Alma Thomas: ritmo, luz y celebración del color
+##### Alma Thomas: ritmo, luz y celebración del color
 
 Alma Thomas ha sido seleccionada como uno de los referentes pictóricos porque su obra ofrece una visión de la abstracción profundamente ligada a la alegría, la naturaleza y la energía positiva del color. Esta perspectiva resulta especialmente valiosa para nuestro proyecto, ya que permite asociar determinadas emociones con una experiencia artística más amable, vibrante y accesible.
 
@@ -240,7 +217,7 @@ Su estilo maduro se caracteriza por las conocidas “Rayas de Alma”, una técn
 
 Además, su trayectoria como maestra durante treinta y cinco años en la Shaw Junior High School refuerza su conexión con nuestro proyecto, orientado en buena parte a la infancia. De hecho, Alma Thomas llegó a afirmar: “La gente siempre me quiere citar por mis pinturas de colores, pero prefiero ser recordada por haber ayudado a poner los fundamentos de las vidas de los niños”.
 
-## c. Jackson Pollock: gesto, energía y pintura en acción
+##### Jackson Pollock: gesto, energía y pintura en acción
 
 Jackson Pollock ha sido seleccionado como referente pictórico por su manera de entender la pintura como acción, movimiento y exteriorización emocional. Su técnica del dripping transforma el lienzo en un espacio de gesto físico, ritmo e intensidad.
 
@@ -251,7 +228,7 @@ Uno de los rasgos más característicos de sus composiciones es el formato all-o
 
 Aunque a primera vista muchas obras de Pollock pueden parecer caóticas, su trabajo no se basa en el azar absoluto. La acumulación de trazos puede transmitir tensión, conflicto o agitación, pero también ritmo, expansión y vitalidad.
 
-## d. Mark Rothko: campos de color, silencio y contemplación emocional
+##### Mark Rothko: campos de color, silencio y contemplación emocional
 
 Mark Rothko ha sido seleccionado como referente pictórico porque su obra lleva la abstracción hacia una experiencia profundamente emocional y contemplativa. Rothko construye sus pinturas a partir de grandes campos de color que buscan envolver al espectador y provocar una respuesta íntima. Su obra no pretende representar objetos ni escenas, sino generar un espacio de reflexión interior.
 
@@ -262,9 +239,9 @@ Durante su etapa más reconocible, Rothko desarrolló un lenguaje basado en dos 
 El color en Rothko actúa como un espacio emocional. Los rojos, naranjas y amarillos suelen transmitir calor, intensidad, vitalidad o exaltación; los azules, violetas y verdes oscuros pueden asociarse con introspección, melancolía, misterio o calma profunda; y los negros o tonos muy apagados tienden a expresar gravedad, duelo o tensión existencial.
 
 
-## 6. Desarrollo técnico del prototipo
+## 5. Desarrollo técnico del prototipo
 
-## a. Moodcam y detección emocional
+### 5.1. Moodcam y detección emocional
 
 Moodcam es el módulo encargado de iniciar la experiencia de Inner Synergy. Su función principal es analizar la expresión facial del usuario y obtener una lectura emocional que posteriormente se utilizará para generar la obra artística. Esta parte del sistema es esencial, ya que transforma la interacción inicial de la persona en datos que pueden ser interpretados por el resto de la solución robótica.
 
@@ -283,11 +260,11 @@ Además, la interfaz muestra la emoción dominante y las puntuaciones asociadas,
 
 Una decisión importante de diseño fue limitar la detección a un solo rostro. En nuestro caso, el objetivo es analizar al usuario que está participando en la experiencia, por lo que procesar únicamente una cara mejora el rendimiento y evita interferencias con otras personas que puedan aparecer en segundo plano. También se aplica un efecto espejo al vídeo y al canvas para que la cámara se comporte de forma más natural para el usuario.
 
-Para obtener una información más útil para la creación artística, Moodcam no se queda solo con una lectura instantánea. El sistema realiza una sesión de análisis de 60 segundos, tomando una muestra de emociones cada segundo. Durante ese minuto, se almacenan las puntuaciones detectadas en cada instante. Al finalizar la sesión, el programa suma los valores acumulados de cada emoción, normaliza las puntuaciones y calcula el peso relativo de cada una respecto al total. Finalmente, las emociones se ordenan de mayor a menor porcentaje y el sistema selecciona las dos emociones predominantes de la sesión.
+Para obtener una información más útil para la creación artística, Moodcam no se queda solo con una lectura instantánea. La duración inicial de la sesión es de 30 segundos y puede configurarse. Durante la captura se toman muestras faciales aproximadamente cada 650 ms. Cada 5 segundos la aplicación resume la ventana reciente y la usa para actualizar la obra; al finalizar conserva un resumen compatible de toda la sesión. Las emociones se ordenan por peso relativo para orientar la propuesta artística.
 
 Esta salida emocional es la información que después se envía al resto del sistema. Las dos emociones predominantes y sus porcentajes permiten decidir los colores principales de la pintura, mientras que el estilo pictórico elegido por el usuario define el tipo de trazo que realizará el brazo robótico. De esta manera, Moodcam actúa como el primer puente entre la persona y la creación artística: convierte una expresión facial en datos emocionales que pueden transformarse en color, movimiento y pintura.
 
-## b. Comunicación mediante HiveMQ
+### 5.2. Comunicación mediante HiveMQ
 
 Para conectar las distintas partes, el proyecto utiliza comunicación mediante MQTT a través de HiveMQ. MQTT es un protocolo de mensajería ligero muy utilizado en sistemas IoT, ya que permite enviar información entre diferentes dispositivos o programas de forma rápida y organizada. En nuestro caso, se utiliza para comunicar la aplicación web, el módulo de inteligencia artificial y el brazo robótico.
 
@@ -300,7 +277,7 @@ La comunicación se organiza mediante topics, que funcionan como canales de info
 
 organización sería especialmente útil si en el futuro hubiera varios brazos robóticos funcionando al mismo tiempo, ya que cada uno podría comunicarse dentro de su propio espacio de mensajes.
 
-Los mensajes enviados no contienen imágenes ni vídeo. Únicamente se transmiten datos procesados. En el caso de Inner Synergy, el dato más importante para la creación artística es el resumen final de la sesión, donde se indican las dos emociones predominantes y su porcentaje.
+Los mensajes enviados no contienen imágenes ni audio. Únicamente se transmiten datos procesados. Con voz aceptada de forma explícita, se puede transmitir una transcripción temporal al módulo de decisión para orientar la intención artística. Cuando OpenAI está configurado, puede recibir fragmentos recientes de esa transcripción; la aplicación no conserva esos datos al terminar la sesión.
 
 La estructura de los mensajes se basa en formato JSON, ya que permite organizar la información de manera clara y fácil de interpretar por todos los módulos.
 
@@ -310,7 +287,7 @@ La comunicación entre los distintos módulos se basa en estructuras de datos en
 
 La estructura en JSON es una parte fundamental del sistema. No solo sirve para enviar información, sino que permite transformar progresivamente una expresión facial en una obra física: primero como datos emocionales, después como resumen de emociones, más tarde como plan artístico y finalmente como instrucciones para el brazo robótico. Gracias a esta organización, Inner Synergy puede convertir el mundo interior del usuario en decisiones técnicas que el robot ejecuta sobre el papel.
 
-## c. Generación de instrucciones artísticas
+### 5.3. Generación de instrucciones artísticas
 
 Una vez obtenidos los datos emocionales del usuario y seleccionado el referente pictórico, el sistema debe transformar esa información en un conjunto de decisiones visuales y, posteriormente, en instrucciones que el brazo robótico pueda ejecutar.
 
@@ -323,32 +300,27 @@ Otro parámetro importante es la densidad visual, entendida en el proyecto como 
 
 menos intervención. De esta manera, la densidad se convierte en una variable cuantificable que el sistema puede traducir en acciones físicas.
 
-| Emocion | Color | Densidad | Forma /trazo |   |
-| --- | --- | --- | --- | --- |
-| Alegria | Amarillo y naranja | Atta | Trazos | expansivos, |
-|   | Azul |   | i | en punta. y |
-| Calma |   | Baja | Curvas, cuadrados |   |
-|   |   |   |   | icion ordenada. |
-| Tension / rabia | Rojo | Muy alta | Puntas, diagonales, |   |
-| Melancolia / tristeza |   | Baja | abiertas. Curvas suaves y formas mas | visual. |
-|   | Violeta |   |   |   |
+| Señal orientativa | Colores predominantes | Densidad | Forma o trazo |
+| --- | --- | --- | --- |
+| Alegría | Amarillo y naranja | Alta | Trazos expansivos y en punta |
+| Calma | Azul | Baja | Curvas, cuadrados y composición ordenada |
+| Tensión o rabia | Rojo | Muy alta | Puntas y diagonales |
+| Melancolía o tristeza | Violeta | Baja | Curvas suaves y formas abiertas |
 
 Cada referente pictórico se traduce en una forma distinta de construir la obra:
 
-| Artista | jimi | elbrazo |   |   |
-| --- | --- | --- | --- | --- |
-| Pollock | Trazos en | i | istril | et |
-|   | p papel. |   |   |   |
-| ‘Alma Thomas | Lineas discontinuas repetitivas, ordenadas como patrones |   |   |   |
-| Rothko | ritmicos. |   |   |   |
-| Kandinsky | Trazos continuos para |   |   | crear campos cuadrados, de color. triangulos y lineas. |
-|   | F é | circulos, |   |   |
+| Artista | Traducción robótica del estilo |
+| --- | --- |
+| Pollock | Trazos gestuales y salpicaduras controladas sobre el papel |
+| Alma Thomas | Líneas discontinuas repetitivas organizadas como patrones rítmicos |
+| Rothko | Campos de color amplios, pausados y ordenados |
+| Kandinsky | Círculos, triángulos y líneas geométricas |
 
 A partir de estas reglas, el sistema genera un plan artístico que ya puede transformarse en instrucciones técnicas. Este plan define cuántos trazos deben realizarse, con qué color, en qué orden, con qué forma general y con qué nivel de densidad. Después, esta información se convierte en una estructura de comandos que el brazo robótico puede interpretar, respetando las limitaciones físicas del soporte, el tamaño A4 y el rango de movimiento de las articulaciones.
 
 El sistema incorpora también un cierto grado de variación para evitar que las obras sean siempre idénticas. Aunque las reglas generales se mantienen, algunos parámetros pueden modificarse dentro de unos límites controlados. Esto permite que cada pintura sea distinta, aunque parta de una misma lógica emocional y artística.
 
-## d. Construcción del brazo robótico
+### 5.4. Construcción del brazo robótico
 
 El objetivo era diseñar un sistema capaz de transformar las instrucciones generadas por el proyecto en movimientos reales sobre un soporte de pintura. Para ello, el equipo siguió un proceso progresivo basado en diseño, fabricación, prueba y mejora del prototipo.
 
@@ -362,11 +334,11 @@ El brazo robótico se diseñó como una estructura articulada fabricada mediante
 
 Además del brazo, el equipo diseñó una zona de trabajo específica para la creación de la obra. Esta zona está pensada para fabricarse con metacrilato cortado mediante cortadora láser. La base incorpora una carcasa para alojar y proteger la parte inferior del brazo robótico, mejorando la estabilidad del conjunto y ordenando los elementos mecánicos y electrónicos.
 
-## Diseño zona de trabajo
+#### Diseño de la zona de trabajo
 
 Se han previsto casilleros para colocar recipientes con agua y otros compartimentos para los colores que utilizará el robot. En la versión planteada, el sistema trabaja con cuatro colores disponibles.
 
-## e. Programación y control con Arduino
+### 5.5. Programación y control con Arduino
 
 El control físico del brazo robótico se realiza mediante una placa ESP32/Arduino, encargada de ejecutar los movimientos. Esta parte del sistema actúa como el puente final entre la información digital generada por la web y la acción física del robot.
 
@@ -383,15 +355,15 @@ Una parte fundamental del control es la calibración. Antes de ejecutar una obra
 
 En conjunto, el control con Arduino/ESP32 permite que Inner Synergy convierta los datos emocionales y artísticos en movimientos físicos. La placa recibe instrucciones generadas a partir de la emoción detectada y del estilo pictórico elegido, las transforma en posiciones de servomotores y coordina las articulaciones para pintar sobre el papel. Gracias a este control, el brazo robótico no actúa como una máquina que repite siempre el mismo movimiento, sino como un sistema capaz de ejecutar diferentes trazos según la información recibida.
 
-## Fotos del brazo en distintas posiciones
+### 5.6. Fotografías y planos del prototipo
 
-## f. Pruebas técnicas, dificultades y mejoras
+### 5.7. Pruebas técnicas, dificultades y mejoras
 
 El desarrollo técnico del prototipo se ha basado en un proceso progresivo de prueba, error y mejora continua. Tanto la parte digital como la parte física del proyecto han sido diseñadas, programadas y ajustadas por el equipo de forma principalmente autodidacta, combinando investigación propia, consulta de documentación técnica, pruebas prácticas y orientación puntual de expertos.
 
 Muchas decisiones iniciales tuvieron que modificarse después de comprobar su funcionamiento real. Por este motivo, el proyecto fue evolucionando en distintas fases: primero se desarrollaron versiones simples para validar la idea, después se añadieron nuevas funciones y, finalmente, se integraron los diferentes sistemas para que pudieran trabajar de forma coordinada.
 
-En el caso de Moodcam, el desarrollo comenzó con un modelo sencillo de detección emocional. En las primeras pruebas, el objetivo principal era comprobar si la cámara podía reconocer un rostro y devolver una emoción dominante. Una vez validada esta parte, la web fue incorporando más elementos: visualización en tiempo real, puntuaciones de confianza, sesión de análisis de 60 segundos, selección de las dos emociones predominantes y comunicación con el resto del sistema. Este crecimiento progresivo permitió mejorar la estabilidad de la detección y adaptar la información emocional a las necesidades del proyecto artístico.
+En el caso de Moodcam, el desarrollo comenzó con un modelo sencillo de detección emocional. En las primeras pruebas, el objetivo principal era comprobar si la cámara podía reconocer un rostro y devolver una emoción dominante. Una vez validada esta parte, la web incorporó visualización en tiempo real, puntuaciones de confianza, muestras periódicas, ventanas de 5 segundos, selección de emociones predominantes y comunicación con el resto del sistema. Este crecimiento progresivo permitió mejorar la estabilidad de la detección y adaptar la información emocional a las necesidades del proyecto artístico.
 
 La programación del brazo comenzó de manera muy básica. En una primera fase, el equipo programó manualmente algunos trazos concretos para comprobar que los servomotores respondían correctamente y que el pincel podía desplazarse sobre el papel. Estos trazos iniciales eran limitados, pero permitieron validar la relación entre el código, los ángulos de los motores y el resultado físico sobre el soporte.
 
@@ -411,6 +383,8 @@ La consulta a expertos también fue importante durante el desarrollo. Aunque el 
 
 ## 6. Impacto social, innovación y emprendimiento
 
+### 6.1. Personas beneficiarias y necesidad abordada
+
 Inner Synergy está pensado principalmente para niños de edades tempranas y para personas autistas o con otras necesidades de apoyo en la comunicación emocional. Sin embargo, su utilidad puede ampliarse a cualquier persona que tenga dificultades para expresar lo que siente mediante palabras o que pueda beneficiarse de una experiencia artística, visual e interactiva.
 
 Los principales beneficiarios del proyecto serían:
@@ -425,6 +399,8 @@ Los principales beneficiarios del proyecto serían:
 
 - Docentes y profesionales de apoyo: Observar cómo el usuario participa en un proceso creativo y cómo responde a una experiencia artística guiada por tecnología.El proyecto no pretende sustituir el trabajo de familias, docentes, terapeutas o profesionales especializados. Su objetivo es funcionar como una herramienta complementaria, accesible y motivadora, que ayude a abrir nuevas vías de expresión y diálogo emocional.
 
+### 6.2. Impacto social y educativo
+
 El principal impacto social está relacionado con la inclusión y la expresión emocional. La solución permite que una persona transforme señales de su mundo interior en una obra artística física, sin necesidad de explicar directamente lo que siente con palabras.
 
 La experiencia propuesta por el proyecto puede ayudar a que el usuario se sienta protagonista de una creación. Al ver que aquello que siente puede convertirse en color, forma y movimiento, el usuario puede reconocer que su experiencia interna tiene valor y puede ser compartida con los demás.
@@ -435,6 +411,7 @@ Otro impacto importante es la posibilidad de crear espacios más inclusivos. Al 
 
 Un posible caso de uso de Inner Synergy sería su aplicación en un centro educativo durante una actividad de educación emocional y arte.
 
+### 6.3. Inclusión, privacidad y límites de uso
 
 Aunque Inner Synergy tiene un objetivo social positivo, también es importante reconocer sus limitaciones. La primera es que el sistema no diagnostica emociones. Moodcam analiza señales faciales y ofrece una estimación basada en un modelo de inteligencia artificial, pero no puede saber con certeza lo que siente una persona.
 
@@ -444,13 +421,21 @@ También pueden existir limitaciones técnicas. La detección emocional puede va
 
 Desde el punto de vista inclusivo, también es importante evitar que la experiencia resulte invasiva. Algunos niños pueden sentirse incómodos con una cámara, con el movimiento del robot o con determinados estímulos visuales.
 
+### 6.4. Innovación de la propuesta
+
 La innovación principal de Inner Synergy está en combinar detección emocional, inteligencia artificial, referentes artísticos y robótica física dentro de una misma experiencia de cocreación. El proyecto no se limita a crear un robot que pinta, sino que propone un sistema en el que la obra final depende de la interacción del usuario. A diferencia de otros robots artísticos que ejecutan patrones predefinidos o reproducen imágenes, Inner Synergy utiliza las señales emocionales detectadas para tomar decisiones sobre la obra. Esto hace que cada obra sea diferente.
 
 Otro elemento innovador es la conexión entre arte y accesibilidad emocional. También resulta innovadora la integración de varias capas tecnológicas.
 
+### 6.5. Contribución a los Objetivos de Desarrollo Sostenible
+
 Inner Synergy puede relacionarse con varios Objetivos de Desarrollo Sostenible, especialmente por su enfoque educativo, inclusivo y tecnológico. Se vincula con el ODS 4, ODS 10: Reducción de las desigualdades y ODS 9: Industria, innovación e infraestructura.
 
+### 6.6. Mejoras y evolución técnica
+
 El prototipo actual permite validar la idea principal del proyecto, pero también ha permitido identificar posibles mejoras para futuras versiones. Una de las mejoras más importantes sería perfeccionar la cinemática inversa del brazo robótico, con el objetivo de aumentar la precisión de los movimientos y facilitar que el pincel alcance posiciones concretas dentro del papel. También sería interesante ampliar el sistema de colores. Otra mejora sería optimizar la limpieza automática del pincel. A nivel de software, se podría mejorar la estabilidad de la detección emocional y adaptar los parámetros a diferentes perfiles de usuario. También se podrían incorporar más recursos audiovisuales o experiencias de realidad virtual relacionadas con los artistas seleccionados, reforzando la dimensión educativa del proyecto.
+
+### 6.7. Viabilidad y posibles contextos de aplicación
 
 En el futuro, Inner Synergy podría ampliarse con nuevos estilos pictóricos, más opciones de personalización, modos de uso para aulas o talleres, y versiones adaptadas a diferentes edades o necesidades de apoyo. También podría incluir un sistema de registro de obras generadas, siempre respetando la privacidad y el consentimiento de los usuarios.
 
@@ -465,8 +450,48 @@ Los posibles socios clave podrían ser colegios, centros de educación especial,
 
 En cuanto a la sostenibilidad económica, el proyecto podría financiarse mediante talleres educativos, colaboraciones con instituciones culturales, subvenciones de innovación educativa, programas de inclusión social o patrocinios tecnológicos. También podría desarrollarse una versión modular para que otros centros pudieran construir o adaptar su propio prototipo.
 
+### 6.8. Síntesis del impacto
+
 El impacto de Inner Synergy no se basa únicamente en el resultado final de la pintura, sino en todo el proceso que permite llegar a ella. La experiencia combina emoción, arte y tecnología para ofrecer una forma diferente de comunicación. El usuario participa desde el inicio, elige un estilo pictórico, aporta señales emocionales y observa cómo un robot transforma esa información en una obra física.
 
 El proyecto tiene valor social porque propone una herramienta inclusiva para expresar emociones de forma visual y creativa. Tiene valor educativo porque permite trabajar arte, inteligencia artificial, robótica y educación emocional en una misma actividad. Y tiene valor innovador porque convierte una interacción humana en una creación artística mediante un sistema robótico autónomo.
 
 Por todo ello, Inner Synergy resume su propósito en su nombre y eslogan: crear una sinergia entre el mundo interior de la persona y la tecnología para convertirlo en arte.
+
+### 6.9. Declaración del uso de inteligencia artificial
+
+Inner Synergy utiliza inteligencia artificial en dos etapas diferenciadas. Moodcam ejecuta en el navegador modelos preentrenados de visión por computador mediante `@vladmandic/human` y TensorFlow.js para estimar señales de expresión facial. Esta estimación no diagnostica emociones ni identifica un estado interno con certeza; solo aporta una señal para la experiencia artística.
+
+El AI Bridge puede utilizar OpenAI para transformar el resumen emocional, el artista elegido y, cuando existe consentimiento de voz, fragmentos recientes de la transcripción en directivas artísticas acotadas. OpenAI no genera coordenadas, puntos, límites de servos ni comandos directos para el brazo. La geometría, los límites del lienzo A4 y las comprobaciones físicas permanecen en lógica local validada. Si OpenAI no está configurado o falla, el sistema dispone de un generador local de respaldo para las directivas artísticas; la captura de voz se mantiene desactivada cuando OpenAI no está disponible.
+
+La voz es opcional y requiere consentimiento explícito. Si se activa, la transcripción temporal puede enviarse a OpenAI para ayudar a crear la obra; la aplicación no envía ni conserva audio o vídeo, y no almacena imágenes, transcripciones ni resúmenes emocionales al finalizar la sesión.
+
+Las decisiones humanas del equipo incluyen la selección de artistas, el mapeo de señales a parámetros visuales, los límites de seguridad del brazo y el diseño de la experiencia de consentimiento. No se han reentrenado modelos con datos de participantes ni se utiliza aprendizaje continuo durante las sesiones.
+
+## 7. Lista de fuentes
+
+### 7.1. Documentos y normativa WRO consultados
+
+- World Robot Olympiad. *WRO 2026 Future Innovators General Rules*. Documento oficial conservado en el repositorio del proyecto.
+
+### 7.2. Páginas web y fuentes de investigación
+
+Las referencias de investigación artística, educativa y técnica se incorporarán en formato APA simplificado antes de la entrega final, indicando autor o entidad, título, fecha, URL y fecha de consulta.
+
+### 7.3. Expertos, docentes o personas entrevistadas
+
+Las consultas y asesoramientos se documentarán antes de la entrega final con nombre o función, institución, fecha y tema tratado.
+
+### 7.4. Recursos visuales, imágenes y materiales externos utilizados
+
+Las fotografías, diagramas y recursos visuales se acreditarán antes de la entrega final, indicando autoría, licencia o permiso de uso cuando corresponda.
+
+## 8. Anexos
+
+### A. Tabla de pruebas completa
+
+### B. Diagramas técnicos adicionales
+
+### C. Capturas complementarias del código
+
+### D. Bocetos o versiones anteriores del prototipo
