@@ -223,6 +223,8 @@ export default function SettingsPage({ config, onConfigChange, onReset, mqttConf
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <TextParam label="URL del broker" value={mqttConfig.brokerUrl} onChange={(value) => onMqttConfigChange('brokerUrl', value)} placeholder="wss://broker.example.com:8884/mqtt" description="URL WebSocket del broker MQTT. Debe usar wss:// si la app se sirve por HTTPS." />
                 <TextParam label="Device ID" value={mqttConfig.deviceId} onChange={(value) => onMqttConfigChange('deviceId', value)} placeholder="device1" description="Identificador compartido por Moodcam, AI Bridge y ESP32." />
+                <TextParam label="Usuario MQTT" value={mqttConfig.username} onChange={(value) => onMqttConfigChange('username', value)} placeholder="Usuario del broker" description="Déjalo vacío si el broker no requiere autenticación." />
+                <TextParam label="Contraseña MQTT" type="password" value={mqttConfig.password} onChange={(value) => onMqttConfigChange('password', value)} placeholder="Contraseña del broker" description="Se guarda junto con la configuración local del navegador." />
               </div>
 
               <p className="text-xs text-gray-600">
