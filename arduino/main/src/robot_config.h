@@ -4,9 +4,9 @@
 
 #define DEMO_MODE true
 #define SAFE_TEST_MODE true
-#define CALIBRATION_MODE true
-#define FINAL_ARM_MODE false
-#define FINAL_ARM_EXPLICITLY_CONFIGURED false
+#define CALIBRATION_MODE false
+#define FINAL_ARM_MODE true
+#define FINAL_ARM_EXPLICITLY_CONFIGURED true
 
 static_assert(!CALIBRATION_MODE || SAFE_TEST_MODE, "CALIBRATION_MODE requires SAFE_TEST_MODE");
 
