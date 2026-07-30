@@ -24,3 +24,19 @@ test('crea topics de comandos robot por deviceId para ESP32 real', () => {
   assert.equal(JSON.parse(options.will.payload).type, 'presence')
   assert.equal(JSON.parse(options.will.payload).status, 'offline')
 })
+
+test('normaliza host MQTT sin protocolo para HiveMQ Cloud', () => {
+  const config = loadBridgeConfig({
+    MQTT_URL: 'c6bc6b4b856e41af8783b93bbd85eea5.s1.eu.hivemq.cloud',
+  })
+
+  assert.equal(config.mqttUrl, 'wss://c6bc6b4b856e41af8783b93bbd85eea5.s1.eu.hivemq.cloud:8884/mqtt')
+})
+
+test('normaliza host MQTT genérico sin protocolo', () => {
+  const config = loadBridgeConfig({
+    MQTT_URL: 'broker.local:1883',
+  })
+
+  assert.equal(config.mqttUrl, 'mqtt://broker.local:1883')
+})

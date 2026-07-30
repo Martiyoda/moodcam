@@ -10,7 +10,7 @@ export function loadBridgeConfig(env = process.env) {
 
   return {
     deviceId,
-    mqttUrl: env.MQTT_URL || env.MQTT_BROKER_URL || 'wss://broker.hivemq.com:8884/mqtt',
+    mqttUrl: normalizeMqttUrl(env.MQTT_URL || env.MQTT_BROKER_URL),
     mqttUsername: env.MQTT_USERNAME || '',
     mqttPassword: env.MQTT_PASSWORD || '',
     openaiApiKey: env.OPENAI_API_KEY || '',
@@ -43,6 +43,26 @@ export function buildMqttOptions(config) {
   if (config.mqttUsername) options.username = config.mqttUsername
   if (config.mqttPassword) options.password = config.mqttPassword
   return options
+}
+
+function normalizeMqttUrl(rawValue) {
+  const fallbackUrl = 'wss://broker.hivemq.com:8884/mqtt'
+  const trimmedValue = String(rawValue || '').trim()
+  if (!trimmedValue) return fallbackUrl
+  if (/^[a-z]+:\/\//i.test(trimmedValue)) return trimmedValue
+
+  const hasExplicitPath = trimmedValue.includes('/')
+  const hasExplicitPort = /:\d+$/.test(trimmedValue)
+  const looksLikeHiveMqCloud = /\.hivemq\.cloud$/i.test(trimmedValue)
+
+  if (looksLikeHiveMqCloud) {
+    if (hasExplicitPath || hasExplicitPort) {
+      return `wss://${trimmedValue}`
+    }
+    return `wss://${trimmedValue}:8884/mqtt`
+  }
+
+  return `mqtt://${trimmedValue}`
 }
 
 function clampNumber(value, min, max, fallback) {

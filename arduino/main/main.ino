@@ -22,6 +22,7 @@ constexpr int SERIAL_BAUD = 115200;
 // Payload generoso para comandos con arrays "points" largos sin rechazos
 // silenciosos. Ajustado al heap real del ESP32 (queda margen amplio).
 constexpr size_t MAX_COMMAND_LENGTH = 2048;
+constexpr size_t MQTT_PACKET_BUFFER_SIZE = MAX_COMMAND_LENGTH + 256;
 constexpr unsigned long WIFI_RETRY_MS = 8000;
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
 constexpr unsigned long WIFI_STATUS_LOG_MS = 5000;
@@ -195,6 +196,13 @@ void setup() {
     }
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
+    if (mqttClient.setBufferSize(MQTT_PACKET_BUFFER_SIZE)) {
+      Serial.print("MQTT buffer size configurado: ");
+      Serial.println(MQTT_PACKET_BUFFER_SIZE);
+    } else {
+      Serial.print("Advertencia: no se pudo configurar MQTT buffer size a ");
+      Serial.println(MQTT_PACKET_BUFFER_SIZE);
+    }
     connectWiFi();
     connectMQTT();
   } else {
