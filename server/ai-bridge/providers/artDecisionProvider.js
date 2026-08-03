@@ -4,7 +4,9 @@ import { resolveSessionEmotions } from './emotionProvider.js'
 import { resolveVoiceProvider } from './voiceProvider.js'
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
-const ART_EMOTIONS = ['happy', 'neutral', 'sad', 'angry', 'fear', 'disgust', 'surprise']
+const ART_EMOTIONS = ['happy', 'angry', 'sad', 'neutral']
+const MAX_SESSION_STROKES = 16
+const SESSION_WINDOW_COUNT = 12
 
 const DECISION_SCHEMA = {
   type: 'object',
@@ -13,11 +15,11 @@ const DECISION_SCHEMA = {
   properties: {
     primary_emotion: {
       type: 'string',
-      enum: ['happy', 'neutral', 'sad', 'angry', 'fear', 'disgust', 'surprise'],
+      enum: ART_EMOTIONS,
     },
     secondary_emotion: {
       type: 'string',
-      enum: ['happy', 'neutral', 'sad', 'angry', 'fear', 'disgust', 'surprise'],
+      enum: ART_EMOTIONS,
     },
     mobility: {
       type: 'integer',
@@ -39,11 +41,11 @@ const CHUNK_DECISION_SCHEMA = {
   properties: {
     primary_emotion: {
       type: 'string',
-      enum: ['happy', 'neutral', 'sad', 'angry', 'fear', 'disgust', 'surprise'],
+      enum: ART_EMOTIONS,
     },
     secondary_emotion: {
       type: 'string',
-      enum: ['happy', 'neutral', 'sad', 'angry', 'fear', 'disgust', 'surprise'],
+      enum: ART_EMOTIONS,
     },
     mobility: {
       type: 'integer',
@@ -146,6 +148,8 @@ export async function decideArtChunk({ emotionWindow, sessionState = {}, config,
       window_index: emotionWindow?.window_index || 0,
       chunk_index: 1,
       chunk_total: 1,
+      completed_stroke_count: sessionState.completed_stroke_count || 0,
+      remaining_windows: Math.max(1, SESSION_WINDOW_COUNT - (emotionWindow?.window_index || 0)),
     },
     calibration: emotionWindow?.calibration || sessionState.calibration,
     mobility: emotionWindow?.mobility || sessionState.mobility || 85,

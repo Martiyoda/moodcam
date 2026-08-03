@@ -1,3 +1,4 @@
+#if 0
 /*
   ==========================================================
   TEST DE MOTORES - BRAZO ROBOTICO (ESP32 + ESP32Servo)
@@ -198,3 +199,4 @@ void testUnServo(Servo &servo, int &posActual, const char* nombre) {
   posActual = 90;
   delay(300);
 }
+#endif

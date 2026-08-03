@@ -6,6 +6,7 @@ export const ARM_CALIBRATION_COMMAND_TYPES = [
     'set_angle',
     'get_joint_state',
     'stop',
+    'resume',
     'release_servos',
     'set_operating_mode',
 ]

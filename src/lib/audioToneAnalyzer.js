@@ -1,4 +1,4 @@
-import { normalizeSimpleScores } from './emotionCategories.js'
+import { normalizePhysicalEmotionScores } from './emotionCategories.js'
 
 export function createAudioToneAnalyzer(stream, { sampleMs = 500, onSample } = {}) {
   const AudioContext = window.AudioContext || window.webkitAudioContext
@@ -56,12 +56,12 @@ export function scoreToneEmotion(metrics = {}, wordsPerMinute = 0) {
   const silenceMs = Number(metrics.silenceMs) || 0
   const speaking = Boolean(metrics.speaking)
 
-  if (!speaking && silenceMs > 2200) return normalizeSimpleScores({ tired: 0.45, sad: 0.25, neutral: 0.3 })
-  if (intensity > 72 && wordsPerMinute > 135) return normalizeSimpleScores({ nervous: 0.5, confused: 0.2, joyful: 0.2, neutral: 0.1 })
-  if (intensity > 62) return normalizeSimpleScores({ joyful: 0.35, nervous: 0.3, confused: 0.15, neutral: 0.2 })
-  if (intensity < 18 && speaking) return normalizeSimpleScores({ tired: 0.35, sad: 0.25, calm: 0.25, neutral: 0.15 })
-  if (intensity < 12) return normalizeSimpleScores({ calm: 0.45, neutral: 0.35, tired: 0.2 })
-  return normalizeSimpleScores({ neutral: 0.35, calm: 0.3, joyful: 0.15, sad: 0.1, nervous: 0.1 })
+  if (!speaking && silenceMs > 2200) return normalizePhysicalEmotionScores({ sad: 0.55, neutral: 0.45 })
+  if (intensity > 72 && wordsPerMinute > 135) return normalizePhysicalEmotionScores({ angry: 0.6, happy: 0.25, neutral: 0.15 })
+  if (intensity > 62) return normalizePhysicalEmotionScores({ happy: 0.4, angry: 0.35, neutral: 0.25 })
+  if (intensity < 18 && speaking) return normalizePhysicalEmotionScores({ sad: 0.45, neutral: 0.55 })
+  if (intensity < 12) return normalizePhysicalEmotionScores({ neutral: 0.8, sad: 0.2 })
+  return normalizePhysicalEmotionScores({ neutral: 0.55, happy: 0.2, sad: 0.15, angry: 0.1 })
 }
 
 function round(value) {

@@ -17,6 +17,8 @@ test('genera plan dentro de A4 horizontal', () => {
   assert.equal(plan.canvas.width, 297)
   assert.equal(plan.canvas.height, 210)
   assert.ok(plan.strokes.length > 0)
+  assert.ok(plan.strokes.length <= 16)
+  assert.ok(plan.strokes.every((stroke) => stroke.points.length <= 10))
 
   const strokePoints = plan.robot_commands
     .filter((command) => command.type === 'stroke')
@@ -93,4 +95,19 @@ test('genera chunks deterministas y acotados por ventana', () => {
     assert.ok(point.y >= DEFAULT_ROBOT_CALIBRATION.canvas.originY + DEFAULT_ROBOT_CALIBRATION.canvas.margin)
     assert.ok(point.y <= DEFAULT_ROBOT_CALIBRATION.canvas.height - DEFAULT_ROBOT_CALIBRATION.canvas.margin)
   })
+})
+
+test('respeta el presupuesto total de trazos de la sesion', () => {
+  const chunk = generateArtChunk({
+    windowSummary: [{ emotion: 'happy', label: 'Alegria', percentage: 100 }],
+    artistId: 'pollock',
+    calibration: DEFAULT_ROBOT_CALIBRATION,
+    sessionState: {
+      session_id: 's-budget',
+      completed_stroke_count: 14,
+      remaining_windows: 1,
+    },
+  })
+
+  assert.equal(chunk.strokes.length, 2)
 })

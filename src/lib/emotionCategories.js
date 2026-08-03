@@ -1,72 +1,70 @@
-export const SIMPLE_EMOTIONS = {
-  joyful: {
-    id: 'joyful',
-    label: 'alegre',
-    artEmotion: 'happy',
-  },
-  calm: {
-    id: 'calm',
-    label: 'tranquilo',
-    artEmotion: 'neutral',
-  },
-  sad: {
-    id: 'sad',
-    label: 'triste',
-    artEmotion: 'sad',
-  },
-  nervous: {
-    id: 'nervous',
-    label: 'nervioso',
-    artEmotion: 'fear',
-  },
-  tired: {
-    id: 'tired',
-    label: 'cansado',
-    artEmotion: 'sad',
-  },
-  confused: {
-    id: 'confused',
-    label: 'confundido',
-    artEmotion: 'surprise',
-  },
-  neutral: {
-    id: 'neutral',
-    label: 'neutro',
-    artEmotion: 'neutral',
-  },
+export const PHYSICAL_EMOTIONS = {
+  happy: { id: 'happy', label: 'alegre', color: 'yellow', colorLabel: 'amarillo' },
+  angry: { id: 'angry', label: 'enfadado', color: 'red', colorLabel: 'rojo' },
+  sad: { id: 'sad', label: 'triste', color: 'violet', colorLabel: 'violeta' },
+  neutral: { id: 'neutral', label: 'tranquilo', color: 'blue', colorLabel: 'azul' },
 }
 
-export const SIMPLE_EMOTION_IDS = Object.keys(SIMPLE_EMOTIONS)
+export const PHYSICAL_EMOTION_IDS = Object.keys(PHYSICAL_EMOTIONS)
 
-export function getSimpleEmotion(id = 'neutral') {
-  return SIMPLE_EMOTIONS[id] || SIMPLE_EMOTIONS.neutral
+const RAW_EMOTION_TO_PHYSICAL = {
+  happy: 'happy',
+  surprise: 'happy',
+  angry: 'angry',
+  disgust: 'angry',
+  sad: 'sad',
+  fear: 'sad',
+  neutral: 'neutral',
+  calm: 'neutral',
+  tired: 'sad',
+  nervous: 'angry',
+  confused: 'angry',
+  joyful: 'happy',
 }
 
-export function normalizeSimpleScores(scores = {}) {
-  const entries = SIMPLE_EMOTION_IDS.map((emotionId) => [emotionId, Math.max(0, Number(scores[emotionId]) || 0)])
+export function getPhysicalEmotion(id = 'neutral') {
+  return PHYSICAL_EMOTIONS[id] || PHYSICAL_EMOTIONS.neutral
+}
+
+export function toPhysicalEmotionId(id = 'neutral') {
+  return RAW_EMOTION_TO_PHYSICAL[id] || 'neutral'
+}
+
+export function toPhysicalEmotionScores(scores = {}) {
+  const physicalScores = {}
+  Object.entries(scores).forEach(([emotion, value]) => {
+    const physicalEmotion = toPhysicalEmotionId(emotion)
+    physicalScores[physicalEmotion] = (physicalScores[physicalEmotion] || 0) + Math.max(0, Number(value) || 0)
+  })
+  return normalizePhysicalEmotionScores(physicalScores)
+}
+
+export function normalizePhysicalEmotionScores(scores = {}) {
+  const entries = PHYSICAL_EMOTION_IDS.map((emotionId) => [emotionId, Math.max(0, Number(scores[emotionId]) || 0)])
   const total = entries.reduce((sum, [, value]) => sum + value, 0)
   if (!total) return { neutral: 1 }
   return Object.fromEntries(entries.map(([key, value]) => [key, round(value / total)]))
 }
 
-export function dominantSimpleEmotion(scores = {}) {
-  const normalized = normalizeSimpleScores(scores)
-  return Object.entries(normalized).sort(([, a], [, b]) => b - a)[0][0]
+export function dominantPhysicalEmotion(scores = {}) {
+  const normalized = normalizePhysicalEmotionScores(scores)
+  return Object.entries(normalized).sort(([, left], [, right]) => right - left)[0][0]
 }
 
-export function simpleScoresToArtSummary(scores = {}, limit = 2) {
-  const normalized = normalizeSimpleScores(scores)
+export function physicalScoresToArtSummary(scores = {}, limit = 2) {
+  const normalized = normalizePhysicalEmotionScores(scores)
   return Object.entries(normalized)
     .map(([emotionId, score]) => {
-      const emotion = getSimpleEmotion(emotionId)
+      const emotion = getPhysicalEmotion(emotionId)
       return {
-        emotion: emotion.artEmotion,
+        emotion: emotion.id,
         label: emotion.label,
-        simple_emotion: emotion.id,
+        color: emotion.color,
+        color_label: emotion.colorLabel,
         percentage: Math.round(score * 100),
       }
     })
-    .sort((a, b) => b.percentage - a.percentage)
+    .sort((left, right) => right.percentage - left.percentage)
     .slice(0, limit)
 }
 

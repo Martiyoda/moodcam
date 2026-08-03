@@ -1,4 +1,4 @@
-import { calculateEmotionSummary } from '../../../src/lib/artEngine.js'
+import { physicalScoresToArtSummary, toPhysicalEmotionScores } from '../../../src/lib/emotionCategories.js'
 
 export function resolveSessionEmotions(sessionSummary, latestFaceEmotion) {
   const combined = normalizeSummary(sessionSummary?.combined_emotions)
@@ -8,9 +8,7 @@ export function resolveSessionEmotions(sessionSummary, latestFaceEmotion) {
   if (face.length) return face
 
   if (latestFaceEmotion?.face_emotions) {
-    return calculateEmotionSummary([{
-      emotions: latestFaceEmotion.face_emotions,
-    }])
+    return physicalScoresToArtSummary(toPhysicalEmotionScores(latestFaceEmotion.face_emotions))
   }
 
   return [{ emotion: 'neutral', label: 'Calma', percentage: 100 }]
@@ -18,13 +16,11 @@ export function resolveSessionEmotions(sessionSummary, latestFaceEmotion) {
 
 function normalizeSummary(value) {
   if (!Array.isArray(value)) return []
-  return value
-    .filter((item) => item?.emotion)
-    .map((item) => ({
-      emotion: item.emotion,
-      label: item.label || item.emotion,
-      percentage: Math.max(0, Math.min(100, Math.round(Number(item.percentage) || 0))),
-    }))
-    .filter((item) => item.percentage > 0)
-    .slice(0, 2)
+  const scores = value.reduce((result, item) => {
+    if (!item?.emotion) return result
+    result[item.emotion] = (result[item.emotion] || 0) + Math.max(0, Number(item.percentage) || 0)
+    return result
+  }, {})
+  if (Object.keys(scores).length === 0) return []
+  return physicalScoresToArtSummary(toPhysicalEmotionScores(scores))
 }

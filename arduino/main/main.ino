@@ -30,6 +30,8 @@ constexpr unsigned long MQTT_RETRY_MS = 5000;
 constexpr unsigned long HEARTBEAT_LOG_MS = 3000;
 constexpr unsigned long MQTT_PRESENCE_MS = 5000;
 constexpr bool WIFI_DIAGNOSTIC_SCAN = true;
+constexpr bool SERIAL_LOG_HEARTBEAT = false;
+constexpr bool SERIAL_LOG_JOINT_STATE = false;
 
 WiFiClient wifiClient;
 WiFiClientSecure secureWifiClient;
@@ -70,7 +72,7 @@ struct QueuedRealCommand {
 };
 
 constexpr size_t MAX_REAL_PATH_POINTS = 96;
-constexpr size_t REAL_COMMAND_QUEUE_CAPACITY = 8;
+constexpr size_t REAL_COMMAND_QUEUE_CAPACITY = 32;
 constexpr float PATH_MIN_X = 0.0f;
 constexpr float PATH_MAX_X = 297.0f;
 constexpr float PATH_MIN_Y = 0.0f;
@@ -92,13 +94,13 @@ constexpr int ELBOW_SAFE_MARGIN_DEG = 6;
 constexpr int WRIST_SAFE_MARGIN_DEG = 10;
 
 // Perfil base calibrable en campo para ejecucion artistica real.
-constexpr int REAL_SPEED_STROKE_DEFAULT = 18;
-constexpr int REAL_SPEED_CONTACT_DEFAULT = 14;
-constexpr int REAL_SPEED_TRANSIT_DEFAULT = 22;
+constexpr int REAL_SPEED_STROKE_DEFAULT = 80;
+constexpr int REAL_SPEED_CONTACT_DEFAULT = 80;
+constexpr int REAL_SPEED_TRANSIT_DEFAULT = 80;
 constexpr int REAL_PRESSURE_STROKE_DEFAULT = 28;
 constexpr int REAL_PRESSURE_CONTACT_DEFAULT = 38;
 constexpr int REAL_PRESSURE_TRANSIT_DEFAULT = 16;
-constexpr int REAL_MIN_PAUSE_STROKE_MS = 22;
+constexpr int REAL_MIN_PAUSE_STROKE_MS = 1;
 constexpr int REAL_MIN_PAUSE_CONTACT_MS = 36;
 constexpr int REAL_MIN_PAUSE_TRANSIT_MS = 14;
 constexpr int REAL_MIN_STEP_PAUSE_MS = 1;
@@ -107,7 +109,7 @@ constexpr int REAL_MAX_STEP_PAUSE_MS = 2000;
 // Limites especificos para el servo de muneca (SG90 9g, plastico, bajo par):
 // no debe ejecutarse a la velocidad maxima cuando hay desplazamiento angular
 // significativo, y el deadband ~1 grado hace inutiles los movimientos < 2.
-constexpr int WRIST_REAL_MAX_SPEED = 12;
+constexpr int WRIST_REAL_MAX_SPEED = 80;
 constexpr int WRIST_SIGNIFICANT_DELTA_DEG = 5;
 // Cuando el codo trabaja muy extendido el par requerido al hombro crece
 // rapidamente; aplicamos una penalizacion de velocidad para compensar la
@@ -122,6 +124,8 @@ size_t realCommandQueueHead = 0;
 size_t realCommandQueueTail = 0;
 size_t realCommandQueueDepth = 0;
 bool realCommandExecuting = false;
+String activePaintId;
+int strokesSincePaintLoad = 0;
 
 void printHelp();
 void printStatus();
@@ -146,6 +150,12 @@ void handleOperatingModeCommand(const String& json, bool fromMqtt);
 void handleCalibrationCommand(const String& json, const String& type);
 void handleRealModeCommand(const String& json, const String& type);
 bool executeRealPathCommand(const String& json, const String& type);
+bool executeMoodcamStationCommand(const String& json, const String& type);
+bool moveMoodcamPose(const ServoPose& target, int speed);
+bool loadMoodcamPaint(const String& paintId, int speed);
+bool rinseMoodcamBrush(int speed);
+bool dryMoodcamBrush(int speed);
+bool moodcamPaintPose(const String& paintId, ServoPose& pose);
 bool parsePathPoints(const String& json, PathPoint* points, size_t& pointCount, size_t maxPoints);
 bool extractFloatValue(const String& json, const char* key, float& value);
 float mapFloatRange(float value, float inMin, float inMax, float outMin, float outMax);
@@ -274,6 +284,9 @@ void loop() {
 }
 
 void printHeartbeat() {
+  if (!SERIAL_LOG_HEARTBEAT) {
+    return;
+  }
   const unsigned long now = millis();
   if (lastHeartbeatLog != 0 && now - lastHeartbeatLog < HEARTBEAT_LOG_MS) {
     return;
@@ -570,13 +583,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     message += static_cast<char>(payload[index]);
   }
 
-  Serial.print("Comando recibido por MQTT en ");
-  Serial.print(topic);
-  Serial.print(": ");
-  Serial.println(message);
   if (topicName == TOPIC_EMOTION_INPUT) {
     handleEmotionCommand(message, true);
   } else {
+    const String type = extractStringValue(message, "type");
+    if (type != "get_joint_state") {
+      Serial.print("MQTT robot command: ");
+      Serial.println(type);
+    }
     handleInputCommand(message, true);
   }
 }
@@ -626,7 +640,9 @@ void publishJointState() {
     + ",\"moving\":" + (state.moving ? "true" : "false")
     + ",\"operating_mode\":\"" + operatingModeText() + "\""
     + ",\"angles_are_commanded\":true}";
-  Serial.println(payload);
+  if (SERIAL_LOG_JOINT_STATE) {
+    Serial.println(payload);
+  }
   if (NETWORK_ENABLED && mqttClient.connected()) {
     mqttClient.publish(TOPIC_ROBOT_STATUS, payload.c_str());
   }
@@ -772,6 +788,17 @@ void handleInputCommand(const String& json, bool fromMqtt) {
 
   if (type == "stop") {
     publishStopped(fromMqtt ? "mqtt" : "serial");
+    return;
+  }
+
+  if (type == "resume") {
+    if (isCalibrationMode()) {
+      publishError("resume_requiere_modo_real");
+      return;
+    }
+    clearEmergencyStop();
+    publishStatus("resumed", "emergency_stop_cleared");
+    publishJointState();
     return;
   }
 
@@ -951,6 +978,28 @@ void handleRealModeCommand(const String& json, const String& type) {
 }
 
 bool executeRealPathCommand(const String& json, const String& type) {
+  if (type == "paint_sequence_start") {
+    activePaintId = "";
+    strokesSincePaintLoad = 0;
+    liftBrush();
+    return true;
+  }
+  if (type == "paint_sequence_end") {
+    liftBrush();
+    const ServoPose homePose = {
+      BASE_SERVO_CONFIG.homeAngle,
+      SHOULDER_SERVO_CONFIG.homeAngle,
+      ELBOW_SERVO_CONFIG.homeAngle,
+      WRIST_SERVO_CONFIG.homeAngle
+    };
+    return moveToPoseSafe(homePose, REAL_SPEED_TRANSIT_DEFAULT);
+  }
+
+  if (type == "move_to_paint" || type == "dip_paint" || type == "move_to_water"
+      || type == "rinse_brush" || type == "move_to_towel" || type == "dry_brush") {
+    return executeMoodcamStationCommand(json, type);
+  }
+
   PathPoint points[MAX_REAL_PATH_POINTS];
   size_t pointCount = 0;
   if (!parsePathPoints(json, points, pointCount, MAX_REAL_PATH_POINTS) || pointCount == 0) {
@@ -962,7 +1011,7 @@ bool executeRealPathCommand(const String& json, const String& type) {
   const MotionParameters safe = sanitizeMotionParameters(
     profile.speed,
     extractIntValue(json, "intensity", 40),
-    extractIntValue(json, "duration_ms", 1200),
+    extractIntValue(json, "duration_ms", type == "stroke" ? 150 : 1200),
     profile.pressure
   );
 
@@ -974,6 +1023,27 @@ bool executeRealPathCommand(const String& json, const String& type) {
   const float armReachMm = ARM_SHOULDER_TO_ELBOW_MM + ARM_ELBOW_TO_WRIST_MM;
   const float canvasDiagonalMm = sqrt(PATH_MAX_X * PATH_MAX_X + PATH_MAX_Y * PATH_MAX_Y);
   const float reachToCanvasRatio = canvasDiagonalMm <= 0.0f ? 1.0f : armReachMm / canvasDiagonalMm;
+
+  if (type == "stroke") {
+    String requestedPaintId = extractStringValue(json, "paint_id");
+    if (requestedPaintId.length() == 0) {
+      requestedPaintId = extractStringValue(json, "color");
+    }
+    if (requestedPaintId.length() > 0 && requestedPaintId != activePaintId) {
+      if (activePaintId.length() > 0 && (!rinseMoodcamBrush(REAL_SPEED_CONTACT_DEFAULT)
+          || !dryMoodcamBrush(REAL_SPEED_CONTACT_DEFAULT))) {
+        return false;
+      }
+      if (!loadMoodcamPaint(requestedPaintId, REAL_SPEED_CONTACT_DEFAULT)) {
+        publishError("color de pintura no configurado en Moodcam");
+        return false;
+      }
+    } else if (requestedPaintId.length() > 0 && strokesSincePaintLoad >= 2
+        && !loadMoodcamPaint(requestedPaintId, REAL_SPEED_CONTACT_DEFAULT)) {
+      publishError("no se pudo recargar la pintura Moodcam");
+      return false;
+    }
+  }
 
   for (size_t index = 0; index < pointCount; index++) {
     if (isEmergencyStopped()) {
@@ -1024,7 +1094,7 @@ bool executeRealPathCommand(const String& json, const String& type) {
       return false;
     }
 
-    if (!waitSafely(pausePerPoint)) {
+    if (type != "stroke" && !waitSafely(pausePerPoint)) {
       stopBrush();
       stopMotors();
       publishError("ejecucion interrumpida durante espera segura");
@@ -1033,7 +1103,113 @@ bool executeRealPathCommand(const String& json, const String& type) {
   }
 
   liftBrush();
+  if (type == "stroke" && activePaintId.length() > 0) {
+    strokesSincePaintLoad++;
+  }
   return true;
+}
+
+bool moveMoodcamPose(const ServoPose& target, int speed) {
+  liftBrush();
+  return moveToPoseSafe(target, speed);
+}
+
+bool moodcamPaintPose(const String& paintId, ServoPose& pose) {
+  String normalized = paintId;
+  normalized.toLowerCase();
+  if (normalized == "yellow" || normalized == "amarillo") {
+    pose = {172, 158, 73, 17};
+  } else if (normalized == "red" || normalized == "rojo") {
+    pose = {143, 158, 85, 30};
+  } else if (normalized == "violet" || normalized == "purple" || normalized == "morado") {
+    pose = {30, 158, 90, 30};
+  } else if (normalized == "blue" || normalized == "light_blue" || normalized == "azul") {
+    pose = {0, 162, 82, 22};
+  } else {
+    return false;
+  }
+  return true;
+}
+
+bool loadMoodcamPaint(const String& paintId, int speed) {
+  ServoPose paintPose;
+  if (!moodcamPaintPose(paintId, paintPose)) {
+    return false;
+  }
+  if (!moveMoodcamPose(paintPose, speed)) {
+    return false;
+  }
+  const ServoPose dipPose = {
+    paintPose.base,
+    constrain(paintPose.shoulder + 3, SHOULDER_SERVO_CONFIG.minAngle, SHOULDER_SERVO_CONFIG.maxAngle),
+    paintPose.elbow,
+    constrain(paintPose.wrist - 2, WRIST_SERVO_CONFIG.minAngle, WRIST_SERVO_CONFIG.maxAngle)
+  };
+  if (!moveMoodcamPose(dipPose, speed)) {
+    return false;
+  }
+  activePaintId = paintId;
+  strokesSincePaintLoad = 0;
+  return true;
+}
+
+bool rinseMoodcamBrush(int speed) {
+  const ServoPose waterPose = {90, 150, 48, 5};
+  if (!moveMoodcamPose(waterPose, speed)) {
+    return false;
+  }
+  for (int repetition = 0; repetition < 15; repetition++) {
+    const ServoPose right = {90, 150, 48, 10};
+    const ServoPose left = {90, 150, 48, 0};
+    if (!moveMoodcamPose(right, speed) || !waitSafely(40)
+      || !moveMoodcamPose(left, speed) || !waitSafely(40)) {
+      return false;
+    }
+  }
+  activePaintId = "";
+  strokesSincePaintLoad = 0;
+  return moveMoodcamPose(waterPose, speed);
+}
+
+bool dryMoodcamBrush(int speed) {
+  const ServoPose towelPose = {0, 150, 50, 0};
+  if (!moveMoodcamPose(towelPose, speed)) {
+    return false;
+  }
+  for (int repetition = 0; repetition < 10; repetition++) {
+    const ServoPose upper = {30, 155, 50, 0};
+    const ServoPose lower = {0, 145, 50, 0};
+    if (!moveMoodcamPose(upper, speed) || !waitSafely(60)
+      || !moveMoodcamPose(lower, speed) || !waitSafely(60)) {
+      return false;
+    }
+  }
+  return moveMoodcamPose(towelPose, speed);
+}
+
+bool executeMoodcamStationCommand(const String& json, const String& type) {
+  const int speed = constrain(extractIntValue(json, "speed", REAL_SPEED_CONTACT_DEFAULT), SAFE_MIN_SPEED, SAFE_MAX_SPEED);
+  if (type == "move_to_paint" || type == "dip_paint") {
+    String paintId = extractStringValue(json, "paint_id");
+    if (paintId.length() == 0) {
+      paintId = extractStringValue(json, "color");
+    }
+    if (type == "dip_paint") {
+      return loadMoodcamPaint(paintId, speed);
+    }
+    ServoPose paintPose;
+    return moodcamPaintPose(paintId, paintPose) && moveMoodcamPose(paintPose, speed);
+  }
+  if (type == "move_to_water") {
+    return moveMoodcamPose({90, 110, 40, 15}, speed);
+  }
+  if (type == "rinse_brush") {
+    return rinseMoodcamBrush(speed);
+  }
+  if (type == "move_to_towel") {
+    return moveMoodcamPose({0, 110, 60, 20}, speed);
+  }
+  return dryMoodcamBrush(speed);
 }
 
 RealCommandProfile buildRealCommandProfile(const String& type, const String& json) {
@@ -1240,7 +1416,6 @@ void handleEmotionCommand(const String& json, bool fromMqtt) {
     publishError("emotion_test bloqueado mientras CALIBRATION_MODE esta activo");
     return;
   }
-  publishStatus("emotion_received", "modo real activo; ejecucion artistica pendiente");
 }
 
 bool isForbiddenRobotCommand(const String& json) {
@@ -1294,7 +1469,6 @@ bool validCalibrationServo(const String& servoName, const RobotServoConfig*& ser
   servoConfig = robotServoConfigByName(servoName.c_str());
   return servoConfig != nullptr
     && servoConfig->enabled
-    && servoConfig->id != SERVO_BRUSH
     && servoConfig->pin >= 0;
 }
 
@@ -1365,6 +1539,7 @@ int extractIntValue(const String& json, const char* key, int fallback) {
   while (valueEnd < json.length() && isDigit(json.charAt(valueEnd))) {
     valueEnd++;
   }
+
   if (valueEnd == valueStart) {
     return fallback;
   }

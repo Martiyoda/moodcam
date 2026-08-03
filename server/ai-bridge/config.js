@@ -16,7 +16,8 @@ export function loadBridgeConfig(env = process.env) {
     openaiApiKey: env.OPENAI_API_KEY || '',
     openaiModel: env.OPENAI_DECISION_MODEL || 'gpt-4.1-mini',
     commandDelayMs: clampNumber(env.MQTT_COMMAND_DELAY_MS, 0, 5000, 60),
-    queueHighWaterMark: clampNumber(env.MQTT_QUEUE_HIGH_WATERMARK, 1, 50, 4),
+    queueHighWaterMark: clampNumber(env.MQTT_QUEUE_HIGH_WATERMARK, 1, 31, 24),
+    queueWaitTimeoutMs: clampNumber(env.MQTT_QUEUE_WAIT_TIMEOUT_MS, 30000, 900000, 600000),
     topics,
   }
 }

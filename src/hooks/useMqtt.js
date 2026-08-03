@@ -365,6 +365,13 @@ export default function useMqtt() {
         }), { qos: 1 })
     ), [publishJson])
 
+    const clearSessionState = useCallback(() => {
+        setLastAiPlan(null)
+        setLastAiChunk(null)
+        setLastSystemError(null)
+        setLastCalibrationError(null)
+    }, [])
+
     const publishArtPlan = useCallback((plan) => (
         publishJson(TOPIC_KEYS.strokePlan, plan, { qos: 1 })
     ), [publishJson])
@@ -443,6 +450,7 @@ export default function useMqtt() {
         lastCalibrationError,
         lastCalibrationCommand,
         publishFaceEmotion,
+        clearSessionState,
         publishSessionStart,
         publishSessionSummary,
         publishSessionWindow,

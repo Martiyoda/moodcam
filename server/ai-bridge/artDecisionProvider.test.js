@@ -15,7 +15,7 @@ test('usa fallback local cuando OpenAI no esta configurado', async () => {
       artist_id: 'kandinsky',
       combined_emotions: [
         { emotion: 'happy', label: 'Alegría', percentage: 70 },
-        { emotion: 'surprise', label: 'Sorpresa', percentage: 30 },
+        { emotion: 'neutral', label: 'Tranquilo', percentage: 30 },
       ],
       calibration: DEFAULT_ROBOT_CALIBRATION,
       mobility: 80,
@@ -42,11 +42,11 @@ test('usa decision OpenAI simulada y valida el plan antes de publicar', async ()
       device_id: 'device1',
       artist_id: 'pollock',
       combined_emotions: [
-        { emotion: 'fear', label: 'nervioso', percentage: 65 },
+        { emotion: 'angry', label: 'enfadado', percentage: 65 },
         { emotion: 'happy', label: 'alegre', percentage: 35 },
       ],
       voice_summary: {
-        color_preferences: ['red', 'black', 'unknown'],
+        color_preferences: ['red', 'violet', 'unknown'],
         keywords: ['nervioso', 'energia'],
       },
       calibration: DEFAULT_ROBOT_CALIBRATION,
@@ -58,9 +58,9 @@ test('usa decision OpenAI simulada y valida el plan antes de publicar', async ()
       text: async () => JSON.stringify({
         output_text: JSON.stringify({
           primary_emotion: 'angry',
-          secondary_emotion: 'surprise',
+          secondary_emotion: 'happy',
           mobility: 500,
-          color_preferences: ['red', 'black'],
+          color_preferences: ['red', 'violet'],
           style_directive: 'Gesto energico, seguro y validado por limites A4.',
         }),
       }),
@@ -118,7 +118,7 @@ test('genera chunk local por ventana cuando OpenAI no esta configurado', async (
       artist_recipe_id: 'alma-thomas-wro-v1',
       window_index: 2,
       combined_summary: [
-        { emotion: 'surprise', label: 'Sorpresa', percentage: 70 },
+        { emotion: 'happy', label: 'Alegria', percentage: 70 },
         { emotion: 'happy', label: 'Alegria', percentage: 30 },
       ],
       calibration: DEFAULT_ROBOT_CALIBRATION,
@@ -148,7 +148,7 @@ test('usa directivas OpenAI simuladas para acotar un chunk', async () => {
       artist_recipe_id: 'pollock-wro-v1',
       window_index: 1,
       combined_summary: [
-        { emotion: 'fear', label: 'Alerta', percentage: 60 },
+        { emotion: 'sad', label: 'Triste', percentage: 60 },
         { emotion: 'angry', label: 'Tension', percentage: 40 },
       ],
       voice_summary: {
@@ -164,9 +164,9 @@ test('usa directivas OpenAI simuladas para acotar un chunk', async () => {
       text: async () => JSON.stringify({
         output_text: JSON.stringify({
           primary_emotion: 'angry',
-          secondary_emotion: 'surprise',
+          secondary_emotion: 'sad',
           mobility: 120,
-          palette_slots: ['red', 'black', 'yellow'],
+          palette_slots: ['red', 'violet', 'yellow'],
           gestures: ['flick', 'unsafe_move', 'loop'],
           randomness: 120,
           style_directive: 'Gesto intenso pero dentro de receta.',
@@ -178,7 +178,7 @@ test('usa directivas OpenAI simuladas para acotar un chunk', async () => {
   assert.equal(result.source, 'openai')
   assert.equal(result.chunk.decision_source, 'openai')
   assert.equal(result.chunk.main_emotion, 'angry')
-  assert.deepEqual(result.chunk.directives.palette_slots, ['red', 'yellow'])
+  assert.deepEqual(result.chunk.directives.palette_slots, ['red', 'violet'])
   assert.deepEqual(result.chunk.directives.gestures, ['flick', 'loop'])
   assert.equal(result.chunk.directives.randomness, 100)
   assert.ok(result.chunk.ai_directive.includes('Gesto intenso'))

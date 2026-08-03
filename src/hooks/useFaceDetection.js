@@ -3,7 +3,7 @@ import { Human } from '@vladmandic/human'
 
 export const DEFAULT_CONFIG = {
     session: {
-        captureSeconds: 30,
+        captureSeconds: 60,
     },
     face: {
         detector: { minConfidence: 0.5, maxDetected: 1, rotation: false, iouThreshold: 0.1, skipFrames: 99, skipTime: 2500 },
@@ -30,7 +30,11 @@ function loadStoredConfig() {
         if (!stored) return null
         const parsed = JSON.parse(stored)
         // Merge con defaults para cubrir nuevas keys tras actualizaciones
-        return mergeDeep(structuredClone(DEFAULT_CONFIG), parsed)
+        const config = mergeDeep(structuredClone(DEFAULT_CONFIG), parsed)
+        if (parsed.session?.captureSeconds === 30) {
+            config.session.captureSeconds = DEFAULT_CONFIG.session.captureSeconds
+        }
+        return config
     } catch {
         return null
     }

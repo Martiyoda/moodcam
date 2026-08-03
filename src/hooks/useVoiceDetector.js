@@ -2,9 +2,9 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { createAudioToneAnalyzer, scoreToneEmotion } from '../lib/audioToneAnalyzer'
 import { analyzeEmotionText, estimateWordsPerMinute } from '../lib/emotionTextAnalyzer'
 import { fuseEmotionSignals } from '../lib/emotionFusionService'
-import { mapFaceEmotionToSimple } from '../lib/faceEmotionProvider'
+import { mapFaceEmotionToPhysical } from '../lib/faceEmotionProvider'
 import { createBrowserSpeechToTextProvider } from '../lib/speechToTextProvider'
-import { simpleScoresToArtSummary } from '../lib/emotionCategories'
+import { physicalScoresToArtSummary } from '../lib/emotionCategories'
 
 const EMPTY_TEXT_SCORES = { neutral: 1 }
 const EMPTY_TONE_SCORES = { neutral: 1 }
@@ -150,15 +150,15 @@ export default function useVoiceDetector() {
     return fuseEmotionSignals({
       textScores: text ? textAnalysis.scores : EMPTY_TEXT_SCORES,
       toneScores: latestVoiceSample ? toneScores : EMPTY_TONE_SCORES,
-      faceScores: faceEmotions ? mapFaceEmotionToSimple(faceEmotions) : EMPTY_FACE_SCORES,
+      faceScores: faceEmotions ? mapFaceEmotionToPhysical(faceEmotions) : EMPTY_FACE_SCORES,
     })
   }, [latestVoiceSample])
 
   const summary = useMemo(() => {
     const latest = latestVoiceSample
     return {
-      main_emotions: simpleScoresToArtSummary(latest?.emotions || { neutral: 1 }),
-      simple_emotion: latest?.dominant || 'neutral',
+      main_emotions: physicalScoresToArtSummary(latest?.emotions || { neutral: 1 }),
+      physical_emotion: latest?.dominant || 'neutral',
       label: latest?.label || 'neutro',
       confidence: latest?.confidence || 1,
       average_intensity: average(voiceSamples.map((sample) => sample.intensity)),

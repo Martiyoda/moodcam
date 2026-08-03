@@ -5,6 +5,7 @@ import {
   INITIAL_ATTACHED_STATE,
   INITIAL_JOINT_STATE,
   buildJogCommand,
+  buildResumeCommand,
   buildSetOperatingModeCommand,
   buildSetAngleCommand,
   buildStartCalibrationCommand,
@@ -183,6 +184,12 @@ export default function RobotCalibrationPanel({
     }
   }
 
+  const resumeRobot = () => {
+    if (calibrationModeActive || jointState.moving) return
+    if (!window.confirm('Comprueba que el brazo está despejado y pulsa Aceptar para quitar la parada de emergencia.')) return
+    onSend(buildResumeCommand())
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -229,6 +236,14 @@ export default function RobotCalibrationPanel({
             className="rounded-md border border-cyan-400/50 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Activar modo real
+          </button>
+          <button
+            type="button"
+            onClick={resumeRobot}
+            disabled={!mqttConnected || calibrationModeActive || jointState.moving}
+            className="rounded-md border border-emerald-400/50 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Quitar parada
           </button>
         </div>
       </section>

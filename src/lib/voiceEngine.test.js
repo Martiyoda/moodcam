@@ -11,8 +11,9 @@ test('analiza vocabulario emocional y colores del transcript', () => {
   const result = analyzeTranscriptText('Estoy feliz y me gusta el azul claro con amarillo')
 
   assert.ok(result.emotionScores.happy > 0)
-  assert.ok(result.colors.includes('light_blue'))
+  assert.ok(result.colors.includes('blue'))
   assert.ok(result.colors.includes('yellow'))
+  assert.deepEqual(Object.keys(result.emotionScores).sort(), ['angry', 'happy', 'neutral', 'sad'])
 })
 
 test('crea muestras de voz con intensidad y emoción dominante', () => {
@@ -28,7 +29,7 @@ test('crea muestras de voz con intensidad y emoción dominante', () => {
   assert.equal(sample.speaking, true)
   assert.ok(sample.intensity >= 80)
   assert.ok(sample.dominant)
-  assert.ok(Object.keys(sample.emotions).length > 0)
+  assert.deepEqual(Object.keys(sample.emotions).sort(), ['angry', 'happy', 'neutral', 'sad'])
 })
 
 test('fusiona rostro y voz con pesos 60/40', () => {
@@ -53,5 +54,6 @@ test('resume voz con colores mencionados', () => {
 
   assert.ok(summary.sample_count === 2)
   assert.ok(summary.color_preferences.includes('red'))
-  assert.ok(summary.color_preferences.includes('deep_blue'))
+  assert.ok(summary.color_preferences.includes('blue'))
+  assert.ok(summary.main_emotions.every((item) => ['happy', 'angry', 'sad', 'neutral'].includes(item.emotion)))
 })

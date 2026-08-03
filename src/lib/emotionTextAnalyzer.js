@@ -1,26 +1,17 @@
-import { normalizeSimpleScores } from './emotionCategories.js'
+import { normalizePhysicalEmotionScores } from './emotionCategories.js'
 
 const TEXT_KEYWORDS = {
-  joyful: ['feliz', 'alegre', 'contento', 'contenta', 'ilusion', 'ilusión', 'bien', 'risa', 'divertido', 'divertida', 'me gusta', 'encanta'],
-  calm: ['calma', 'tranquilo', 'tranquila', 'relajado', 'relajada', 'paz', 'suave', 'sereno', 'serena'],
+  happy: ['feliz', 'alegre', 'contento', 'contenta', 'ilusion', 'ilusión', 'bien', 'risa', 'divertido', 'divertida', 'me gusta', 'encanta', 'sorpresa', 'sorprendido', 'sorprendida'],
+  neutral: ['calma', 'tranquilo', 'tranquila', 'relajado', 'relajada', 'paz', 'suave', 'sereno', 'serena', 'normal', 'neutro', 'neutra', 'no mucho', 'igual'],
   sad: ['triste', 'pena', 'llorar', 'lloro', 'solo', 'sola', 'melancolia', 'melancolía', 'gris', 'apagado', 'apagada'],
-  nervous: ['nervioso', 'nerviosa', 'miedo', 'asustado', 'asustada', 'preocupa', 'ansioso', 'ansiosa', 'temor', 'inquieto', 'inquieta'],
-  tired: ['cansado', 'cansada', 'sueño', 'agotado', 'agotada', 'sin energia', 'sin energía', 'fatiga', 'pesado', 'pesada'],
-  confused: ['confuso', 'confusa', 'confundido', 'confundida', 'no se', 'no sé', 'duda', 'raro', 'rara', 'perdido', 'perdida'],
-  neutral: ['normal', 'neutro', 'neutra', 'no mucho', 'igual'],
+  angry: ['enfado', 'enfadado', 'enfadada', 'rabia', 'furia', 'nervioso', 'nerviosa', 'miedo', 'asustado', 'asustada', 'preocupa', 'ansioso', 'ansiosa', 'temor', 'inquieto', 'inquieta', 'confuso', 'confusa', 'confundido', 'confundida', 'no se', 'no sé', 'duda', 'raro', 'rara', 'perdido', 'perdida'],
 }
 
 const COLOR_KEYWORDS = {
-  yellow: ['amarillo', 'amarilla', 'sol', 'dorado', 'dorada'],
-  orange: ['naranja'],
-  red: ['rojo', 'roja'],
-  light_blue: ['azul claro', 'celeste'],
-  deep_blue: ['azul oscuro', 'azul'],
-  black: ['negro', 'negra'],
-  white: ['blanco', 'blanca'],
-  soft_green: ['verde'],
-  violet: ['violeta', 'morado', 'morada', 'lila'],
-  pink: ['rosa', 'rosado', 'rosada'],
+  yellow: ['amarillo', 'amarilla', 'sol', 'dorado', 'dorada', 'naranja'],
+  red: ['rojo', 'roja', 'rosa', 'rosado', 'rosada'],
+  blue: ['azul claro', 'celeste', 'azul oscuro', 'azul', 'verde', 'blanco', 'blanca'],
+  violet: ['violeta', 'morado', 'morada', 'lila', 'negro', 'negra'],
 }
 
 export function analyzeEmotionText(text = '') {
@@ -43,7 +34,7 @@ export function analyzeEmotionText(text = '') {
   })
 
   return {
-    scores: normalizeSimpleScores(scores),
+    scores: normalizePhysicalEmotionScores(scores),
     keywords: [...new Set(keywords)],
     colors: [...new Set(colors)],
   }

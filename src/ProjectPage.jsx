@@ -15,7 +15,7 @@ const pipelineSteps = [
   {
     title: 'Voz y pintor',
     text: 'La conversacion con el pintor elegido suma ritmo, palabras, intensidad y preferencias de color.',
-    metric: '30 segundos',
+    metric: '60 segundos',
   },
   {
     title: 'Plan artistico',

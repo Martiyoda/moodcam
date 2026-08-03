@@ -1,28 +1,28 @@
-import { normalizeSimpleScores } from './emotionCategories.js'
+import { normalizePhysicalEmotionScores } from './emotionCategories.js'
 
-const FACE_TO_SIMPLE = {
-  happy: 'joyful',
-  neutral: 'calm',
+const FACE_TO_PHYSICAL = {
+  happy: 'happy',
+  neutral: 'neutral',
   sad: 'sad',
-  angry: 'nervous',
-  fear: 'nervous',
-  disgust: 'confused',
-  surprise: 'confused',
+  angry: 'angry',
+  fear: 'sad',
+  disgust: 'angry',
+  surprise: 'happy',
 }
 
-export function mapFaceEmotionToSimple(faceEmotions = {}) {
+export function mapFaceEmotionToPhysical(faceEmotions = {}) {
   const scores = {}
 
   Object.entries(faceEmotions || {}).forEach(([faceEmotion, rawValue]) => {
-    const simpleEmotion = FACE_TO_SIMPLE[faceEmotion] || 'neutral'
-    scores[simpleEmotion] = (scores[simpleEmotion] || 0) + normalizeScore(rawValue)
+    const physicalEmotion = FACE_TO_PHYSICAL[faceEmotion] || 'neutral'
+    scores[physicalEmotion] = (scores[physicalEmotion] || 0) + normalizeScore(rawValue)
   })
 
-  return normalizeSimpleScores(scores)
+  return normalizePhysicalEmotionScores(scores)
 }
 
 export function buildFaceEmotionSignal({ emotions, dominant }) {
-  const scores = mapFaceEmotionToSimple(emotions)
+  const scores = mapFaceEmotionToPhysical(emotions)
   return {
     source: 'face',
     dominant_face_emotion: dominant,

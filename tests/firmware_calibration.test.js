@@ -6,6 +6,7 @@ const config = readFileSync(new URL('../arduino/main/src/robot_config.h', import
 const main = readFileSync(new URL('../arduino/main/main.ino', import.meta.url), 'utf8')
 const motors = readFileSync(new URL('../arduino/main/src/core/motors.cpp', import.meta.url), 'utf8')
 const mqttConfigExample = readFileSync(new URL('../arduino/main/src/config.example.h', import.meta.url), 'utf8')
+const legacyMoodcamPoses = readFileSync(new URL('../arduino/main/src/legacy_moodcam_pose_reference.h', import.meta.url), 'utf8')
 
 function functionBody(source, name, nextName) {
   const start = source.indexOf(name)
@@ -15,16 +16,42 @@ function functionBody(source, name, nextName) {
   return source.slice(start, end)
 }
 
-test('configura el mapa definitivo y los limites de calibracion', () => {
-  assert.match(config, /#define CALIBRATION_MODE true/)
+test('configura el mapa Moodcam y los limites de calibracion', () => {
+  assert.match(config, /#define CALIBRATION_MODE false/)
   assert.match(config, /static_assert\(!CALIBRATION_MODE \|\| SAFE_TEST_MODE/)
-  assert.match(config, /SERVO_BASE, "base", 26, true, 75, 115, 90/)
-  assert.match(config, /SERVO_SHOULDER, "shoulder", 25, true, 65, 125, 90/)
-  assert.match(config, /SERVO_ELBOW, "elbow", 33, true, 65, 125, 90/)
-  assert.match(config, /SERVO_WRIST, "wrist", 32, true, 70, 120, 90/)
-  assert.match(config, /SERVO_BRUSH, "brush", -1, false/)
+  assert.match(config, /SERVO_BASE, "base", 26, true, 0, 180, 90/)
+  assert.match(config, /SERVO_SHOULDER, "shoulder", 25, true, 60, 165, 90/)
+  assert.match(config, /SERVO_ELBOW, "elbow", 33, true, 35, 150, 90/)
+  assert.match(config, /SERVO_WRIST, "wrist", 32, true, 0, 120, 90/)
+  assert.doesNotMatch(config, /SERVO_BRUSH|BRUSH_SERVO_CONFIG/)
   assert.match(config, /CALIBRATION_MIN_DURATION_MS = 200/)
   assert.match(config, /CALIBRATION_MAX_DURATION_MS = 5000/)
+})
+
+test('conserva las poses Moodcam validadas solo como referencia de migracion', () => {
+  assert.match(legacyMoodcamPoses, /Reference only/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_REST = \{90, 90, 90, 90\}/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_PAINT_YELLOW = \{172, 158, 73, 17\}/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_PAINT_RED = \{143, 158, 85, 30\}/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_PAINT_VIOLET = \{30, 158, 90, 30\}/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_PAINT_BLUE = \{0, 162, 82, 22\}/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_WATER = \{90, 150, 48, 5\}/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_WATER_SHAKE_REPETITIONS = 15/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_TOWEL = \{0, 150, 50, 0\}/)
+  assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_TOWEL_TAP_REPETITIONS = 10/)
+})
+
+test('ejecuta las poses Moodcam para cargar, limpiar y secar el pincel', () => {
+  assert.match(main, /bool loadMoodcamPaint\(const String& paintId, int speed\)/)
+  assert.match(main, /pose = \{172, 158, 73, 17\}/)
+  assert.match(main, /pose = \{143, 158, 85, 30\}/)
+  assert.match(main, /pose = \{30, 158, 90, 30\}/)
+  assert.match(main, /pose = \{0, 162, 82, 22\}/)
+  assert.match(main, /const ServoPose waterPose = \{90, 150, 48, 5\}/)
+  assert.match(main, /for \(int repetition = 0; repetition < 15; repetition\+\+\)/)
+  assert.match(main, /const ServoPose towelPose = \{0, 150, 50, 0\}/)
+  assert.match(main, /for \(int repetition = 0; repetition < 10; repetition\+\+\)/)
+  assert.match(main, /strokesSincePaintLoad >= 2/)
 })
 
 test('arranca detached y con posicion desconocida sin asumir HOME fisico', () => {
@@ -113,8 +140,21 @@ test('ServoPose incluye base y moveToPoseSafe interpola los cuatro servos', () =
   assert.match(motorsHeader, /struct ServoPose \{\s*int base;\s*int shoulder;\s*int elbow;\s*int wrist;\s*\}/)
   const move = functionBody(motors, 'bool moveToPoseSafe(const ServoPose& target, int speed) {', 'bool runPoseSequence(')
   assert.match(move, /constrain\(target\.base, BASE_SERVO_CONFIG\.minAngle, BASE_SERVO_CONFIG\.maxAngle\)/)
+  assert.doesNotMatch(move, /if \(speed >= SAFE_MAX_SPEED\)/)
   assert.match(move, /abs\(safeTarget\.base - pose\.base\)/)
+  assert.match(motors, /int degreesPerStepForSpeed\(int speed\)/)
+  assert.match(move, /const int steps = max\(1, \(maxDelta \+ degreesPerStep - 1\) \/ degreesPerStep\)/)
   assert.match(move, /start\.base \+ \(\(safeTarget\.base - start\.base\) \* step\)/)
+})
+
+test('al finalizar una obra vuelve a HOME con el pincel levantado', () => {
+  const execute = functionBody(main, 'bool executeRealPathCommand(const String& json, const String& type) {', 'bool moveMoodcamPose(')
+  assert.match(execute, /if \(type == "paint_sequence_end"\) \{\s*liftBrush\(\);/)
+  assert.match(execute, /BASE_SERVO_CONFIG\.homeAngle/)
+  assert.match(execute, /SHOULDER_SERVO_CONFIG\.homeAngle/)
+  assert.match(execute, /ELBOW_SERVO_CONFIG\.homeAngle/)
+  assert.match(execute, /WRIST_SERVO_CONFIG\.homeAngle/)
+  assert.match(execute, /moveToPoseSafe\(homePose, REAL_SPEED_TRANSIT_DEFAULT\)/)
 })
 
 test('moveToPoseSafe libera MQTT entre pasos via callback en lugar de delay bloqueante', () => {
@@ -138,7 +178,10 @@ test('al pasar a modo real sincroniza la pose interna con los angulos comandados
 })
 
 test('aplica protecciones especificas para el servo SG90 de la muneca y el codo extendido', () => {
-  assert.match(main, /WRIST_REAL_MAX_SPEED = 12/)
+  assert.match(main, /REAL_SPEED_STROKE_DEFAULT = 80/)
+  assert.match(main, /REAL_SPEED_CONTACT_DEFAULT = 80/)
+  assert.match(main, /REAL_SPEED_TRANSIT_DEFAULT = 80/)
+  assert.match(main, /WRIST_REAL_MAX_SPEED = 80/)
   assert.match(main, /WRIST_SIGNIFICANT_DELTA_DEG = 5/)
   assert.match(main, /ELBOW_EXTENSION_THRESHOLD_DEG = 110/)
   assert.match(main, /ELBOW_EXTENSION_SPEED_PENALTY = 3/)
@@ -150,7 +193,7 @@ test('aplica protecciones especificas para el servo SG90 de la muneca y el codo 
 })
 
 test('modo real usa FIFO acotado y publica backpressure para el AI Bridge', () => {
-  assert.match(main, /constexpr size_t REAL_COMMAND_QUEUE_CAPACITY = 8/)
+  assert.match(main, /constexpr size_t REAL_COMMAND_QUEUE_CAPACITY = 32/)
   assert.match(main, /struct QueuedRealCommand/)
   assert.match(main, /QueuedRealCommand realCommandQueue\[REAL_COMMAND_QUEUE_CAPACITY\]/)
   assert.match(main, /bool enqueueRealCommand\(const String& json, const String& type\)/)

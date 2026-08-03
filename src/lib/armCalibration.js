@@ -1,10 +1,8 @@
 export const ARM_SERVOS = [
-  // Rango conservador ampliado para brazo impreso 3D (23cm + 18cm):
-  // evita extremos mecanicos pero permite cubrir mejor el plano A4.
-  { id: 'base', label: 'Base', gpio: 26, minAngle: 75, maxAngle: 115 },
-  { id: 'shoulder', label: 'Hombro', gpio: 25, minAngle: 65, maxAngle: 125 },
-  { id: 'elbow', label: 'Codo', gpio: 33, minAngle: 65, maxAngle: 125 },
-  { id: 'wrist', label: 'Muñeca', gpio: 32, minAngle: 70, maxAngle: 120 },
+  { id: 'base', label: 'Base', gpio: 26, minAngle: 0, maxAngle: 180 },
+  { id: 'shoulder', label: 'Hombro', gpio: 25, minAngle: 60, maxAngle: 165 },
+  { id: 'elbow', label: 'Codo', gpio: 33, minAngle: 35, maxAngle: 150 },
+  { id: 'wrist', label: 'Muñeca', gpio: 32, minAngle: 0, maxAngle: 120 },
 ]
 
 export const INITIAL_JOINT_STATE = {
@@ -26,6 +24,10 @@ export const INITIAL_ATTACHED_STATE = {
 
 export function buildStartCalibrationCommand() {
   return { type: 'start_calibration', assume_home: true }
+}
+
+export function buildResumeCommand() {
+  return { type: 'resume' }
 }
 
 export function buildJogCommand(servo, delta) {

@@ -7,7 +7,7 @@ export const WRO_PHYSICAL_COLORS = [
 
 const COMMON_LIMITS = {
     max_strokes_per_chunk: 4,
-    max_points_per_stroke: 24,
+    max_points_per_stroke: 10,
     max_commands_per_chunk: 10,
     max_payload_bytes: 1800,
     pressure_range: [25, 75],

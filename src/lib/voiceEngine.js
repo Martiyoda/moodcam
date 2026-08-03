@@ -1,4 +1,4 @@
-import { getEmotionLabel } from './artEngine.js'
+import { dominantPhysicalEmotion, physicalScoresToArtSummary, toPhysicalEmotionId, toPhysicalEmotionScores } from './emotionCategories.js'
 
 export const DEFAULT_ROBOT_CALIBRATION = {
   canvas: {
@@ -25,33 +25,24 @@ export const DEFAULT_ROBOT_CALIBRATION = {
 }
 
 const EMOTION_KEYWORDS = {
-  happy: ['feliz', 'alegre', 'contento', 'contenta', 'bien', 'divertido', 'risa', 'encanta', 'gusta'],
+  happy: ['feliz', 'alegre', 'contento', 'contenta', 'bien', 'divertido', 'risa', 'encanta', 'gusta', 'sorpresa', 'sorprendido', 'sorprendida', 'wow', 'increíble', 'increible'],
   sad: ['triste', 'pena', 'llorar', 'solo', 'sola', 'melancolía', 'melancolia', 'gris'],
-  angry: ['rabia', 'enfado', 'enfadado', 'enfadada', 'furia', 'molesto', 'molesta', 'odio'],
-  fear: ['miedo', 'asustado', 'asustada', 'nervioso', 'nerviosa', 'temor', 'preocupa'],
-  surprise: ['sorpresa', 'sorprendido', 'sorprendida', 'wow', 'increíble', 'increible'],
-  disgust: ['asco', 'disgusto', 'raro', 'incómodo', 'incomodo'],
+  angry: ['rabia', 'enfado', 'enfadado', 'enfadada', 'furia', 'molesto', 'molesta', 'odio', 'miedo', 'asustado', 'asustada', 'nervioso', 'nerviosa', 'temor', 'preocupa', 'asco', 'disgusto', 'raro', 'incómodo', 'incomodo'],
   neutral: ['calma', 'tranquilo', 'tranquila', 'relajado', 'relajada', 'paz', 'suave'],
 }
 
 const COLOR_KEYWORDS = {
-  yellow: ['amarillo', 'amarilla', 'sol', 'dorado', 'dorada'],
-  orange: ['naranja'],
-  red: ['rojo', 'roja'],
-  light_blue: ['azul claro', 'celeste'],
-  deep_blue: ['azul oscuro', 'azul'],
-  black: ['negro', 'negra'],
-  white: ['blanco', 'blanca'],
-  soft_green: ['verde'],
-  violet: ['violeta', 'morado', 'morada', 'lila'],
-  pink: ['rosa', 'rosado', 'rosada'],
+  yellow: ['amarillo', 'amarilla', 'sol', 'dorado', 'dorada', 'naranja'],
+  red: ['rojo', 'roja', 'rosa', 'rosado', 'rosada'],
+  blue: ['azul claro', 'celeste', 'azul oscuro', 'azul', 'verde', 'blanco', 'blanca'],
+  violet: ['violeta', 'morado', 'morada', 'lila', 'negro', 'negra'],
 }
 
 export function createVoiceSample(metrics, text = '') {
   const audioScores = scoreAudioEmotion(metrics)
   const textAnalysis = analyzeTranscriptText(text)
-  const emotionScores = mergeEmotionScores(audioScores, textAnalysis.emotionScores, 0.65, 0.35)
-  const dominant = topEmotion(emotionScores)
+  const emotionScores = toPhysicalEmotionScores(mergeEmotionScores(audioScores, textAnalysis.emotionScores, 0.65, 0.35))
+  const dominant = dominantPhysicalEmotion(emotionScores)
 
   return {
     timestamp: Date.now(),
@@ -64,7 +55,7 @@ export function createVoiceSample(metrics, text = '') {
     words_per_minute: Math.round(metrics.wordsPerMinute || 0),
     dominant,
     confidence: round(emotionScores[dominant] || 0),
-    emotions: normalizeScoreMap(emotionScores),
+    emotions: emotionScores,
     colors: textAnalysis.colors,
     keywords: textAnalysis.keywords,
     transcript_fragment: text,
@@ -93,7 +84,7 @@ export function analyzeTranscriptText(text = '') {
   })
 
   return {
-    emotionScores: normalizeScoreMap(emotionScores),
+    emotionScores: toPhysicalEmotionScores(emotionScores),
     colors: [...new Set(colors)],
     keywords: [...new Set(keywords)],
   }
@@ -108,7 +99,8 @@ export function summarizeVoiceEmotion(samples, transcriptItems = []) {
 
   samples.forEach((sample) => {
     Object.entries(sample.emotions || {}).forEach(([emotion, value]) => {
-      totals[emotion] = (totals[emotion] || 0) + normalizeScore(value)
+      const physicalEmotion = toPhysicalEmotionId(emotion)
+      totals[physicalEmotion] = (totals[physicalEmotion] || 0) + normalizeScore(value)
     })
     totalIntensity += sample.intensity || 0
     if (sample.speaking) speakingSamples += 1
@@ -119,13 +111,14 @@ export function summarizeVoiceEmotion(samples, transcriptItems = []) {
   transcriptItems.forEach((item) => {
     const analysis = analyzeTranscriptText(item.text || '')
     Object.entries(analysis.emotionScores).forEach(([emotion, value]) => {
-      totals[emotion] = (totals[emotion] || 0) + value
+      const physicalEmotion = toPhysicalEmotionId(emotion)
+      totals[physicalEmotion] = (totals[physicalEmotion] || 0) + value
     })
     colors.push(...analysis.colors)
     keywords.push(...analysis.keywords)
   })
 
-  const mainEmotions = scoresToSummary(totals)
+  const mainEmotions = physicalScoresToArtSummary(totals)
   const averageIntensity = samples.length ? Math.round(totalIntensity / samples.length) : 0
 
   return {
@@ -142,14 +135,16 @@ export function combineEmotionSummaries(faceSummary, voiceSummary, weights = { f
   const totals = {}
 
   faceSummary.forEach((item) => {
-    totals[item.emotion] = (totals[item.emotion] || 0) + normalizeScore(item.percentage) * weights.face
+    const emotion = toPhysicalEmotionId(item.emotion)
+    totals[emotion] = (totals[emotion] || 0) + normalizeScore(item.percentage) * weights.face
   })
 
     ; (voiceSummary.main_emotions || []).forEach((item) => {
-      totals[item.emotion] = (totals[item.emotion] || 0) + normalizeScore(item.percentage) * weights.voice
+      const emotion = toPhysicalEmotionId(item.emotion)
+      totals[emotion] = (totals[emotion] || 0) + normalizeScore(item.percentage) * weights.voice
     })
 
-  return scoresToSummary(totals)
+  return physicalScoresToArtSummary(totals)
 }
 
 export function buildSessionSummary({ artist, faceSummary, voiceSummary, combinedSummary, transcript }) {
@@ -178,11 +173,11 @@ function scoreAudioEmotion(metrics) {
   const wordsPerMinute = metrics.wordsPerMinute || 0
 
   if (!speaking && silence > 1800) return { neutral: 0.7, sad: 0.3 }
-  if (intensity > 72 && wordsPerMinute > 130) return { angry: 0.42, surprise: 0.28, happy: 0.2, fear: 0.1 }
-  if (intensity > 62) return { surprise: 0.35, happy: 0.32, angry: 0.2, fear: 0.13 }
-  if (intensity < 20 && speaking) return { sad: 0.36, neutral: 0.46, fear: 0.18 }
+  if (intensity > 72 && wordsPerMinute > 130) return { angry: 0.6, happy: 0.25, neutral: 0.15 }
+  if (intensity > 62) return { happy: 0.4, angry: 0.35, neutral: 0.25 }
+  if (intensity < 20 && speaking) return { sad: 0.45, neutral: 0.55 }
   if (intensity < 12) return { neutral: 0.78, sad: 0.22 }
-  return { neutral: 0.42, happy: 0.24, sad: 0.16, surprise: 0.1, fear: 0.08 }
+  return { neutral: 0.55, happy: 0.2, sad: 0.15, angry: 0.1 }
 }
 
 function mergeEmotionScores(primary, secondary, primaryWeight, secondaryWeight) {
@@ -191,32 +186,7 @@ function mergeEmotionScores(primary, secondary, primaryWeight, secondaryWeight) 
   keys.forEach((key) => {
     result[key] = (primary[key] || 0) * primaryWeight + (secondary[key] || 0) * secondaryWeight
   })
-  return normalizeScoreMap(result)
-}
-
-function scoresToSummary(scores, limit = 2) {
-  const normalized = normalizeScoreMap(scores)
-  return Object.entries(normalized)
-    .map(([emotion, score]) => ({
-      emotion,
-      label: getEmotionLabel(emotion),
-      percentage: Math.round(score * 100),
-    }))
-    .sort((a, b) => b.percentage - a.percentage)
-    .slice(0, limit)
-}
-
-function topEmotion(scores) {
-  const entries = Object.entries(scores || {})
-  if (!entries.length) return 'neutral'
-  return entries.sort(([, a], [, b]) => b - a)[0][0]
-}
-
-function normalizeScoreMap(scores) {
-  const entries = Object.entries(scores || {}).filter(([, value]) => value > 0)
-  const total = entries.reduce((sum, [, value]) => sum + value, 0)
-  if (!total) return { neutral: 1 }
-  return Object.fromEntries(entries.map(([key, value]) => [key, round(value / total)]))
+  return toPhysicalEmotionScores(result)
 }
 
 function normalizeScore(value) {

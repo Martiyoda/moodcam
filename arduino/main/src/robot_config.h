@@ -20,8 +20,7 @@ enum RobotServoId {
   SERVO_BASE,
   SERVO_SHOULDER,
   SERVO_ELBOW,
-  SERVO_WRIST,
-  SERVO_BRUSH
+  SERVO_WRIST
 };
 
 struct RobotServoConfig {
@@ -35,33 +34,29 @@ struct RobotServoConfig {
   int safeSpeed;
 };
 
-// Definitive physical pin map. Limits remain conservative until calibration.
+// Rangos verificados por la coreografia fisica de Moodcam para pinturas,
+// agua y toalla. Ajustar solo tras una nueva calibracion mecanica.
 constexpr RobotServoConfig BASE_SERVO_CONFIG = {
-  SERVO_BASE, "base", 26, true, 75, 115, 90, DEFAULT_SAFE_SPEED
+  SERVO_BASE, "base", 26, true, 0, 180, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig SHOULDER_SERVO_CONFIG = {
-  SERVO_SHOULDER, "shoulder", 25, true, 65, 125, 90, DEFAULT_SAFE_SPEED
+  SERVO_SHOULDER, "shoulder", 25, true, 60, 165, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig ELBOW_SERVO_CONFIG = {
-  SERVO_ELBOW, "elbow", 33, true, 65, 125, 90, DEFAULT_SAFE_SPEED
+  SERVO_ELBOW, "elbow", 33, true, 35, 150, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig WRIST_SERVO_CONFIG = {
-  SERVO_WRIST, "wrist", 32, true, 70, 120, 90, DEFAULT_SAFE_SPEED
-};
-
-constexpr RobotServoConfig BRUSH_SERVO_CONFIG = {
-  SERVO_BRUSH, "brush", -1, false, 0, 0, 0, DEFAULT_SAFE_SPEED
+  SERVO_WRIST, "wrist", 32, true, 0, 120, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig ROBOT_SERVOS[] = {
   BASE_SERVO_CONFIG,
   SHOULDER_SERVO_CONFIG,
   ELBOW_SERVO_CONFIG,
-  WRIST_SERVO_CONFIG,
-  BRUSH_SERVO_CONFIG
+  WRIST_SERVO_CONFIG
 };
 
 constexpr size_t ROBOT_SERVO_COUNT = sizeof(ROBOT_SERVOS) / sizeof(ROBOT_SERVOS[0]);

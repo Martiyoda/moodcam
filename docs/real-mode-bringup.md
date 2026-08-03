@@ -48,6 +48,19 @@ antes y durante el primer arranque del modo real del firmware Inner Synergy.
 - [ ] **Acceso fisico al cable de alimentacion de los servos**. Si algo va
       mal: corta esa alimentacion, no la del ESP32.
 
+### Referencia de posiciones Moodcam
+
+Las posiciones fisicas validadas en el brazo historico estan preservadas en
+[`arduino/main/src/legacy_moodcam_pose_reference.h`](../arduino/main/src/legacy_moodcam_pose_reference.h).
+Incluyen reposo, cuatro pinturas, agua con agitado de muneca, toalla con
+toques y trazos base. Son una referencia de migracion, no una configuracion
+ejecutable: no se incluyen en el firmware activo ni se aceptan desde MQTT.
+
+Antes de usar una estacion historica, confirmar mediante `jog` que el
+cableado, direccion de giro y limites del brazo final coinciden. Los limites
+actuales son mas conservadores que los angulos historicos; no los amplias sin
+registrar la validacion fisica correspondiente.
+
 ---
 
 ## 1. Validacion en modo calibracion

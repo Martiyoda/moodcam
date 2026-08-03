@@ -106,22 +106,22 @@ function publishDemoSession() {
     artist,
     faceSummary: [
       { emotion: 'happy', label: 'Alegria', percentage: 62 },
-      { emotion: 'surprise', label: 'Sorpresa', percentage: 38 },
+      { emotion: 'neutral', label: 'Tranquilo', percentage: 38 },
     ],
     voiceSummary: {
       main_emotions: [
-        { emotion: 'happy', label: 'alegre', simple_emotion: 'joyful', percentage: 70 },
-        { emotion: 'neutral', label: 'tranquilo', simple_emotion: 'calm', percentage: 30 },
+        { emotion: 'happy', label: 'alegre', color: 'yellow', percentage: 70 },
+        { emotion: 'neutral', label: 'tranquilo', color: 'blue', percentage: 30 },
       ],
-      simple_emotion: 'joyful',
+      physical_emotion: 'happy',
       label: 'alegre',
-      color_preferences: ['yellow', 'light_blue'],
+      color_preferences: ['yellow', 'blue'],
       keywords: ['alegre', 'azul', 'movimiento'],
       sample_count: 5,
     },
     combinedSummary: [
-      { emotion: 'happy', label: 'alegre', simple_emotion: 'joyful', percentage: 68 },
-      { emotion: 'surprise', label: 'confundido', simple_emotion: 'confused', percentage: 32 },
+      { emotion: 'happy', label: 'alegre', color: 'yellow', percentage: 68 },
+      { emotion: 'angry', label: 'enfadado', color: 'red', percentage: 32 },
     ],
     transcript: [
       {

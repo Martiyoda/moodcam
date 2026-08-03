@@ -241,7 +241,7 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
     100
   )
 
-  const strokeCount = clamp(Math.round(6 + density / 8 + movementLevel / 7), 8, 30)
+  const strokeCount = clamp(Math.round(6 + density / 8 + movementLevel / 7), 8, 16)
   const shapes = uniqueStrings([...artist.shapes, ...primaryProfile.shapes, ...secondaryProfile.shapes]).slice(0, 7)
   const planId = `plan-${Date.now()}`
 
@@ -260,8 +260,10 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
   ))
   const strokes = rawStrokes.map((stroke) => ({
     ...stroke,
-    points: stroke.points.map((strokePoint) => projectPointToCanvas(strokePoint, resolvedCalibration)),
-  }))
+    points: stroke.points
+      .slice(0, 10)
+      .map((strokePoint) => projectPointToCanvas(strokePoint, resolvedCalibration)),
+  })).sort((first, second) => first.color.name.localeCompare(second.color.name))
   const robotCommands = createRobotCommands(strokes, resolvedCalibration)
 
   return {
@@ -331,10 +333,16 @@ export function generateArtChunk({ windowSummary = [], artistId, recipe = null, 
       resolvedRecipe.density_range[1]
     )
     const randomness = clamp(directives.randomness ?? artist.randomness, 0, 100)
-    const strokeCount = clamp(
-      Math.round(1 + density / 28),
-      1,
-      resolvedRecipe.limits.max_strokes_per_chunk
+    const completedStrokeCount = Math.max(0, Number(sessionState.completed_stroke_count) || 0)
+    const remainingStrokeBudget = Math.max(0, 16 - completedStrokeCount)
+    const remainingWindows = Math.max(1, Number(sessionState.remaining_windows) || 1)
+    const strokeCount = Math.min(
+      remainingStrokeBudget,
+      clamp(
+        Math.ceil(remainingStrokeBudget / remainingWindows),
+        0,
+        resolvedRecipe.limits.max_strokes_per_chunk
+      )
     )
     const shapes = uniqueStrings([...(directives.gestures || []), ...resolvedRecipe.allowed_gestures, ...artist.shapes]).slice(0, 7)
     const chunkId = sessionState.chunk_id || `${sessionState.session_id || 'session'}-window-${sessionState.window_index || 0}-chunk-${sessionState.chunk_index || 1}`
@@ -356,7 +364,7 @@ export function generateArtChunk({ windowSummary = [], artistId, recipe = null, 
       points: stroke.points
         .slice(0, resolvedRecipe.limits.max_points_per_stroke)
         .map((strokePoint) => projectPointToCanvas(strokePoint, resolvedCalibration)),
-    }))
+    })).sort((first, second) => first.color.name.localeCompare(second.color.name))
     const robotCommands = createRobotCommands(strokes, resolvedCalibration, { finishWithRest: false, cleanAtEnd: false })
 
     return {
@@ -501,7 +509,6 @@ function createRobotCommands(strokes, calibration, options = {}) {
   strokes.forEach((stroke) => {
     const station = findPaintStation(stroke.color, calibration)
     if (station.id !== currentPaintId) {
-      if (currentPaintId) commands.push(...createBrushCleaningCommands(calibration))
       commands.push(...createPaintLoadCommands(station, calibration))
       currentPaintId = station.id
     }
@@ -613,7 +620,7 @@ function createStroke({ index, artist, shapes, colors, speed, pressure, randomne
   const shape = pickShape(artist, shapes, index)
   const color = colors[index % colors.length]
   const jitter = randomness / 100
-  const strokeSpeed = clamp(Math.round(speed + randomBetween(-10, 14) * jitter + movementLevel * 0.05), 10, 100)
+  const strokeSpeed = clamp(Math.round(speed + randomBetween(-10, 14) * jitter + movementLevel * 0.05), 70, 80)
   const strokePressure = clamp(Math.round(pressure + randomBetween(-8, 10) * jitter), 10, 100)
   const points = createPointsForShape(shape, direction, movementLevel, jitter, index)
 

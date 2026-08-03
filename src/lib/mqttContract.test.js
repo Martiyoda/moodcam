@@ -16,7 +16,7 @@ import {
 
 test('limita la calibración web a comandos aprobados', () => {
   assert.deepEqual(ARM_CALIBRATION_COMMAND_TYPES, [
-    'start_calibration', 'jog', 'set_angle', 'get_joint_state', 'stop', 'release_servos', 'set_operating_mode',
+    'start_calibration', 'jog', 'set_angle', 'get_joint_state', 'stop', 'resume', 'release_servos', 'set_operating_mode',
   ])
   assert.equal(ARM_CALIBRATION_COMMAND_TYPES.includes('emotion_test'), false)
   assert.equal(ARM_CALIBRATION_COMMAND_TYPES.includes('pose_test'), false)

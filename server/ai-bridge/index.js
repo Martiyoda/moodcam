@@ -10,6 +10,7 @@ const BRIDGE_PRESENCE_INTERVAL_MS = 5000
 
 export function startAiBridge(config = loadBridgeConfig()) {
   const client = mqtt.connect(config.mqttUrl, buildMqttOptions(config))
+  const queueTracker = createRobotQueueTracker(config)
   const startedAt = Date.now()
   let presenceTimer = null
 
@@ -37,7 +38,7 @@ export function startAiBridge(config = loadBridgeConfig()) {
 
     try {
       if (topic === config.topics[TOPIC_KEYS.sessionStart]) {
-        rememberSession(payload)
+        resetForNewSession(payload, queueTracker)
         console.log(`Sesion iniciada: ${payload.session_id || 'sin id'}`)
       }
 
@@ -47,13 +48,23 @@ export function startAiBridge(config = loadBridgeConfig()) {
 
       if (topic === config.topics[TOPIC_KEYS.robotStatus]) {
         rememberRobotStatus(payload)
+        queueTracker.observe(payload)
       }
 
       if (topic === config.topics[TOPIC_KEYS.sessionSummary]) {
         rememberSession(payload)
-        const latestFaceEmotion = getSession(payload.session_id)?.latestFaceEmotion
+        const sessionState = getSession(payload.session_id) || {}
+        const latestFaceEmotion = sessionState.latestFaceEmotion
         const decision = await decideArtPlan({ sessionSummary: payload, latestFaceEmotion, config })
-        const publishResult = await publishPlanAndCommands(client, config, decision.plan)
+        if (sessionState.completed_stroke_count > 0) {
+          client.publish(config.topics[TOPIC_KEYS.strokePlan], JSON.stringify(decision.plan), { qos: 1 })
+          console.log(`Plan ${decision.plan.id} publicado sin comandos: la sesion ya genero ${sessionState.completed_stroke_count} trazos.`)
+          return
+        }
+        const publishResult = await publishPlanAndCommands(client, config, decision.plan, {
+          waitForQueueCapacity: () => queueTracker.waitForCapacity(),
+          onCommandPublished: () => queueTracker.reserveCommand(),
+        })
 
         if (decision.source === 'local_fallback') {
           publishBridgeError(client, config, {
@@ -86,7 +97,10 @@ export function startAiBridge(config = loadBridgeConfig()) {
         }
 
         const decision = await decideArtChunk({ emotionWindow: payload, sessionState, config })
-        const publishResult = await publishChunkAndCommands(client, config, decision.chunk)
+        const publishResult = await publishChunkAndCommands(client, config, decision.chunk, {
+          waitForQueueCapacity: () => queueTracker.waitForCapacity(),
+          onCommandPublished: () => queueTracker.reserveCommand(),
+        })
 
         if (decision.source === 'local_fallback') {
           publishBridgeError(client, config, {
@@ -108,7 +122,10 @@ export function startAiBridge(config = loadBridgeConfig()) {
         rememberSession(payload)
         const sessionState = getSession(payload.session_id) || {}
         const chunk = createSessionEndChunk({ sessionEnd: payload, sessionState })
-        const publishResult = await publishChunkAndCommands(client, config, chunk)
+        const publishResult = await publishChunkAndCommands(client, config, chunk, {
+          waitForQueueCapacity: () => queueTracker.waitForCapacity(),
+          onCommandPublished: () => queueTracker.reserveCommand(),
+        })
         rememberPublishedChunk(chunk)
         console.log(`Cierre ${chunk.chunk_id} publicado con ${publishResult.commandCount} mensajes.`)
       }
@@ -156,6 +173,17 @@ function rememberSession(payload) {
   })
 }
 
+function resetForNewSession(payload, queueTracker) {
+  const latestRobotStatus = getSession('latest')?.latestRobotStatus
+  sessions.clear()
+  sessions.set('latest', latestRobotStatus ? { latestRobotStatus } : {})
+  sessions.set(payload.session_id || 'latest', {
+    session: payload,
+    latestRobotStatus,
+  })
+  queueTracker.reset(latestRobotStatus)
+}
+
 function rememberFaceEmotion(payload) {
   const key = payload.session_id || 'latest'
   sessions.set(key, {
@@ -200,6 +228,8 @@ function rememberPublishedChunk(chunk) {
   const chunks = previous?.chunks || []
   sessions.set(key, {
     ...previous,
+    completed_stroke_count: (previous?.completed_stroke_count || 0)
+      + (Array.isArray(chunk.strokes) ? chunk.strokes.length : 0),
     chunks: [...chunks, {
       chunk_id: chunk.chunk_id,
       window_index: chunk.window_index,
@@ -217,6 +247,39 @@ function queueBackpressureReason(robotStatus, config) {
     return `ESP32 queue_depth=${queueDepth} supera umbral ${config.queueHighWaterMark}; AI Bridge pausa la ventana.`
   }
   return ''
+}
+
+function createRobotQueueTracker(config) {
+  let observedDepth = 0
+  let reservedDepth = 0
+
+  return {
+    reset(payload) {
+      const depth = Number(payload?.queue_depth)
+      observedDepth = Number.isFinite(depth) ? Math.max(0, depth) : 0
+      reservedDepth = observedDepth
+    },
+    observe(payload) {
+      const depth = Number(payload?.queue_depth)
+      if (!Number.isFinite(depth)) return
+      const drainedDepth = Math.max(0, observedDepth - depth)
+      observedDepth = Math.max(0, depth)
+      reservedDepth = Math.max(observedDepth, reservedDepth - drainedDepth)
+    },
+    reserveCommand() {
+      reservedDepth++
+    },
+    async waitForCapacity() {
+      const deadline = Date.now() + config.queueWaitTimeoutMs
+      while (Date.now() < deadline) {
+        if (Math.max(observedDepth, reservedDepth) < config.queueHighWaterMark) {
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      throw new Error(`ESP32 no libera espacio en la cola de comandos durante ${Math.round(config.queueWaitTimeoutMs / 1000)} segundos.`)
+    },
+  }
 }
 
 function getSession(sessionId) {

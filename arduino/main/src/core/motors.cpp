@@ -73,7 +73,11 @@ CalibrationJoint* calibrationJointByName(const char* servoName) {
 }
 
 int stepDelayForSpeed(int speed) {
-  return map(constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED), SAFE_MIN_SPEED, SAFE_MAX_SPEED, 35, 6);
+  return map(constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED), SAFE_MIN_SPEED, SAFE_MAX_SPEED, 28, 4);
+}
+
+int degreesPerStepForSpeed(int speed) {
+  return map(constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED), SAFE_MIN_SPEED, SAFE_MAX_SPEED, 1, 6);
 }
 
 void writePose(const ServoPose& nextPose) {
@@ -163,7 +167,6 @@ bool hardwareTestConfigured(int servoPin) {
     && MOTOR_OUTPUT_ENABLED
     && servo != nullptr
     && servo->enabled
-    && servo->id != SERVO_BRUSH
     && validPin(servo->pin);
 }
 
@@ -235,7 +238,7 @@ bool startCalibrationMove(const char* servoName, int targetAngle, int durationMs
   if (!CALIBRATION_MODE || !SAFE_TEST_MODE || !positionKnown || calibrationMotion.active || joint == nullptr) {
     return false;
   }
-  if (!joint->config->enabled || joint->config->id == SERVO_BRUSH || !validPin(joint->config->pin)) {
+  if (!joint->config->enabled || !validPin(joint->config->pin)) {
     return false;
   }
   if (targetAngle < joint->config->minAngle || targetAngle > joint->config->maxAngle) {
@@ -364,7 +367,8 @@ bool moveToPoseSafe(const ServoPose& target, int speed) {
     )
   );
   const ServoPose start = pose;
-  const int steps = max(1, maxDelta);
+  const int degreesPerStep = degreesPerStepForSpeed(speed);
+  const int steps = max(1, (maxDelta + degreesPerStep - 1) / degreesPerStep);
   const unsigned long stepWaitMs = stepDelayForSpeed(speed);
 
   for (int step = 1; step <= steps; step++) {

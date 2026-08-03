@@ -14,6 +14,8 @@ import { DEFAULT_CONVERSATION_MODE, getConversationMode } from './lib/conversati
 import { calibrationTopicsFromMap, createSessionId } from './lib/mqttContract'
 import { getPainterProfile } from './lib/painterProfiles'
 import { getPainterRecipe } from './lib/painterRecipes'
+import { dominantPhysicalEmotion } from './lib/emotionCategories'
+import { mapFaceEmotionToPhysical } from './lib/faceEmotionProvider'
 import {
   DEFAULT_ROBOT_CALIBRATION,
   combineEmotionSummaries,
@@ -59,6 +61,7 @@ function App() {
     lastCalibrationError,
     lastCalibrationCommand,
     publishFaceEmotion,
+    clearSessionState,
     publishSessionStart,
     publishSessionSummary,
     publishSessionWindow,
@@ -120,6 +123,8 @@ function App() {
   const captureDurationMs = captureDurationSeconds * 1000
   const liveFaceSummary = useMemo(() => calculateEmotionSummary(faceEmotionSamples), [faceEmotionSamples])
   const displayedFaceSummary = faceSummary.length ? faceSummary : liveFaceSummary
+  const physicalFaceEmotions = useMemo(() => mapFaceEmotionToPhysical(emotions || {}), [emotions])
+  const physicalDominant = useMemo(() => dominantPhysicalEmotion(physicalFaceEmotions), [physicalFaceEmotions])
 
   useEffect(() => {
     faceSamplesRef.current = faceEmotionSamples
@@ -152,15 +157,15 @@ function App() {
       publishFaceEmotion({
         sessionId,
         artistId: selectedArtist,
-        emotions,
-        dominant,
+        emotions: physicalFaceEmotions,
+        dominant: physicalDominant,
         calibration: robotCalibration,
         mobility,
         sampleCount: faceSamplesRef.current.length,
         sessionActive,
       })
     }
-  }, [calibrationLocked, dominant, emotions, mobility, publishFaceEmotion, robotCalibration, selectedArtist, sessionActive, sessionId])
+  }, [calibrationLocked, dominant, emotions, mobility, physicalDominant, physicalFaceEmotions, publishFaceEmotion, robotCalibration, selectedArtist, sessionActive, sessionId])
 
   useEffect(() => {
     if (!sessionActive || !emotions || !dominant) return
@@ -174,11 +179,11 @@ function App() {
       {
         timestamp: now,
         detection_time: new Date(now).toISOString(),
-        dominant,
-        emotions,
+        dominant: physicalDominant,
+        emotions: physicalFaceEmotions,
       },
     ])
-  }, [dominant, emotions, sessionActive])
+  }, [dominant, emotions, physicalDominant, physicalFaceEmotions, sessionActive])
 
   const publishEmotionWindow = useCallback(({ isFinalWindow = false, windowEndMs = null } = {}) => {
     if (!sessionId || !sessionStartedAt) return false
@@ -327,6 +332,7 @@ function App() {
       return
     }
     setActionMessage(null)
+    clearSessionState()
     setFaceEmotionSamples([])
     setFaceSummary([])
     setCombinedEmotionSummary([])
@@ -368,6 +374,7 @@ function App() {
     captureDurationMs,
     mobility,
     mqttConfig.deviceId,
+    clearSessionState,
     publishSessionStart,
     robotCalibration,
     selectedArtistInfo,
@@ -419,10 +426,11 @@ function App() {
           </svg>
         </a>
         <div className="text-center">
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-xl sm:text-2xl font-semibold tracking-[0.18em] uppercase text-white">Inner Synergy</span>
+            <div className="flex items-center justify-center gap-2">
+              <img src="/logo-esplubot.png" alt="Esplubot" className="h-9 w-9 rounded-full border border-zinc-700 bg-zinc-900 p-1" />
+              <span className="text-xl font-semibold tracking-[0.18em] uppercase text-white sm:text-2xl">Moodcam</span>
           </div>
-          <p className="text-xs text-zinc-500 mt-1">emoción · arte generativo · pintura A4</p>
+            <p className="mt-1 text-xs text-zinc-500">Inner Synergy · emoción · arte generativo · pintura A4</p>
         </div>
         <div className="flex items-center gap-1">
           {mqttConfig.enabled && (
@@ -535,7 +543,7 @@ function App() {
                     ) : (
                       <>
                         <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emoción en vivo</h2>
-                        <EmotionDisplay emotions={emotions} dominant={dominant} age={age} gender={gender} />
+                        <EmotionDisplay emotions={physicalFaceEmotions} dominant={physicalDominant} age={age} gender={gender} />
                       </>
                     )}
                   </div>

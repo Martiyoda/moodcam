@@ -3,16 +3,16 @@ import assert from 'node:assert/strict'
 import { calculateToneMetrics, scoreToneEmotion } from './audioToneAnalyzer.js'
 import { analyzeEmotionText } from './emotionTextAnalyzer.js'
 import { fuseEmotionSignals } from './emotionFusionService.js'
-import { mapFaceEmotionToSimple } from './faceEmotionProvider.js'
+import { mapFaceEmotionToPhysical } from './faceEmotionProvider.js'
 import { getPainterProfile } from './painterProfiles.js'
 import { selectPainterResponse } from './painterResponseSelector.js'
 
-test('analiza texto de voz en categorias simples y colores', () => {
+test('analiza texto de voz en las cuatro categorias fisicas y colores', () => {
   const result = analyzeEmotionText('Estoy nervioso, no sé qué pintar, pero quiero azul')
 
-  assert.ok(result.scores.nervous > 0)
-  assert.ok(result.scores.confused > 0)
-  assert.ok(result.colors.includes('deep_blue'))
+  assert.ok(result.scores.angry > 0)
+  assert.deepEqual(Object.keys(result.scores).sort(), ['angry', 'happy', 'neutral', 'sad'])
+  assert.ok(result.colors.includes('blue'))
 })
 
 test('analiza tono basico con intensidad y silencio', () => {
@@ -21,25 +21,30 @@ test('analiza tono basico con intensidad y silencio', () => {
   const scores = scoreToneEmotion(metrics, 0)
 
   assert.equal(metrics.speaking, false)
-  assert.ok(scores.tired > 0)
+  assert.ok(scores.sad > 0)
+  assert.deepEqual(Object.keys(scores).sort(), ['angry', 'happy', 'neutral', 'sad'])
 })
 
-test('fusiona texto, tono y rostro en emocion simple', () => {
+test('fusiona texto, tono y rostro en una emocion fisica', () => {
   const fused = fuseEmotionSignals({
-    textScores: { joyful: 1 },
-    toneScores: { calm: 1 },
-    faceScores: { joyful: 1 },
+    textScores: { happy: 1 },
+    toneScores: { neutral: 1 },
+    faceScores: { happy: 1 },
   })
 
-  assert.equal(fused.dominant, 'joyful')
+  assert.equal(fused.dominant, 'happy')
   assert.equal(fused.label, 'alegre')
   assert.equal(fused.art_summary[0].emotion, 'happy')
+  assert.equal(fused.art_summary[0].color, 'yellow')
 })
 
-test('mapea emocion facial existente a categorias simples', () => {
-  const scores = mapFaceEmotionToSimple({ happy: 0.8, neutral: 0.2 })
+test('mapea las siete emociones faciales a cuatro categorias fisicas', () => {
+  const scores = mapFaceEmotionToPhysical({ happy: 0.3, fear: 0.2, disgust: 0.2, surprise: 0.3 })
 
-  assert.ok(scores.joyful > scores.calm)
+  assert.deepEqual(Object.keys(scores).sort(), ['angry', 'happy', 'neutral', 'sad'])
+  assert.equal(scores.happy, 0.6)
+  assert.equal(scores.sad, 0.2)
+  assert.equal(scores.angry, 0.2)
 })
 
 test('prepara perfiles de pintor con respuestas emocionales simples', () => {

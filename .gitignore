@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 .env
+.arduino/
 .env.*
 !.env.example
 arduino/main/src/config.h
