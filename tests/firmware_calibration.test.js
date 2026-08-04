@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const config = readFileSync(new URL('../arduino/main/src/robot_config.h', import.meta.url), 'utf8')
+const safety = readFileSync(new URL('../arduino/main/src/core/safety.h', import.meta.url), 'utf8')
 const main = readFileSync(new URL('../arduino/main/main.ino', import.meta.url), 'utf8')
 const motors = readFileSync(new URL('../arduino/main/src/core/motors.cpp', import.meta.url), 'utf8')
 const mqttConfigExample = readFileSync(new URL('../arduino/main/src/config.example.h', import.meta.url), 'utf8')
@@ -48,7 +49,12 @@ test('ejecuta las poses Moodcam para cargar, limpiar y secar el pincel', () => {
   assert.match(main, /pose = \{30, 158, 90, 30\}/)
   assert.match(main, /pose = \{0, 162, 82, 22\}/)
   assert.match(main, /const ServoPose waterPose = \{90, 150, 48, 5\}/)
-  assert.match(main, /for \(int repetition = 0; repetition < 15; repetition\+\+\)/)
+  assert.match(main, /WATER_SHAKE_REPETITIONS = 15/)
+  assert.match(main, /WATER_SHAKE_AMPLITUDE_DEG = 5/)
+  assert.match(main, /WATER_SHAKE_HALF_CYCLE_MS = 100/)
+  const loadPaint = functionBody(main, 'bool loadMoodcamPaint(const String& paintId, int speed) {', 'bool rinseMoodcamBrush(int speed) {')
+  assert.match(loadPaint, /activePaintId\.length\(\) > 0 && activePaintId != paintId[\s\S]*rinseMoodcamBrush\(speed\)[\s\S]*dryMoodcamBrush\(speed\)/)
+  assert.doesNotMatch(loadPaint, /paintShake|PAINT_SHAKE/)
   assert.match(main, /const ServoPose towelPose = \{0, 150, 50, 0\}/)
   assert.match(main, /for \(int repetition = 0; repetition < 10; repetition\+\+\)/)
   assert.match(main, /strokesSincePaintLoad >= 2/)
@@ -129,9 +135,12 @@ test('payload MQTT permite comandos largos con arrays de puntos', () => {
 
 test('mapPointToPose usa la base para el eje X del lienzo', () => {
   const body = functionBody(main, 'ServoPose mapPointToPose(const PathPoint& point) {', 'void handleEmotionCommand(const String& json, bool fromMqtt) {')
-  assert.match(body, /BASE_SERVO_CONFIG\.minAngle/)
-  assert.match(body, /BASE_SERVO_CONFIG\.maxAngle/)
+  assert.match(main, /CANVAS_BASE_LEFT_DEG = 120/)
+  assert.match(main, /CANVAS_BASE_RIGHT_DEG = 50/)
+  assert.match(main, /CANVAS_NEAR_SHOULDER_DEG = 155/)
+  assert.match(main, /CANVAS_FAR_ELBOW_DEG = 144/)
   assert.match(body, /safeX,[\s\S]*PATH_MIN_X,[\s\S]*PATH_MAX_X/)
+  assert.match(body, /static_cast<float>\(CANVAS_BASE_LEFT_DEG\),[\s\S]*static_cast<float>\(CANVAS_BASE_RIGHT_DEG\)/)
   assert.match(body, /return \{[\s\S]*constrain\(base/)
 })
 
@@ -143,18 +152,18 @@ test('ServoPose incluye base y moveToPoseSafe interpola los cuatro servos', () =
   assert.doesNotMatch(move, /if \(speed >= SAFE_MAX_SPEED\)/)
   assert.match(move, /abs\(safeTarget\.base - pose\.base\)/)
   assert.match(motors, /int degreesPerStepForSpeed\(int speed\)/)
+  assert.match(motors, /SAFE_MIN_SPEED, SAFE_MAX_SPEED, 28, 8/)
+  assert.match(motors, /SAFE_MIN_SPEED, SAFE_MAX_SPEED, 1, 4/)
   assert.match(move, /const int steps = max\(1, \(maxDelta \+ degreesPerStep - 1\) \/ degreesPerStep\)/)
   assert.match(move, /start\.base \+ \(\(safeTarget\.base - start\.base\) \* step\)/)
 })
 
-test('al finalizar una obra vuelve a HOME con el pincel levantado', () => {
+test('al finalizar una obra limpia, seca y vuelve a HOME lentamente', () => {
   const execute = functionBody(main, 'bool executeRealPathCommand(const String& json, const String& type) {', 'bool moveMoodcamPose(')
-  assert.match(execute, /if \(type == "paint_sequence_end"\) \{\s*liftBrush\(\);/)
-  assert.match(execute, /BASE_SERVO_CONFIG\.homeAngle/)
-  assert.match(execute, /SHOULDER_SERVO_CONFIG\.homeAngle/)
-  assert.match(execute, /ELBOW_SERVO_CONFIG\.homeAngle/)
-  assert.match(execute, /WRIST_SERVO_CONFIG\.homeAngle/)
-  assert.match(execute, /moveToPoseSafe\(homePose, REAL_SPEED_TRANSIT_DEFAULT\)/)
+  assert.match(execute, /if \(type == "paint_sequence_end"\) \{\s*return rinseMoodcamBrush\(REAL_SPEED_CONTACT_DEFAULT\)\s*&& dryMoodcamBrush\(REAL_SPEED_CONTACT_DEFAULT\)\s*&& moveToHomeSlowly\(\)/)
+  assert.match(main, /bool moveToHomeSlowly\(\) \{[\s\S]*BASE_SERVO_CONFIG\.homeAngle/)
+  assert.match(main, /moveToPoseSafe\(homePose, REAL_SPEED_HOME_DEFAULT\)/)
+  assert.match(main, /if \(type == "stroke" && !moveToHomeSlowly\(\)\)/)
 })
 
 test('moveToPoseSafe libera MQTT entre pasos via callback en lugar de delay bloqueante', () => {
@@ -178,10 +187,12 @@ test('al pasar a modo real sincroniza la pose interna con los angulos comandados
 })
 
 test('aplica protecciones especificas para el servo SG90 de la muneca y el codo extendido', () => {
-  assert.match(main, /REAL_SPEED_STROKE_DEFAULT = 80/)
-  assert.match(main, /REAL_SPEED_CONTACT_DEFAULT = 80/)
-  assert.match(main, /REAL_SPEED_TRANSIT_DEFAULT = 80/)
-  assert.match(main, /WRIST_REAL_MAX_SPEED = 80/)
+  assert.match(safety, /SAFE_MAX_SPEED = 50/)
+  assert.match(main, /REAL_SPEED_STROKE_DEFAULT = 50/)
+  assert.match(main, /REAL_SPEED_CONTACT_DEFAULT = 50/)
+  assert.match(main, /REAL_SPEED_TRANSIT_DEFAULT = 50/)
+  assert.match(main, /REAL_SPEED_HOME_DEFAULT = 45/)
+  assert.match(main, /WRIST_REAL_MAX_SPEED = 50/)
   assert.match(main, /WRIST_SIGNIFICANT_DELTA_DEG = 5/)
   assert.match(main, /ELBOW_EXTENSION_THRESHOLD_DEG = 110/)
   assert.match(main, /ELBOW_EXTENSION_SPEED_PENALTY = 3/)
@@ -190,6 +201,25 @@ test('aplica protecciones especificas para el servo SG90 de la muneca y el codo 
   assert.match(execute, /dynamicSpeed = min\(dynamicSpeed, WRIST_REAL_MAX_SPEED\)/)
   assert.match(execute, /target\.elbow > ELBOW_EXTENSION_THRESHOLD_DEG/)
   assert.match(execute, /dynamicSpeed - ELBOW_EXTENSION_SPEED_PENALTY/)
+  assert.match(execute, /const bool hasBrushServo = brushConfigured\(\)/)
+  assert.match(execute, /FOUR_SERVO_CONTACT_SETTLE_MS/)
+  assert.doesNotMatch(execute, /brush_not_configured/)
+})
+
+test('ejecuta los marcadores de secuencia y recarga pintura tras dos trazos', () => {
+  const queueStart = main.indexOf('void serviceRealCommandQueue() {')
+  const queueEnd = main.indexOf('void printServoConfig(', queueStart)
+  assert.notEqual(queueStart, -1, 'implementacion de serviceRealCommandQueue no encontrada')
+  assert.notEqual(queueEnd, -1, 'fin de serviceRealCommandQueue no encontrado')
+  const queue = main.slice(queueStart, queueEnd)
+  assert.doesNotMatch(queue, /execution=ack/)
+  assert.match(queue, /executeRealPathCommand\(command\.json, command\.type\)/)
+  assert.match(queue, /real_command_failed/)
+
+  const execute = functionBody(main, 'bool executeRealPathCommand(const String& json, const String& type) {', 'bool moveMoodcamPose(')
+  assert.match(execute, /if \(type == "paint_sequence_start"\) \{\s*activePaintId = "";\s*strokesSincePaintLoad = 0;/)
+  assert.match(execute, /if \(type == "paint_sequence_end"\) \{\s*return rinseMoodcamBrush\(REAL_SPEED_CONTACT_DEFAULT\)/)
+  assert.match(execute, /strokesSincePaintLoad >= 2\) \{\s*if \(!loadMoodcamPaint/)
 })
 
 test('modo real usa FIFO acotado y publica backpressure para el AI Bridge', () => {

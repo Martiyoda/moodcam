@@ -86,14 +86,7 @@ export function startAiBridge(config = loadBridgeConfig()) {
         const sessionState = getSession(payload.session_id) || {}
         const queueBlockReason = queueBackpressureReason(sessionState.latestRobotStatus, config)
         if (queueBlockReason) {
-          publishBridgeError(client, config, {
-            session_id: payload.session_id,
-            severity: 'warning',
-            message: queueBlockReason,
-            fallback: false,
-          })
-          console.warn(`Ventana ${payload.window_index} pausada: ${queueBlockReason}`)
-          return
+          console.warn(`Ventana ${payload.window_index} en espera: ${queueBlockReason}`)
         }
 
         const decision = await decideArtChunk({ emotionWindow: payload, sessionState, config })

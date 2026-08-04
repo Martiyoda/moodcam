@@ -5,21 +5,20 @@ const ARTIST_PALETTES = {
   'alma-thomas': { primary: '#f6c453', accent: '#5ec4d8' },
 }
 
-export default function MoodcamAvatar({ artist, voiceStatus, sessionActive, captureComplete, progress }) {
+export default function MoodcamAvatar({ artist, voiceStatus, sessionActive, captureComplete }) {
   const palette = ARTIST_PALETTES[artist?.id] || ARTIST_PALETTES.kandinsky
   const speaking = voiceStatus === 'listening' || voiceStatus === 'live'
   const state = avatarState({ speaking, sessionActive, captureComplete })
 
   return (
     <div
-      className="relative min-h-56 overflow-hidden rounded-md border border-zinc-800 bg-zinc-950"
+      className="relative aspect-square min-h-72 overflow-hidden rounded-md border border-zinc-800 bg-zinc-950"
       aria-label={`Avatar Moodcam: ${state.label}`}
     >
       <video className="absolute inset-0 h-full w-full object-cover opacity-45" src="/moodcam-avatar/background.mp4" autoPlay loop muted playsInline aria-hidden="true" />
       <video className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${speaking ? 'opacity-0' : 'opacity-100'}`} src="/moodcam-avatar/idle.mp4" autoPlay loop muted playsInline aria-hidden="true" />
       <video className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${speaking ? 'opacity-100' : 'opacity-0'}`} src="/moodcam-avatar/speak.mp4" autoPlay loop muted playsInline aria-hidden="true" />
       <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
-      <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: palette.primary, transform: `scaleX(${Math.max(0.04, progress / 100)})`, transformOrigin: 'left' }} />
 
       <div className="relative z-10 flex min-h-56 items-center justify-center p-5">
         <div className="relative h-36 w-32 opacity-0" aria-hidden="true">

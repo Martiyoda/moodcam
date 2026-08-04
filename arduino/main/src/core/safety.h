@@ -4,7 +4,7 @@
 
 // Limites globales editables. Se aplican antes de ejecutar cualquier trazo.
 constexpr int SAFE_MIN_SPEED = 1;
-constexpr int SAFE_MAX_SPEED = 80;
+constexpr int SAFE_MAX_SPEED = 50;
 constexpr int SAFE_MIN_INTENSITY = 0;
 constexpr int SAFE_MAX_INTENSITY = 85;
 constexpr int SAFE_MIN_DURATION_MS = 250;

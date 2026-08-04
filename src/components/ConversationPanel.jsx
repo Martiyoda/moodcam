@@ -7,50 +7,20 @@ export default function ConversationPanel({
   transcript,
   mode,
   voiceEnabled,
-  remainingSeconds,
-  captureDurationSeconds,
-  progress,
   sessionActive,
   captureComplete,
 }) {
-  const progressValue = Math.max(0, Math.min(100, progress || 0))
-  const progressStyle = sessionActive
-    ? { animation: `capture-progress-fill ${captureDurationSeconds}s linear forwards` }
-    : { transform: `scaleX(${progressValue / 100})` }
-  const modeLabel = voiceEnabled ? mode?.label || 'Sesión visual' : 'Sesión sólo rostro'
-  const modeDescription = voiceEnabled
-    ? mode?.description || `Moodcam mide la emoción visual durante ${captureDurationSeconds} segundos.`
-    : `Moodcam usa únicamente la cámara para estimar la emoción durante ${captureDurationSeconds} segundos.`
-
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Avatar</h2>
-          <p className="text-xs text-gray-500 mt-1">{modeDescription}</p>
-        </div>
-        <StatusBadge status={status} mode={mode} voiceEnabled={voiceEnabled} />
-      </div>
-
       <MoodcamAvatar
         artist={artist}
         voiceStatus={status}
         sessionActive={sessionActive}
         captureComplete={captureComplete}
-        progress={progressValue}
       />
 
-      <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-4 space-y-3">
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{modeLabel}</span>
-          <span className="text-2xl font-semibold text-white">{captureComplete ? '0s' : sessionActive ? `${remainingSeconds}s` : `${captureDurationSeconds}s`}</span>
-        </div>
-        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-          <div
-            className="h-full w-full origin-left bg-linear-to-r from-cyan-300 via-amber-300 to-rose-400"
-            style={progressStyle}
-          />
-        </div>
+      <div className="flex justify-end">
+        <StatusBadge status={status} mode={mode} voiceEnabled={voiceEnabled} />
       </div>
 
       {error && (
@@ -92,7 +62,7 @@ function StatusBadge({ status, mode, voiceEnabled }) {
     error: 'bg-red-500/15 text-red-200',
   }
   const labels = {
-    idle: 'Listo',
+    idle: 'Rostro + voz',
     starting: 'Iniciando',
     listening: 'Escuchando',
     connecting: 'Conectando',

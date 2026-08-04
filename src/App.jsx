@@ -22,8 +22,8 @@ import {
   summarizeVoiceEmotion,
 } from './lib/voiceEngine'
 
-const DEFAULT_SESSION_MS = 30_000
-const SESSION_WINDOW_MS = 5_000
+const DEFAULT_SESSION_MS = 60_000
+const SESSION_WINDOW_SCHEDULE_MS = [7500, 15000, 22500, 30000, 37500, 45000, 52500, 60000]
 const FACE_SAMPLE_INTERVAL_MS = 650
 const VOICE_CAPTURE_ENABLED = true
 
@@ -108,6 +108,7 @@ function App() {
   const lastWindowVoiceCursorRef = useRef(0)
   const lastWindowTranscriptCursorRef = useRef(0)
   const lastPublishedWindowIndexRef = useRef(-1)
+  const captureSectionRef = useRef(null)
 
   const selectedArtistInfo = useMemo(() => getArtistById(selectedArtist), [selectedArtist])
   const selectedPainterProfile = useMemo(() => getPainterProfile(selectedArtist), [selectedArtist])
@@ -119,7 +120,7 @@ function App() {
   const voiceAvailable = VOICE_CAPTURE_ENABLED && bridgeOpenAiConfigured
   const voiceCaptureActive = voiceAvailable && voiceConsentGranted
   const calibrationLocked = armCalibrationState.moving
-  const captureDurationSeconds = Math.max(1, Number(detectionConfig.session?.captureSeconds) || 30)
+  const captureDurationSeconds = Math.max(1, Number(detectionConfig.session?.captureSeconds) || 60)
   const captureDurationMs = captureDurationSeconds * 1000
   const liveFaceSummary = useMemo(() => calculateEmotionSummary(faceEmotionSamples), [faceEmotionSamples])
   const displayedFaceSummary = faceSummary.length ? faceSummary : liveFaceSummary
@@ -185,12 +186,14 @@ function App() {
     ])
   }, [dominant, emotions, physicalDominant, physicalFaceEmotions, sessionActive])
 
-  const publishEmotionWindow = useCallback(({ isFinalWindow = false, windowEndMs = null } = {}) => {
+  const publishEmotionWindow = useCallback(({ isFinalWindow = false, windowIndex, windowStartMs, windowEndMs } = {}) => {
     if (!sessionId || !sessionStartedAt) return false
 
     const elapsedMs = windowEndMs ?? Math.max(0, Date.now() - sessionStartedAt)
-    const windowIndex = Math.max(0, Math.ceil(elapsedMs / SESSION_WINDOW_MS) - 1)
-    if (windowIndex <= lastPublishedWindowIndexRef.current) return false
+    const nextWindowIndex = windowIndex ?? SESSION_WINDOW_SCHEDULE_MS.findIndex((milestoneMs) => elapsedMs >= milestoneMs)
+    if (nextWindowIndex < 0 || nextWindowIndex <= lastPublishedWindowIndexRef.current) return false
+    const nextWindowStartMs = windowStartMs ?? (nextWindowIndex === 0 ? 0 : SESSION_WINDOW_SCHEDULE_MS[nextWindowIndex - 1])
+    const nextWindowEndMs = Math.min(captureDurationMs, windowEndMs ?? SESSION_WINDOW_SCHEDULE_MS[nextWindowIndex])
 
 
     const faceSamples = faceSamplesRef.current.slice(lastWindowFaceCursorRef.current)
@@ -206,9 +209,9 @@ function App() {
 
     const published = publishSessionWindow({
       sessionId,
-      windowIndex,
-      windowStartMs: Math.max(0, windowIndex * SESSION_WINDOW_MS),
-      windowEndMs: Math.min(captureDurationMs, Math.max(elapsedMs, (windowIndex + 1) * SESSION_WINDOW_MS)),
+      windowIndex: nextWindowIndex,
+      windowStartMs: nextWindowStartMs,
+      windowEndMs: nextWindowEndMs,
       isFinalWindow,
       artist: selectedArtistInfo,
       artistRecipeId: selectedPainterRecipe.id,
@@ -226,7 +229,7 @@ function App() {
     })
 
     if (published) {
-      lastPublishedWindowIndexRef.current = windowIndex
+      lastPublishedWindowIndexRef.current = nextWindowIndex
       lastWindowFaceCursorRef.current = faceSamplesRef.current.length
       lastWindowVoiceCursorRef.current = voiceSamplesRef.current.length
       lastWindowTranscriptCursorRef.current = transcriptRef.current.length
@@ -259,7 +262,12 @@ function App() {
         : nextFaceSummary
 
     stopVoiceDetection()
-    publishEmotionWindow({ isFinalWindow: true, windowEndMs: captureDurationMs })
+    publishEmotionWindow({
+      isFinalWindow: true,
+      windowIndex: SESSION_WINDOW_SCHEDULE_MS.length - 1,
+      windowStartMs: SESSION_WINDOW_SCHEDULE_MS.at(-2),
+      windowEndMs: captureDurationMs,
+    })
     setSessionActive(false)
     setRemainingMs(0)
     setFaceSummary(nextFaceSummary)
@@ -282,7 +290,7 @@ function App() {
     publishSessionEnd({
       sessionId,
       artist: selectedArtistInfo,
-      totalWindows: Math.ceil(captureDurationMs / SESSION_WINDOW_MS),
+      totalWindows: SESSION_WINDOW_SCHEDULE_MS.length,
       durationMs: captureDurationMs,
       reason: nextCombinedSummary.length > 0 ? 'completed' : 'insufficient_emotion_data',
       calibration: robotCalibration,
@@ -318,8 +326,13 @@ function App() {
         finishSession()
         return
       }
-      if (elapsed >= (lastPublishedWindowIndexRef.current + 1) * SESSION_WINDOW_MS + SESSION_WINDOW_MS) {
-        publishEmotionWindow()
+      const nextWindowIndex = lastPublishedWindowIndexRef.current + 1
+      if (elapsed >= SESSION_WINDOW_SCHEDULE_MS[nextWindowIndex]) {
+        publishEmotionWindow({
+          windowIndex: nextWindowIndex,
+          windowStartMs: nextWindowIndex === 0 ? 0 : SESSION_WINDOW_SCHEDULE_MS[nextWindowIndex - 1],
+          windowEndMs: SESSION_WINDOW_SCHEDULE_MS[nextWindowIndex],
+        })
       }
     }, 250)
 
@@ -368,6 +381,9 @@ function App() {
     setRemainingMs(captureDurationMs)
     setSessionStartedAt(Date.now())
     setSessionActive(true)
+    requestAnimationFrame(() => {
+      captureSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }, [
     cameraActive,
     conversationMode.id,
@@ -508,12 +524,19 @@ function App() {
 
               {error && <div className="bg-red-950/40 border border-red-700 text-red-200 rounded-lg p-3 text-sm text-center">{error}</div>}
 
-              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] gap-4">
+              <div ref={captureSectionRef} className="grid grid-cols-1 xl:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.55fr)] gap-4 xl:items-start">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 md:p-4">
                   <CameraView videoRef={videoRef} canvasRef={canvasRef} cameraActive={cameraActive} />
+                  <CaptureTimer
+                    remainingSeconds={remainingSeconds}
+                    captureDurationSeconds={captureDurationSeconds}
+                    progress={captureProgress}
+                    sessionActive={sessionActive}
+                    captureComplete={combinedEmotionSummary.length > 0}
+                  />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+                <div className="grid gap-4 xl:grid-cols-[minmax(360px,1fr)_minmax(230px,0.6fr)] xl:items-start">
                   <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
                     <ConversationPanel
                       artist={selectedArtistInfo}
@@ -522,33 +545,29 @@ function App() {
                       transcript={transcript}
                       mode={conversationMode}
                       voiceEnabled={voiceCaptureActive}
-                      remainingSeconds={remainingSeconds}
-                      captureDurationSeconds={captureDurationSeconds}
-                      progress={captureProgress}
                       sessionActive={sessionActive}
                       captureComplete={combinedEmotionSummary.length > 0}
                     />
                   </div>
 
-                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
-                    {combinedEmotionSummary.length > 0 ? (
-                      <VoiceEmotionPanel
-                        latestSample={latestVoiceSample}
-                        summary={voiceSummary}
-                        combinedSummary={combinedEmotionSummary}
-                        faceSummary={displayedFaceSummary}
-                        title="Resumen de emociones"
-                        description={`Lectura capturada durante ${captureDurationSeconds} segundos.`}
-                      />
-                    ) : (
-                      <>
-                        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emoción en vivo</h2>
-                        <EmotionDisplay emotions={physicalFaceEmotions} dominant={physicalDominant} age={age} gender={gender} />
-                      </>
-                    )}
-                  </div>
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
+                      {combinedEmotionSummary.length > 0 ? (
+                        <VoiceEmotionPanel
+                          latestSample={latestVoiceSample}
+                          summary={voiceSummary}
+                          combinedSummary={combinedEmotionSummary}
+                          faceSummary={displayedFaceSummary}
+                          title="Emociones predominantes"
+                        />
+                      ) : (
+                        <>
+                          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emociones predominantes</h2>
+                          <EmotionDisplay emotions={physicalFaceEmotions} dominant={physicalDominant} age={age} gender={gender} />
+                        </>
+                      )}
+                    </div>
 
-                  <div className="md:col-span-2 xl:col-span-1">
                     <VoiceCaptureStatus
                       enabled={voiceCaptureActive}
                       status={voiceStatus}
@@ -602,6 +621,11 @@ function App() {
 function DynamicArtworkStatus({ aiChunk, aiPlan, robotStatus, sessionActive }) {
   const queueDepth = Number(robotStatus?.queue_depth)
   const hasQueueDepth = Number.isFinite(queueDepth)
+  const windowIndex = Number(aiChunk?.payload?.window_index)
+  const packageLabel = Number.isInteger(windowIndex) ? `${windowIndex + 1}/8` : '-'
+  const strokeCount = Array.isArray(aiChunk?.payload?.robot_commands)
+    ? aiChunk.payload.robot_commands.filter((command) => command.type === 'stroke').length
+    : '-'
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4 space-y-3">
@@ -613,8 +637,8 @@ function DynamicArtworkStatus({ aiChunk, aiPlan, robotStatus, sessionActive }) {
       </div>
       <div className="grid grid-cols-2 gap-2">
         <StatusMetric label="Último chunk" value={aiChunk?.payload?.chunk_id || aiChunk?.payload?.id || 'pendiente'} />
-        <StatusMetric label="Ventana" value={aiChunk?.payload?.window_index ?? '-'} />
-        <StatusMetric label="Comandos" value={aiChunk?.payload?.command_count ?? '-'} />
+        <StatusMetric label="Paquete" value={packageLabel} />
+        <StatusMetric label="Trazos" value={strokeCount} />
         <StatusMetric label="Cola robot" value={hasQueueDepth ? `${queueDepth}/${robotStatus.queue_capacity ?? '?'}` : robotStatus?.queue_full ? 'llena' : '-'} />
       </div>
       {aiPlan && (
@@ -659,10 +683,7 @@ function VoiceCaptureStatus({ enabled, status, error, latestSample, transcript }
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4 space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Captura de voz</h2>
-          <p className="text-xs text-gray-500 mt-1">{enabled ? 'Señal vocal y transcript durante la sesión.' : 'Sólo se está usando emoción facial.'}</p>
-        </div>
+        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Captura de voz</h2>
         <span className="rounded-md bg-zinc-950 px-2 py-1 text-xs font-semibold text-zinc-300">{label}</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -670,6 +691,26 @@ function VoiceCaptureStatus({ enabled, status, error, latestSample, transcript }
         <StatusMetric label="Transcript" value={enabled ? `${transcript.length} entradas` : '-'} />
       </div>
       {error && <p className="text-xs text-red-300">{error}</p>}
+    </div>
+  )
+}
+
+function CaptureTimer({ remainingSeconds, captureDurationSeconds, progress, sessionActive, captureComplete }) {
+  const progressValue = Math.max(0, Math.min(100, progress || 0))
+  const progressStyle = sessionActive
+    ? { animation: `capture-progress-fill ${captureDurationSeconds}s linear forwards` }
+    : { transform: `scaleX(${progressValue / 100})` }
+  const timeValue = captureComplete ? '0s' : sessionActive ? `${remainingSeconds}s` : `${captureDurationSeconds}s`
+
+  return (
+    <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Tiempo de captura</span>
+        <span className="text-2xl font-semibold text-zinc-100">{timeValue}</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800">
+        <div className="h-full w-full origin-left bg-linear-to-r from-cyan-300 via-amber-300 to-rose-400" style={progressStyle} />
+      </div>
     </div>
   )
 }

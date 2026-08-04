@@ -73,11 +73,11 @@ CalibrationJoint* calibrationJointByName(const char* servoName) {
 }
 
 int stepDelayForSpeed(int speed) {
-  return map(constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED), SAFE_MIN_SPEED, SAFE_MAX_SPEED, 28, 4);
+  return map(constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED), SAFE_MIN_SPEED, SAFE_MAX_SPEED, 28, 8);
 }
 
 int degreesPerStepForSpeed(int speed) {
-  return map(constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED), SAFE_MIN_SPEED, SAFE_MAX_SPEED, 1, 6);
+  return map(constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED), SAFE_MIN_SPEED, SAFE_MAX_SPEED, 1, 4);
 }
 
 void writePose(const ServoPose& nextPose) {

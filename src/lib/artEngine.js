@@ -5,6 +5,7 @@ const CANVAS_HEIGHT = 160
 const SAFE_MARGIN = 6
 const Z_UP = 28
 const Z_PAINT = 8
+export const MAX_SESSION_STROKES = 8
 
 let activeRandom = Math.random
 
@@ -218,8 +219,16 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
   const movementLevel = clamp(mobility, 0, 100)
   const resolvedCalibration = normalizeCalibration(calibration)
 
-  const baseColors = uniqueColors([...primaryProfile.colors, ...secondaryProfile.colors]).slice(0, 5)
-  const colors = selectPalette(baseColors, colorPreferences, resolvedCalibration.paints)
+  const recipe = getPainterRecipe(artist.id)
+  const recipeColors = uniqueStrings([
+    ...getRecipeColorsForEmotion(recipe, primary.emotion),
+    ...getRecipeColorsForEmotion(recipe, secondary.emotion),
+  ])
+  const baseColors = recipeColors.map((colorId) => {
+    const color = getPhysicalColor(colorId)
+    return { name: color.id, hex: color.hex }
+  })
+  const colors = selectPalette(baseColors, colorPreferences, resolvedCalibration.paints).slice(0, 2)
   const speed = clamp(
     Math.round(weightedAverage(primaryProfile.speed, secondaryProfile.speed, primary.percentage) * 0.45 + artist.baseSpeed * 0.35 + movementLevel * 0.2),
     15,
@@ -241,7 +250,7 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
     100
   )
 
-  const strokeCount = clamp(Math.round(6 + density / 8 + movementLevel / 7), 8, 16)
+  const strokeCount = clamp(Math.round(6 + density / 8 + movementLevel / 7), 8, MAX_SESSION_STROKES)
   const shapes = uniqueStrings([...artist.shapes, ...primaryProfile.shapes, ...secondaryProfile.shapes]).slice(0, 7)
   const planId = `plan-${Date.now()}`
 
@@ -334,16 +343,9 @@ export function generateArtChunk({ windowSummary = [], artistId, recipe = null, 
     )
     const randomness = clamp(directives.randomness ?? artist.randomness, 0, 100)
     const completedStrokeCount = Math.max(0, Number(sessionState.completed_stroke_count) || 0)
-    const remainingStrokeBudget = Math.max(0, 16 - completedStrokeCount)
-    const remainingWindows = Math.max(1, Number(sessionState.remaining_windows) || 1)
-    const strokeCount = Math.min(
-      remainingStrokeBudget,
-      clamp(
-        Math.ceil(remainingStrokeBudget / remainingWindows),
-        0,
-        resolvedRecipe.limits.max_strokes_per_chunk
-      )
-    )
+    const maxSessionStrokes = Math.max(0, Number(sessionState.max_strokes) || MAX_SESSION_STROKES)
+    const remainingStrokeBudget = Math.max(0, maxSessionStrokes - completedStrokeCount)
+    const strokeCount = remainingStrokeBudget > 0 ? 1 : 0
     const shapes = uniqueStrings([...(directives.gestures || []), ...resolvedRecipe.allowed_gestures, ...artist.shapes]).slice(0, 7)
     const chunkId = sessionState.chunk_id || `${sessionState.session_id || 'session'}-window-${sessionState.window_index || 0}-chunk-${sessionState.chunk_index || 1}`
 
@@ -411,15 +413,6 @@ function normalizeScore(value) {
 function weightedAverage(primaryValue, secondaryValue, primaryPercentage) {
   const primaryWeight = clamp(primaryPercentage || 50, 0, 100) / 100
   return primaryValue * primaryWeight + secondaryValue * (1 - primaryWeight)
-}
-
-function uniqueColors(colors) {
-  const seen = new Set()
-  return colors.filter((color) => {
-    if (seen.has(color.name)) return false
-    seen.add(color.name)
-    return true
-  })
 }
 
 function uniqueStrings(values) {
@@ -556,12 +549,6 @@ function createPaintLoadCommands(station, calibration) {
 
   return [
     {
-      type: 'move_to_paint',
-      color: station.color,
-      paint_id: station.id,
-      points: [upPoint],
-    },
-    {
       type: 'dip_paint',
       color: station.color,
       paint_id: station.id,
@@ -635,14 +622,19 @@ function createStroke({ index, artist, shapes, colors, speed, pressure, randomne
 }
 
 function pickShape(artist, shapes, index) {
-  if (artist.id === 'alma-thomas') return index % 3 === 0 ? 'mosaic' : 'dash'
-  if (artist.id === 'rothko') return index % 2 === 0 ? 'block' : 'wash'
-  if (artist.id === 'pollock') return ['splatter', 'flick', 'loop', 'drip'][index % 4]
-  if (artist.id === 'de-kooning') return ['gesture', 'slash', 'curve', 'broken_line'][index % 4]
-  return shapes[index % shapes.length]
+  const legacyStrokes = [
+    'moodcam_vertical',
+    'moodcam_left',
+    'moodcam_right',
+    'moodcam_diagonal_left',
+    'moodcam_diagonal_right',
+  ]
+  const artistOffset = ARTISTS.findIndex((candidate) => candidate.id === artist.id)
+  return legacyStrokes[(index + Math.max(artistOffset, 0)) % legacyStrokes.length]
 }
 
 function createPointsForShape(shape, direction, movementLevel, jitter, index) {
+  if (shape.startsWith('moodcam_')) return moodcamStrokePoints(shape, movementLevel)
   if (shape === 'circle') return circlePoints(randomX(), randomY(), randomBetween(10, 24 + movementLevel * 0.1), 14)
   if (shape === 'spiral') return spiralPoints(randomX(), randomY(), randomBetween(8, 24 + movementLevel * 0.1), 18)
   if (shape === 'triangle') return polygonPoints(randomX(), randomY(), randomBetween(16, 34 + movementLevel * 0.16), 3, -Math.PI / 2)
@@ -652,6 +644,28 @@ function createPointsForShape(shape, direction, movementLevel, jitter, index) {
   if (shape === 'splatter' || shape === 'flick' || shape === 'drip' || shape === 'loop') return actionPoints(shape, movementLevel, jitter)
   if (shape === 'gesture' || shape === 'slash' || shape === 'curve' || shape === 'broken_line') return gesturePoints(direction, movementLevel, jitter)
   return linePoints(direction, movementLevel, jitter)
+}
+
+function moodcamStrokePoints(shape, movementLevel) {
+  const vectors = {
+    moodcam_vertical: { x: 0, y: 1, length: [56, 92] },
+    moodcam_left: { x: -1, y: 0, length: [48, 76] },
+    moodcam_right: { x: 1, y: 0, length: [48, 76] },
+    moodcam_diagonal_left: { x: -0.55, y: 1, length: [52, 82] },
+    moodcam_diagonal_right: { x: 0.55, y: 1, length: [52, 82] },
+  }
+  const vector = vectors[shape]
+  const length = randomBetween(vector.length[0], vector.length[1] + movementLevel * 0.12)
+  const magnitude = Math.hypot(vector.x, vector.y)
+  const dx = (vector.x / magnitude) * length
+  const dy = (vector.y / magnitude) * length
+  const centerX = randomBetween(18 + Math.abs(dx) / 2, CANVAS_WIDTH - 18 - Math.abs(dx) / 2)
+  const centerY = randomBetween(18 + Math.abs(dy) / 2, CANVAS_HEIGHT - 18 - Math.abs(dy) / 2)
+
+  return withLift([
+    point(centerX - dx / 2, centerY - dy / 2, Z_PAINT, 1),
+    point(centerX + dx / 2, centerY + dy / 2, Z_PAINT, 1),
+  ])
 }
 
 function randomX() {

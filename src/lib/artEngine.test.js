@@ -17,7 +17,7 @@ test('genera plan dentro de A4 horizontal', () => {
   assert.equal(plan.canvas.width, 297)
   assert.equal(plan.canvas.height, 210)
   assert.ok(plan.strokes.length > 0)
-  assert.ok(plan.strokes.length <= 16)
+  assert.ok(plan.strokes.length <= 8)
   assert.ok(plan.strokes.every((stroke) => stroke.points.length <= 10))
 
   const strokePoints = plan.robot_commands
@@ -30,6 +30,27 @@ test('genera plan dentro de A4 horizontal', () => {
     assert.ok(point.y >= DEFAULT_ROBOT_CALIBRATION.canvas.originY + DEFAULT_ROBOT_CALIBRATION.canvas.margin)
     assert.ok(point.y <= DEFAULT_ROBOT_CALIBRATION.canvas.height - DEFAULT_ROBOT_CALIBRATION.canvas.margin)
   })
+  assert.ok(strokePoints.some((point) => point.brush === 0 && point.z === DEFAULT_ROBOT_CALIBRATION.z.up))
+  assert.ok(strokePoints.some((point) => point.brush === 1 && point.z === DEFAULT_ROBOT_CALIBRATION.z.paint))
+})
+
+test('limita los trazos a las cinco trayectorias Moodcam validadas', () => {
+  const plan = generateArtPlan({
+    mainEmotions: [{ emotion: 'angry', label: 'Tension', percentage: 100 }],
+    artistId: 'pollock',
+    mobility: 100,
+    calibration: DEFAULT_ROBOT_CALIBRATION,
+  })
+  const allowedShapes = new Set([
+    'moodcam_vertical',
+    'moodcam_left',
+    'moodcam_right',
+    'moodcam_diagonal_left',
+    'moodcam_diagonal_right',
+  ])
+
+  assert.ok(plan.strokes.every((stroke) => allowedShapes.has(stroke.shape)))
+  assert.ok(plan.strokes.every((stroke) => stroke.points.length === 4))
 })
 
 test('incluye comandos de pintura, agua, trazos y reposo', () => {
@@ -46,7 +67,6 @@ test('incluye comandos de pintura, agua, trazos y reposo', () => {
 
   const commandTypes = plan.robot_commands.map((command) => command.type)
 
-  assert.ok(commandTypes.includes('move_to_paint'))
   assert.ok(commandTypes.includes('dip_paint'))
   assert.ok(commandTypes.includes('stroke'))
   assert.ok(commandTypes.includes('move_to_water'))
@@ -54,6 +74,20 @@ test('incluye comandos de pintura, agua, trazos y reposo', () => {
   assert.ok(commandTypes.includes('move_to_towel'))
   assert.ok(commandTypes.includes('dry_brush'))
   assert.equal(commandTypes.at(-1), 'move_to_rest')
+})
+
+test('elige solamente colores fisicos segun la emocion y el pintor', () => {
+  const plan = generateArtPlan({
+    mainEmotions: [{ emotion: 'sad', label: 'Tristeza', percentage: 100 }],
+    artistId: 'kandinsky',
+    calibration: DEFAULT_ROBOT_CALIBRATION,
+    colorPreferences: ['black', 'orange'],
+  })
+
+  assert.ok(plan.colors.every((color) => ['blue', 'violet'].includes(color)))
+  assert.ok(plan.robot_commands
+    .filter((command) => command.type === 'dip_paint' || command.type === 'stroke')
+    .every((command) => ['blue', 'violet'].includes(command.paint_id)))
 })
 
 test('genera chunks deterministas y acotados por ventana', () => {
@@ -81,7 +115,8 @@ test('genera chunks deterministas y acotados por ventana', () => {
   assert.equal(first.chunk_id, 's1-window-2-chunk-1')
   assert.equal(first.window_index, 2)
   assert.equal(first.queue_policy, 'enqueue')
-  assert.ok(first.strokes.length <= 5)
+  assert.ok(first.strokes.length >= 1)
+  assert.ok(first.strokes.length <= 3)
   assert.equal(first.robot_commands.some((command) => command.type === 'move_to_rest'), false)
   assert.ok(first.colors.every((color) => ['blue', 'violet', 'red', 'yellow'].includes(color)))
 
@@ -97,17 +132,38 @@ test('genera chunks deterministas y acotados por ventana', () => {
   })
 })
 
-test('respeta el presupuesto total de trazos de la sesion', () => {
-  const chunk = generateArtChunk({
+test('genera ocho paquetes de un trazo sin superar ocho trazos por sesion', () => {
+  let completedStrokeCount = 0
+  const chunks = Array.from({ length: 8 }, (_, windowIndex) => {
+    const chunk = generateArtChunk({
+      windowSummary: [{ emotion: 'happy', label: 'Alegria', percentage: 100 }],
+      artistId: 'pollock',
+      calibration: DEFAULT_ROBOT_CALIBRATION,
+      sessionState: {
+        session_id: 's-budget',
+        window_index: windowIndex,
+        completed_stroke_count: completedStrokeCount,
+        remaining_windows: 8 - windowIndex,
+      },
+    })
+    completedStrokeCount += chunk.strokes.length
+    return chunk
+  })
+
+  assert.equal(chunks.length, 8)
+  assert.ok(chunks.every((chunk) => chunk.strokes.length === 1))
+  assert.equal(completedStrokeCount, 8)
+
+  const fullSessionChunk = generateArtChunk({
     windowSummary: [{ emotion: 'happy', label: 'Alegria', percentage: 100 }],
     artistId: 'pollock',
     calibration: DEFAULT_ROBOT_CALIBRATION,
     sessionState: {
-      session_id: 's-budget',
-      completed_stroke_count: 14,
+      session_id: 's-full-budget',
+      completed_stroke_count: 8,
       remaining_windows: 1,
     },
   })
 
-  assert.equal(chunk.strokes.length, 2)
+  assert.equal(fullSessionChunk.strokes.length, 0)
 })

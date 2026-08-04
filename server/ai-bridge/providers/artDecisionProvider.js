@@ -1,12 +1,11 @@
-import { generateArtChunk, generateArtPlan, getArtistById, getEmotionLabel } from '../../../src/lib/artEngine.js'
+import { MAX_SESSION_STROKES, generateArtChunk, generateArtPlan, getArtistById, getEmotionLabel } from '../../../src/lib/artEngine.js'
 import { getPainterRecipe, getPainterRecipeById, isPhysicalColor, recipeToPromptContext } from '../../../src/lib/painterRecipes.js'
 import { resolveSessionEmotions } from './emotionProvider.js'
 import { resolveVoiceProvider } from './voiceProvider.js'
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 const ART_EMOTIONS = ['happy', 'angry', 'sad', 'neutral']
-const MAX_SESSION_STROKES = 16
-const SESSION_WINDOW_COUNT = 12
+const SESSION_WINDOW_COUNT = 8
 
 const DECISION_SCHEMA = {
   type: 'object',
@@ -149,6 +148,7 @@ export async function decideArtChunk({ emotionWindow, sessionState = {}, config,
       chunk_index: 1,
       chunk_total: 1,
       completed_stroke_count: sessionState.completed_stroke_count || 0,
+      max_strokes: MAX_SESSION_STROKES,
       remaining_windows: Math.max(1, SESSION_WINDOW_COUNT - (emotionWindow?.window_index || 0)),
     },
     calibration: emotionWindow?.calibration || sessionState.calibration,

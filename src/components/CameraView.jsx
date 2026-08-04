@@ -1,6 +1,6 @@
 export default function CameraView({ videoRef, canvasRef, cameraActive }) {
   return (
-    <div className="relative w-full max-w-lg mx-auto aspect-[4/3] bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
+    <div className="relative w-full max-w-sm mx-auto aspect-[4/3] bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
       {!cameraActive && (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
           <svg
