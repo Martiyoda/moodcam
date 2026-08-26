@@ -25,10 +25,6 @@ const ARTIST_PROMPTS = {
     name: 'Alma Thomas',
     instructions: 'Habla con sensibilidad hacia patrones, mosaicos, luz, naturaleza y color alegre.',
   },
-  'de-kooning': {
-    name: 'De Kooning',
-    instructions: 'Habla con gesto intenso, curvas rotas, energía expresiva y composición fragmentada.',
-  },
 }
 
 function getArtistPrompt(artistId) {
