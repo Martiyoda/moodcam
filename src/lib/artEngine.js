@@ -163,19 +163,6 @@ export const ARTISTS = [
     randomness: 28,
     mobility: 68,
   },
-  {
-    id: 'de-kooning',
-    name: 'De Kooning',
-    style: 'gesture',
-    label: 'Gesto intenso',
-    summary: 'Curvas rotas, barridos y trazos fragmentados.',
-    shapes: ['gesture', 'slash', 'curve', 'broken_line'],
-    baseSpeed: 82,
-    basePressure: 72,
-    density: 74,
-    randomness: 70,
-    mobility: 90,
-  },
 ]
 
 export function getArtistById(artistId) {
@@ -622,15 +609,16 @@ function createStroke({ index, artist, shapes, colors, speed, pressure, randomne
 }
 
 function pickShape(artist, shapes, index) {
-  const legacyStrokes = [
-    'moodcam_vertical',
-    'moodcam_left',
-    'moodcam_right',
-    'moodcam_diagonal_left',
-    'moodcam_diagonal_right',
-  ]
+  const supportedShapes = shapes.filter((shape) => [
+    'circle', 'triangle', 'line', 'arc', 'spiral', 'open_arc',
+    'splatter', 'flick', 'loop', 'drip', 'broken_line',
+    'block', 'wash', 'horizon', 'soft_edge',
+    'dash', 'mosaic', 'short_arc', 'column', 'ring',
+  ].includes(shape))
+  const artistShapes = artist.shapes.filter((shape) => supportedShapes.includes(shape))
   const artistOffset = ARTISTS.findIndex((candidate) => candidate.id === artist.id)
-  return legacyStrokes[(index + Math.max(artistOffset, 0)) % legacyStrokes.length]
+  const selectedShapes = artistShapes.length ? artistShapes : (supportedShapes.length ? supportedShapes : ['line'])
+  return selectedShapes[(index + Math.max(artistOffset, 0)) % selectedShapes.length]
 }
 
 function createPointsForShape(shape, direction, movementLevel, jitter, index) {
@@ -639,8 +627,10 @@ function createPointsForShape(shape, direction, movementLevel, jitter, index) {
   if (shape === 'spiral') return spiralPoints(randomX(), randomY(), randomBetween(8, 24 + movementLevel * 0.1), 18)
   if (shape === 'triangle') return polygonPoints(randomX(), randomY(), randomBetween(16, 34 + movementLevel * 0.16), 3, -Math.PI / 2)
   if (shape === 'arc' || shape === 'open_arc') return arcPoints(randomX(), randomY(), randomBetween(18, 38), 12)
-  if (shape === 'block' || shape === 'wash' || shape === 'horizon') return blockPoints(index, movementLevel)
-  if (shape === 'mosaic' || shape === 'dash' || shape === 'short_arc') return dashPoints(index, movementLevel, shape === 'short_arc')
+  if (shape === 'block' || shape === 'wash' || shape === 'horizon' || shape === 'soft_edge') return blockPoints(index, movementLevel)
+  if (shape === 'mosaic' || shape === 'dash' || shape === 'short_arc' || shape === 'column' || shape === 'ring') {
+    return dashPoints(index, movementLevel, shape === 'short_arc' || shape === 'ring')
+  }
   if (shape === 'splatter' || shape === 'flick' || shape === 'drip' || shape === 'loop') return actionPoints(shape, movementLevel, jitter)
   if (shape === 'gesture' || shape === 'slash' || shape === 'curve' || shape === 'broken_line') return gesturePoints(direction, movementLevel, jitter)
   return linePoints(direction, movementLevel, jitter)
@@ -678,8 +668,9 @@ function randomY() {
 
 function circlePoints(cx, cy, radius, segments) {
   const points = []
-  for (let i = 0; i <= segments; i += 1) {
-    const angle = (Math.PI * 2 * i) / segments
+  const safeSegments = Math.min(8, segments)
+  for (let i = 0; i <= safeSegments; i += 1) {
+    const angle = (Math.PI * 2 * i) / safeSegments
     points.push(point(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, Z_PAINT, 1))
   }
   return withLift(points)
@@ -687,8 +678,9 @@ function circlePoints(cx, cy, radius, segments) {
 
 function spiralPoints(cx, cy, radius, segments) {
   const points = []
-  for (let i = 0; i <= segments; i += 1) {
-    const t = i / segments
+  const safeSegments = Math.min(8, segments)
+  for (let i = 0; i <= safeSegments; i += 1) {
+    const t = i / safeSegments
     const angle = Math.PI * 4.5 * t
     const r = radius * t
     points.push(point(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, Z_PAINT, 1))
@@ -709,8 +701,9 @@ function arcPoints(cx, cy, radius, segments) {
   const start = randomBetween(-Math.PI, Math.PI * 0.3)
   const span = randomBetween(Math.PI * 0.7, Math.PI * 1.5)
   const points = []
-  for (let i = 0; i <= segments; i += 1) {
-    const angle = start + (span * i) / segments
+  const safeSegments = Math.min(8, segments)
+  for (let i = 0; i <= safeSegments; i += 1) {
+    const angle = start + (span * i) / safeSegments
     points.push(point(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, Z_PAINT, 1))
   }
   return withLift(points)
@@ -732,7 +725,7 @@ function blockPoints(index, movementLevel) {
   const height = randomBetween(22, 42 + movementLevel * 0.1)
   const x = clamp(randomBetween(18, CANVAS_WIDTH - width - 18), 12, CANVAS_WIDTH - width - 12)
   const y = clamp(22 + (index % 5) * 24 + randomBetween(-8, 8), 12, CANVAS_HEIGHT - height - 12)
-  const rows = Math.max(3, Math.round(height / 8))
+  const rows = 3
   const points = []
 
   for (let row = 0; row <= rows; row += 1) {
@@ -766,7 +759,7 @@ function dashPoints(index, movementLevel, curved = false) {
 function actionPoints(shape, movementLevel, jitter) {
   const start = { x: randomX(), y: randomY() }
   const points = []
-  const count = shape === 'loop' ? 11 : 4 + Math.round(movementLevel / 18)
+  const count = shape === 'loop' ? 8 : Math.min(8, 4 + Math.round(movementLevel / 18))
   let angle = randomBetween(0, Math.PI * 2)
   let x = start.x
   let y = start.y
@@ -787,7 +780,7 @@ function actionPoints(shape, movementLevel, jitter) {
 function gesturePoints(direction, movementLevel, jitter) {
   const start = { x: randomX(), y: randomY() }
   const points = []
-  const count = 5 + Math.round(movementLevel / 18)
+  const count = Math.min(8, 5 + Math.round(movementLevel / 18))
   let angle = angleForDirection(direction) + randomBetween(-0.8, 0.8)
   let x = start.x
   let y = start.y

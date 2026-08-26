@@ -34,23 +34,25 @@ test('genera plan dentro de A4 horizontal', () => {
   assert.ok(strokePoints.some((point) => point.brush === 1 && point.z === DEFAULT_ROBOT_CALIBRATION.z.paint))
 })
 
-test('limita los trazos a las cinco trayectorias Moodcam validadas', () => {
-  const plan = generateArtPlan({
-    mainEmotions: [{ emotion: 'angry', label: 'Tension', percentage: 100 }],
-    artistId: 'pollock',
-    mobility: 100,
-    calibration: DEFAULT_ROBOT_CALIBRATION,
-  })
-  const allowedShapes = new Set([
-    'moodcam_vertical',
-    'moodcam_left',
-    'moodcam_right',
-    'moodcam_diagonal_left',
-    'moodcam_diagonal_right',
-  ])
+test('genera trazos propios para cada pintor dentro del limite seguro', () => {
+  const expectedShapes = {
+    kandinsky: new Set(['circle', 'triangle', 'line', 'arc', 'spiral', 'open_arc']),
+    pollock: new Set(['splatter', 'flick', 'loop', 'drip', 'broken_line']),
+    rothko: new Set(['block', 'wash', 'horizon', 'soft_edge']),
+    'alma-thomas': new Set(['dash', 'mosaic', 'short_arc', 'column', 'ring']),
+  }
 
-  assert.ok(plan.strokes.every((stroke) => allowedShapes.has(stroke.shape)))
-  assert.ok(plan.strokes.every((stroke) => stroke.points.length === 4))
+  Object.entries(expectedShapes).forEach(([artistId, allowedShapes]) => {
+    const plan = generateArtPlan({
+      mainEmotions: [{ emotion: 'angry', label: 'Tension', percentage: 100 }],
+      artistId,
+      mobility: 100,
+      calibration: DEFAULT_ROBOT_CALIBRATION,
+    })
+
+    assert.ok(plan.strokes.every((stroke) => allowedShapes.has(stroke.shape)))
+    assert.ok(plan.strokes.every((stroke) => stroke.points.length <= 10))
+  })
 })
 
 test('incluye comandos de pintura, agua, trazos y reposo', () => {

@@ -19,8 +19,6 @@ test('define recetas WRO solo para los cuatro pintores de presentacion', () => {
     ])
 
     assert.deepEqual(WRO_PAINTER_RECIPES.map((recipe) => recipe.artist_id), WRO_PRESENTATION_ARTIST_IDS)
-
-    assert.equal(WRO_PAINTER_RECIPES.some((recipe) => recipe.artist_id === 'de-kooning'), false)
 })
 
 test('limita la paleta fisica inicial a cuatro colores', () => {

@@ -47,17 +47,6 @@ const PAINTER_SCRIPT_DATA = {
       neutral: 'Empezare con un patron claro, luminoso y estable.',
     },
   },
-  'de-kooning': {
-    responses: {
-      joyful: 'La alegria saldra como curvas grandes y cortes de color con mucha presencia.',
-      calm: 'Voy a suavizar el gesto y dejar que las curvas se abran sin romperse.',
-      sad: 'Usare barridos lentos y fragmentos oscuros para mover esa emocion con cuidado.',
-      nervous: 'La tension ira a trazos rotos y diagonales, pero con control de velocidad y margen.',
-      tired: 'Reducire el gesto: menos presion, curvas bajas y una composicion mas respirada.',
-      confused: 'Trabajare con fragmentos, capas y curvas cruzadas hasta encontrar una direccion.',
-      neutral: 'Hare un gesto base: suficiente energia para empezar, sin forzar el cuadro.',
-    },
-  },
 }
 
 export function getPainterProfiles() {
