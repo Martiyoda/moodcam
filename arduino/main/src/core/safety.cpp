@@ -24,12 +24,11 @@ bool isEmergencyStopped() {
 }
 
 // Recorta todos los parametros recibidos a limites globales conservadores.
-MotionParameters sanitizeMotionParameters(int speed, int intensity, int durationMs, int pressure) {
+MotionParameters sanitizeMotionParameters(int speed, int intensity, int durationMs) {
   return {
     constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED),
     constrain(intensity, SAFE_MIN_INTENSITY, SAFE_MAX_INTENSITY),
-    constrain(durationMs, SAFE_MIN_DURATION_MS, SAFE_MAX_DURATION_MS),
-    constrain(pressure, SAFE_MIN_PRESSURE, SAFE_MAX_PRESSURE)
+    constrain(durationMs, SAFE_MIN_DURATION_MS, SAFE_MAX_DURATION_MS)
   };
 }
 

@@ -8,7 +8,6 @@
 #include "src/config.example.h"
 #endif
 
-#include "src/core/brush.h"   
 #include "src/core/motors.h"
 #include "src/core/safety.h"
 #include "src/robot_config.h"
@@ -60,7 +59,6 @@ struct PathPoint {
 
 struct RealCommandProfile {
   int speed;
-  int pressure;
   unsigned long minPauseMs;
   bool forceBrushUp;
   bool forceBrushDown;
@@ -89,6 +87,7 @@ constexpr int CANVAS_NEAR_SHOULDER_DEG = 155;
 constexpr int CANVAS_FAR_SHOULDER_DEG = 159;
 constexpr int CANVAS_NEAR_ELBOW_DEG = 70;
 constexpr int CANVAS_FAR_ELBOW_DEG = 144;
+constexpr int CANVAS_WRIST_CONTACT_OFFSET_DEG = 3;
 
 // Geometria medida del brazo impreso 3D (aprox):
 // - hombro -> codo: 230 mm
@@ -108,18 +107,22 @@ constexpr int REAL_SPEED_STROKE_DEFAULT = 50;
 constexpr int REAL_SPEED_CONTACT_DEFAULT = 50;
 constexpr int REAL_SPEED_TRANSIT_DEFAULT = 50;
 constexpr int REAL_SPEED_HOME_DEFAULT = 45;
-constexpr int REAL_PRESSURE_STROKE_DEFAULT = 28;
-constexpr int REAL_PRESSURE_CONTACT_DEFAULT = 38;
-constexpr int REAL_PRESSURE_TRANSIT_DEFAULT = 16;
 constexpr int REAL_MIN_PAUSE_STROKE_MS = 1;
 constexpr int REAL_MIN_PAUSE_CONTACT_MS = 36;
 constexpr int REAL_MIN_PAUSE_TRANSIT_MS = 14;
 constexpr int REAL_MIN_STEP_PAUSE_MS = 1;
 constexpr int REAL_MAX_STEP_PAUSE_MS = 2000;
 constexpr unsigned long FOUR_SERVO_CONTACT_SETTLE_MS = 80;
-constexpr int WATER_SHAKE_REPETITIONS = 15;
-constexpr int WATER_SHAKE_AMPLITUDE_DEG = 5;
-constexpr unsigned long WATER_SHAKE_HALF_CYCLE_MS = 100;
+constexpr int WATER_SHAKE_REPETITIONS = 7;
+constexpr int DRY_TOWEL_REPETITIONS = 5;
+constexpr unsigned long DRY_TOWEL_HALF_CYCLE_MS = 40;
+constexpr int DRY_TOWEL_START_BASE_DEG = 3;
+constexpr int DRY_TOWEL_MAX_BASE_DEG = 20;
+constexpr int PAINT_LOAD_CIRCLE_REPETITIONS = 2;
+constexpr int PAINT_LOAD_CIRCLE_RADIUS_DEG = 5;
+constexpr unsigned long PAINT_LOAD_SETTLE_MS = 1000;
+constexpr int WATER_SHAKE_WRIST_AMPLITUDE_DEG = 5;
+constexpr unsigned long WATER_SHAKE_HALF_CYCLE_MS = 50;
 
 // Limites especificos para el servo de muneca (SG90 9g, plastico, bajo par):
 // no debe ejecutarse a la velocidad maxima cuando hay desplazamiento angular
@@ -200,7 +203,6 @@ void setup() {
   Serial.setTimeout(50);
   beginSafety();
   beginMotors();
-  beginBrush();
   clearEmergencyStop();
   // Permite que moveToPoseSafe siga procesando MQTT entre pasos de
   // interpolacion para no perder presencia durante un stroke largo.
@@ -383,8 +385,6 @@ void printStatus() {
   Serial.println(operatingModeText());
   Serial.print("MOTOR_OUTPUT_ENABLED: ");
   Serial.println(MOTOR_OUTPUT_ENABLED ? "true" : "false");
-  Serial.print("BRUSH_OUTPUT_ENABLED: ");
-  Serial.println(BRUSH_OUTPUT_ENABLED ? "true" : "false");
   Serial.println("Mapa definitivo de servos:");
   for (size_t index = 0; index < ROBOT_SERVO_COUNT; index++) {
     printServoConfig(ROBOT_SERVOS[index]);
@@ -667,7 +667,6 @@ void publishJointState() {
 void publishStopped(const char* source) {
   requestEmergencyStop();
   clearRealCommandQueue();
-  stopBrush();
   stopMotors();
   const char* stoppedServo = nullptr;
   int stoppedAngle = -1;
@@ -995,7 +994,6 @@ bool executeRealPathCommand(const String& json, const String& type) {
   if (type == "paint_sequence_start") {
     activePaintId = "";
     strokesSincePaintLoad = 0;
-    liftBrush();
     return true;
   }
   if (type == "paint_sequence_end") {
@@ -1020,8 +1018,7 @@ bool executeRealPathCommand(const String& json, const String& type) {
   const MotionParameters safe = sanitizeMotionParameters(
     profile.speed,
     extractIntValue(json, "intensity", 40),
-    extractIntValue(json, "duration_ms", type == "stroke" ? 150 : 1200),
-    profile.pressure
+    extractIntValue(json, "duration_ms", type == "stroke" ? 150 : 1200)
   );
 
   const unsigned long pausePerPoint = max(
@@ -1032,7 +1029,6 @@ bool executeRealPathCommand(const String& json, const String& type) {
   const float armReachMm = ARM_SHOULDER_TO_ELBOW_MM + ARM_ELBOW_TO_WRIST_MM;
   const float canvasDiagonalMm = sqrt(PATH_MAX_X * PATH_MAX_X + PATH_MAX_Y * PATH_MAX_Y);
   const float reachToCanvasRatio = canvasDiagonalMm <= 0.0f ? 1.0f : armReachMm / canvasDiagonalMm;
-  const bool hasBrushServo = brushConfigured();
   bool previousPointWasContact = false;
 
   if (type == "stroke") {
@@ -1041,10 +1037,6 @@ bool executeRealPathCommand(const String& json, const String& type) {
       requestedPaintId = extractStringValue(json, "color");
     }
     if (requestedPaintId.length() > 0 && requestedPaintId != activePaintId) {
-      if (activePaintId.length() > 0 && (!rinseMoodcamBrush(REAL_SPEED_CONTACT_DEFAULT)
-          || !dryMoodcamBrush(REAL_SPEED_CONTACT_DEFAULT))) {
-        return false;
-      }
       if (!loadMoodcamPaint(requestedPaintId, REAL_SPEED_CONTACT_DEFAULT)) {
         publishError("color de pintura no configurado en Moodcam");
         return false;
@@ -1059,7 +1051,6 @@ bool executeRealPathCommand(const String& json, const String& type) {
 
   for (size_t index = 0; index < pointCount; index++) {
     if (isEmergencyStopped()) {
-      stopBrush();
       stopMotors();
       publishError("ejecucion interrumpida por parada de emergencia");
       return false;
@@ -1067,13 +1058,6 @@ bool executeRealPathCommand(const String& json, const String& type) {
 
     const ServoPose target = mapPointToPose(points[index]);
     const bool contactPoint = !profile.forceBrushUp && (profile.forceBrushDown || points[index].brush > 0);
-    if (hasBrushServo) {
-      if (contactPoint) {
-        setBrushPressureSafe(safe.pressure);
-      } else {
-        liftBrush();
-      }
-    }
 
     const float minEdgeDistance = min(
       min(points[index].x - PATH_MIN_X, PATH_MAX_X - points[index].x),
@@ -1101,7 +1085,6 @@ bool executeRealPathCommand(const String& json, const String& type) {
     }
 
     if (!moveToPoseSafe(target, dynamicSpeed)) {
-      stopBrush();
       stopMotors();
       publishError("fallo al mover pose en modo real");
       return false;
@@ -1110,7 +1093,6 @@ bool executeRealPathCommand(const String& json, const String& type) {
     // El brazo de cuatro servos usa la muneca como eje Z: el primer punto con
     // brush=1 llega a z de contacto antes de avanzar por el trazo.
     if (contactPoint && !previousPointWasContact && !waitSafely(FOUR_SERVO_CONTACT_SETTLE_MS)) {
-      stopBrush();
       stopMotors();
       publishError("ejecucion interrumpida al apoyar el pincel");
       return false;
@@ -1118,14 +1100,12 @@ bool executeRealPathCommand(const String& json, const String& type) {
     previousPointWasContact = contactPoint;
 
     if (type != "stroke" && !waitSafely(pausePerPoint)) {
-      stopBrush();
       stopMotors();
       publishError("ejecucion interrumpida durante espera segura");
       return false;
     }
   }
 
-  liftBrush();
   if (type == "stroke" && activePaintId.length() > 0) {
     strokesSincePaintLoad++;
   }
@@ -1137,12 +1117,10 @@ bool executeRealPathCommand(const String& json, const String& type) {
 }
 
 bool moveMoodcamPose(const ServoPose& target, int speed) {
-  liftBrush();
   return moveToPoseSafe(target, speed);
 }
 
 bool moveToHomeSlowly() {
-  liftBrush();
   const ServoPose homePose = {
     BASE_SERVO_CONFIG.homeAngle,
     SHOULDER_SERVO_CONFIG.homeAngle,
@@ -1156,13 +1134,13 @@ bool moodcamPaintPose(const String& paintId, ServoPose& pose) {
   String normalized = paintId;
   normalized.toLowerCase();
   if (normalized == "yellow" || normalized == "amarillo") {
-    pose = {172, 158, 73, 17};
+    pose = {172, 158, 73, 47};
   } else if (normalized == "red" || normalized == "rojo") {
-    pose = {143, 158, 85, 30};
+    pose = {143, 158, 85, 60};
   } else if (normalized == "violet" || normalized == "purple" || normalized == "morado") {
-    pose = {30, 158, 90, 30};
+    pose = {30, 158, 90, 60};
   } else if (normalized == "blue" || normalized == "light_blue" || normalized == "azul") {
-    pose = {0, 162, 82, 22};
+    pose = {0, 162, 82, 52};
   } else {
     return false;
   }
@@ -1174,6 +1152,9 @@ bool loadMoodcamPaint(const String& paintId, int speed) {
       && (!rinseMoodcamBrush(speed) || !dryMoodcamBrush(speed))) {
     return false;
   }
+  if (!moveToHomeSlowly()) {
+    return false;
+  }
   ServoPose paintPose;
   if (!moodcamPaintPose(paintId, paintPose)) {
     return false;
@@ -1181,14 +1162,32 @@ bool loadMoodcamPaint(const String& paintId, int speed) {
   if (!moveMoodcamPose(paintPose, speed)) {
     return false;
   }
+  const int paintLoadSpeed = constrain(speed / 2, SAFE_MIN_SPEED, SAFE_MAX_SPEED);
   const ServoPose dipPose = {
     paintPose.base,
     constrain(paintPose.shoulder + 3, SHOULDER_SERVO_CONFIG.minAngle, SHOULDER_SERVO_CONFIG.maxAngle),
     paintPose.elbow,
-    constrain(paintPose.wrist - 2, WRIST_SERVO_CONFIG.minAngle, WRIST_SERVO_CONFIG.maxAngle)
+    constrain(paintPose.wrist - 17, WRIST_SERVO_CONFIG.minAngle, WRIST_SERVO_CONFIG.maxAngle)
   };
-  if (!moveMoodcamPose(dipPose, speed)) {
+  if (!moveMoodcamPose(dipPose, paintLoadSpeed) || !waitSafely(PAINT_LOAD_SETTLE_MS)) {
     return false;
+  }
+  const int circleRadius = PAINT_LOAD_CIRCLE_RADIUS_DEG;
+  const ServoPose circlePoints[] = {
+    {constrain(dipPose.base + circleRadius, BASE_SERVO_CONFIG.minAngle, BASE_SERVO_CONFIG.maxAngle), dipPose.shoulder, dipPose.elbow, dipPose.wrist},
+    {dipPose.base, constrain(dipPose.shoulder + circleRadius, SHOULDER_SERVO_CONFIG.minAngle, SHOULDER_SERVO_CONFIG.maxAngle), dipPose.elbow, dipPose.wrist},
+    {constrain(dipPose.base - circleRadius, BASE_SERVO_CONFIG.minAngle, BASE_SERVO_CONFIG.maxAngle), dipPose.shoulder, dipPose.elbow, dipPose.wrist},
+    {dipPose.base, constrain(dipPose.shoulder - circleRadius, SHOULDER_SERVO_CONFIG.minAngle, SHOULDER_SERVO_CONFIG.maxAngle), dipPose.elbow, dipPose.wrist}
+  };
+  for (int repetition = 0; repetition < PAINT_LOAD_CIRCLE_REPETITIONS; repetition++) {
+    for (const ServoPose& circlePoint : circlePoints) {
+      if (!moveMoodcamPose(circlePoint, paintLoadSpeed)) {
+        return false;
+      }
+    }
+    if (!moveMoodcamPose(dipPose, paintLoadSpeed)) {
+      return false;
+    }
   }
   activePaintId = paintId;
   strokesSincePaintLoad = 0;
@@ -1196,12 +1195,12 @@ bool loadMoodcamPaint(const String& paintId, int speed) {
 }
 
 bool rinseMoodcamBrush(int speed) {
-  const ServoPose waterPose = {90, 150, 48, 5};
+  const ServoPose waterPose = {90, 150, 48, 0};
   if (!moveMoodcamPose(waterPose, speed)) {
     return false;
   }
-  const ServoPose right = {90, 150, 48, 5 + WATER_SHAKE_AMPLITUDE_DEG};
-  const ServoPose left = {90, 150, 48, 5 - WATER_SHAKE_AMPLITUDE_DEG};
+  const ServoPose right = {90, 150, 48, WATER_SHAKE_WRIST_AMPLITUDE_DEG};
+  const ServoPose left = {90, 150, 48, 0};
   for (int repetition = 0; repetition < WATER_SHAKE_REPETITIONS; repetition++) {
     if (!moveMoodcamPose(right, speed) || !waitSafely(WATER_SHAKE_HALF_CYCLE_MS)
       || !moveMoodcamPose(left, speed) || !waitSafely(WATER_SHAKE_HALF_CYCLE_MS)) {
@@ -1214,15 +1213,15 @@ bool rinseMoodcamBrush(int speed) {
 }
 
 bool dryMoodcamBrush(int speed) {
-  const ServoPose towelPose = {0, 150, 50, 0};
+  const ServoPose towelPose = {DRY_TOWEL_START_BASE_DEG, 150, 50, 0};
   if (!moveMoodcamPose(towelPose, speed)) {
     return false;
   }
-  for (int repetition = 0; repetition < 10; repetition++) {
-    const ServoPose upper = {30, 155, 50, 0};
+  for (int repetition = 0; repetition < DRY_TOWEL_REPETITIONS; repetition++) {
+    const ServoPose upper = {DRY_TOWEL_MAX_BASE_DEG, 155, 50, 0};
     const ServoPose lower = {0, 145, 50, 0};
-    if (!moveMoodcamPose(upper, speed) || !waitSafely(60)
-      || !moveMoodcamPose(lower, speed) || !waitSafely(60)) {
+    if (!moveMoodcamPose(upper, speed) || !waitSafely(DRY_TOWEL_HALF_CYCLE_MS)
+      || !moveMoodcamPose(lower, speed) || !waitSafely(DRY_TOWEL_HALF_CYCLE_MS)) {
       return false;
     }
   }
@@ -1243,13 +1242,13 @@ bool executeMoodcamStationCommand(const String& json, const String& type) {
     return moodcamPaintPose(paintId, paintPose) && moveMoodcamPose(paintPose, speed);
   }
   if (type == "move_to_water") {
-    return moveMoodcamPose({90, 110, 40, 15}, speed);
+    return moveMoodcamPose({90, 110, 40, 0}, speed);
   }
   if (type == "rinse_brush") {
     return rinseMoodcamBrush(speed);
   }
   if (type == "move_to_towel") {
-    return moveMoodcamPose({0, 110, 60, 20}, speed);
+    return moveMoodcamPose({0, 110, 60, 0}, speed);
   }
   return dryMoodcamBrush(speed);
 }
@@ -1267,9 +1266,6 @@ RealCommandProfile buildRealCommandProfile(const String& type, const String& jso
   const int defaultSpeed = isStroke
     ? REAL_SPEED_STROKE_DEFAULT
     : ((isPaintLoad || isWater || isTowel) ? REAL_SPEED_CONTACT_DEFAULT : REAL_SPEED_TRANSIT_DEFAULT);
-  const int defaultPressure = isStroke
-    ? REAL_PRESSURE_STROKE_DEFAULT
-    : ((isPaintLoad || isWater || isTowel) ? REAL_PRESSURE_CONTACT_DEFAULT : REAL_PRESSURE_TRANSIT_DEFAULT);
   const int defaultPause = isStroke
     ? REAL_MIN_PAUSE_STROKE_MS
     : ((isPaintLoad || isWater || isTowel) ? REAL_MIN_PAUSE_CONTACT_MS : REAL_MIN_PAUSE_TRANSIT_MS);
@@ -1281,7 +1277,6 @@ RealCommandProfile buildRealCommandProfile(const String& type, const String& jso
 
   return {
     extractIntValue(json, "speed", defaultSpeed),
-    extractIntValue(json, "pressure", defaultPressure),
     static_cast<unsigned long>(requestedPause),
     isTransit,
     isPaintLoad || isWater || isTowel
@@ -1433,8 +1428,8 @@ ServoPose mapPointToPose(const PathPoint& point) {
     safeZ,
     PATH_MIN_Z,
     PATH_MAX_Z,
-    static_cast<float>(wristMin),
-    static_cast<float>(wristMax)
+    static_cast<float>(wristMin + CANVAS_WRIST_CONTACT_OFFSET_DEG),
+    static_cast<float>(wristMax + CANVAS_WRIST_CONTACT_OFFSET_DEG)
   ));
 
   return {

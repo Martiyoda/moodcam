@@ -1,4 +1,4 @@
-#if 0
+#if defined(MOTOR_TEST_SKETCH)
 /*
   ==========================================================
   TEST DE MOTORES - BRAZO ROBOTICO (ESP32 + ESP32Servo)
@@ -55,6 +55,12 @@ int posHombro = 90;
 int posCodo   = 90;
 int posMuneca = 90;
 
+void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, bool invertirDireccion);
+void moverServo(Servo &servo, int grados, const char* nombre);
+void mostrarPosiciones();
+void testBarrido();
+void testUnServo(Servo &servo, int &posActual, const char* nombre, int posicionHome);
+
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -86,7 +92,7 @@ void setup() {
   Serial.println(" Brazo robotico listo para pruebas");
   Serial.println(" Comandos relativos: b+/-grados h+/-grados c+/-grados m+/-grados");
   Serial.println(" Ejemplo: b10 suma 10; b-10 resta 10 desde la posicion actual");
-  Serial.println(" Posicion inicial: BASE=90 HOMBRO=90 CODO=90 MUNECA=90");
+  Serial.println(" Posicion HOME: BASE=90 HOMBRO=90 CODO=90 MUNECA=90");
   Serial.println(" t = test de barrido automatico");
   Serial.println(" s = mostrar posiciones actuales");
   Serial.println("==========================================");
@@ -175,15 +181,15 @@ void mostrarPosiciones() {
 void testBarrido() {
   Serial.println(">> Iniciando test de barrido automatico...");
 
-  testUnServo(servoBase, posBase, "BASE");
-  testUnServo(servoHombro, posHombro, "HOMBRO");
-  testUnServo(servoCodo, posCodo, "CODO");
-  testUnServo(servoMuneca, posMuneca, "MUNECA");
+  testUnServo(servoBase, posBase, "BASE", 90);
+  testUnServo(servoHombro, posHombro, "HOMBRO", 90);
+  testUnServo(servoCodo, posCodo, "CODO", 90);
+  testUnServo(servoMuneca, posMuneca, "MUNECA", 90);
 
   Serial.println(">> Test de barrido finalizado.");
 }
 
-void testUnServo(Servo &servo, int &posActual, const char* nombre) {
+void testUnServo(Servo &servo, int &posActual, const char* nombre, int posicionHome) {
   Serial.print(">> Probando "); Serial.println(nombre);
 
   for (int angulo = ANGULO_MIN; angulo <= ANGULO_MAX; angulo += 5) {
@@ -195,8 +201,8 @@ void testUnServo(Servo &servo, int &posActual, const char* nombre) {
     delay(30);
   }
 
-  servo.write(90); // vuelve al centro
-  posActual = 90;
+  servo.write(posicionHome);
+  posActual = posicionHome;
   delay(300);
 }
 #endif
