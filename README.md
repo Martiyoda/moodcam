@@ -36,7 +36,6 @@ No hay modo simulador que sustituya al brazo fisico. Moodcam es el nombre tecnic
 - server/: backend local y AI Bridge.
 - arduino/main/: firmware del brazo.
 - packages/contracts/: contrato MQTT compartido.
-- strokes/: recetas artisticas validadas.
 - examples/: utilidades de prueba por MQTT.
 
 ## Requisitos

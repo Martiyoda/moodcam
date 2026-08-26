@@ -96,7 +96,6 @@ Nunca escribas secretos reales en archivos versionados. `arduino/main/src/config
 - `server/ai-bridge/`: proceso MQTT que decide planes y publica comandos.
 - `server/ai-bridge/providers/artDecisionProvider.js`: OpenAI/fallback local para planes artisticos.
 - `server/ai-bridge/providers/robotCommandPublisher.js`: publica plan y secuencia de comandos al robot.
-- `server/validator.js`, `server/load_strokes.js`, `strokes/`: validador y recetas historicas/auxiliares.
 - `packages/contracts/mqttContract.js`: fuente de verdad de topics, payloads, client ids y secuencias de comandos.
 - `arduino/main/main.ino`: firmware activo del ESP32.
 - `arduino/main/src/robot_config.h`: pines, limites y flags de modo seguro/final.
@@ -202,9 +201,8 @@ Pintores soportados:
 - `pollock`: accion y salpicadura.
 - `rothko`: campos de color.
 - `alma-thomas`: patron/mosaico.
-- `de-kooning`: gesto intenso.
 
-En la UI de presentacion solo deben mostrarse los cuatro pintores con receta WRO (`kandinsky`, `pollock`, `rothko`, `alma-thomas`). `de-kooning` puede existir como compatibilidad tecnica, pero no debe aparecer en el selector principal.
+En la UI de presentacion se muestran los cuatro pintores con receta WRO: `kandinsky`, `pollock`, `rothko` y `alma-thomas`.
 
 Emociones soportadas:
 
