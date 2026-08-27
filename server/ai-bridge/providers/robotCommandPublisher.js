@@ -1,8 +1,10 @@
+// Publica planes/chunks y sus comandos, respetando capacidad de cola y orden global.
 import { TOPIC_KEYS, buildStrokeChunkPayload, createRobotCommandSequence } from '../../../packages/contracts/mqttContract.js'
 
 let robotCommandPublishChain = Promise.resolve()
 
 export async function publishPlanAndCommands(client, config, plan, options = {}) {
+  // Envía el plan y después su secuencia de comandos físicos.
   return runExclusiveRobotPublish(async () => {
     publishJson(client, config.topics[TOPIC_KEYS.strokePlan], plan, { qos: 1 })
 
@@ -23,6 +25,7 @@ export async function publishPlanAndCommands(client, config, plan, options = {})
 }
 
 export async function publishChunkAndCommands(client, config, chunk, options = {}) {
+  // Envía un chunk incremental y sus comandos asociados.
   return runExclusiveRobotPublish(async () => {
     publishJson(client, config.topics[TOPIC_KEYS.strokeChunk], buildStrokeChunkPayload({
       sessionId: chunk.session_id,
@@ -55,6 +58,7 @@ export async function publishChunkAndCommands(client, config, chunk, options = {
 }
 
 export function publishBridgeError(client, config, payload) {
+  // Notifica errores de decisión o fallback al resto del sistema.
   publishJson(client, config.topics[TOPIC_KEYS.systemError], {
     type: 'ai_bridge_error',
     device_id: config.deviceId,
@@ -82,6 +86,7 @@ async function waitForQueueCapacity(waitForQueueCapacity) {
 }
 
 function runExclusiveRobotPublish(task) {
+  // Serializa publicaciones para evitar que dos sesiones intercalen comandos.
   const result = robotCommandPublishChain.then(task, task)
   robotCommandPublishChain = result.catch(() => {})
   return result

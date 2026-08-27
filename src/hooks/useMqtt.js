@@ -1,3 +1,4 @@
+// Hook MQTT de la web: gestiona conexión, presencia, eventos de sesión y estado del robot.
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mqtt from 'mqtt'
 import {

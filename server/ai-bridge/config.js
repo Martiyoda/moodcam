@@ -1,9 +1,11 @@
+// Carga y normaliza la configuración del proceso que conecta MQTT, IA y robot.
 import { DEFAULT_DEVICE_ID, TOPIC_KEYS, buildPresencePayload, createMqttClientId, createTopicMap, normalizeDeviceId } from '../../packages/contracts/mqttContract.js'
 import { loadServerEnv } from '../loadEnv.js'
 
 loadServerEnv()
 
 export function loadBridgeConfig(env = process.env) {
+  // Construye una configuración completa con límites seguros y topics coherentes.
   const deviceId = normalizeDeviceId(env.MQTT_DEVICE_ID || env.MOODCAM_DEVICE_ID || DEFAULT_DEVICE_ID)
   const topics = createTopicMap(deviceId)
   applyTopicOverrides(topics, env)
@@ -23,6 +25,7 @@ export function loadBridgeConfig(env = process.env) {
 }
 
 export function buildMqttOptions(config) {
+  // Prepara autenticación, reconexión y mensaje de última voluntad MQTT.
   const options = {
     clean: true,
     reconnectPeriod: 5000,

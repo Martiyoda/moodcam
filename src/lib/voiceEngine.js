@@ -1,3 +1,4 @@
+// Analiza tono y transcripción temporal para obtener señales emocionales y preferencias de color.
 import { dominantPhysicalEmotion, physicalScoresToArtSummary, toPhysicalEmotionId, toPhysicalEmotionScores } from './emotionCategories.js'
 
 export const DEFAULT_ROBOT_CALIBRATION = {
@@ -39,6 +40,7 @@ const COLOR_KEYWORDS = {
 }
 
 export function createVoiceSample(metrics, text = '') {
+  // Convierte una lectura de audio y texto en una muestra normalizada para la sesión.
   const audioScores = scoreAudioEmotion(metrics)
   const textAnalysis = analyzeTranscriptText(text)
   const emotionScores = toPhysicalEmotionScores(mergeEmotionScores(audioScores, textAnalysis.emotionScores, 0.65, 0.35))
@@ -63,6 +65,7 @@ export function createVoiceSample(metrics, text = '') {
 }
 
 export function analyzeTranscriptText(text = '') {
+  // Busca palabras de emoción y color sin enviar audio al broker MQTT.
   const normalized = normalizeText(text)
   const emotionScores = {}
   const keywords = []
@@ -91,6 +94,7 @@ export function analyzeTranscriptText(text = '') {
 }
 
 export function summarizeVoiceEmotion(samples, transcriptItems = []) {
+  // Resume las muestras nuevas de voz para incluirlas en una ventana MQTT.
   const totals = {}
   const colors = []
   const keywords = []

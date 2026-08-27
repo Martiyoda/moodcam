@@ -1,3 +1,4 @@
+// Página explicativa que presenta el flujo del proyecto sin participar en la sesión operativa.
 import { useEffect, useRef } from 'react'
 import './project.css'
 

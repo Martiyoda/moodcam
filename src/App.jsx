@@ -1,3 +1,4 @@
+// Pantalla operativa principal: coordina cámara, voz, sesión MQTT, pintor y estado del robot.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useFaceDetection from './hooks/useFaceDetection'
 import useMqtt from './hooks/useMqtt'

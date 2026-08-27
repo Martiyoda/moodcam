@@ -1,3 +1,4 @@
+// Hook opcional de voz: analiza audio y transcripción temporal con consentimiento del usuario.
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { createAudioToneAnalyzer, scoreToneEmotion } from '../lib/audioToneAnalyzer'
 import { analyzeEmotionText, estimateWordsPerMinute } from '../lib/emotionTextAnalyzer'

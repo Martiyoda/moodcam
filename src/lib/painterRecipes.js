@@ -1,3 +1,4 @@
+// Colores realmente disponibles en la estación de pintura del prototipo WRO.
 export const WRO_PHYSICAL_COLORS = [
     { id: 'blue', label: 'Azul', hex: '#2563eb' },
     { id: 'violet', label: 'Violeta', hex: '#7c3aed' },
@@ -112,28 +113,34 @@ export const WRO_PAINTER_RECIPES = [
 export const WRO_PRESENTATION_ARTIST_IDS = WRO_PAINTER_RECIPES.map((recipe) => recipe.artist_id)
 
 export function getPhysicalColor(colorId) {
+    // Devuelve la definición física de un color o azul como respaldo.
     return WRO_PHYSICAL_COLORS.find((color) => color.id === colorId) || WRO_PHYSICAL_COLORS[0]
 }
 
 export function isPhysicalColor(colorId) {
+    // Comprueba que un color solicitado exista en la estación real.
     return WRO_PHYSICAL_COLORS.some((color) => color.id === colorId)
 }
 
 export function getPainterRecipe(artistId) {
+    // Obtiene la receta versionada asociada a un artista.
     return WRO_PAINTER_RECIPES.find((recipe) => recipe.artist_id === artistId) || WRO_PAINTER_RECIPES[0]
 }
 
 export function getPainterRecipeById(recipeId) {
+    // Obtiene una receta concreta sin inventar una alternativa si no existe.
     return WRO_PAINTER_RECIPES.find((recipe) => recipe.id === recipeId) || null
 }
 
 export function getRecipeColorsForEmotion(recipe, emotion) {
+    // Filtra los colores de la receta para conservar solo pinturas físicas.
     const resolvedRecipe = recipe || WRO_PAINTER_RECIPES[0]
     const colors = resolvedRecipe.color_rules?.[emotion] || resolvedRecipe.color_rules?.neutral || ['blue', 'yellow']
     return colors.filter(isPhysicalColor)
 }
 
 export function recipeToPromptContext(recipe) {
+    // Reduce una receta al contexto seguro que puede recibir el proveedor de IA.
     const resolvedRecipe = recipe || WRO_PAINTER_RECIPES[0]
     return {
         recipe_id: resolvedRecipe.id,

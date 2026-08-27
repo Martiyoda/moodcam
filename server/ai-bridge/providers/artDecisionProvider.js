@@ -1,3 +1,4 @@
+// Traduce ventanas emocionales a decisiones artísticas validadas y con fallback local.
 import { MAX_SESSION_STROKES, generateArtChunk, generateArtPlan, getArtistById, getEmotionLabel } from '../../../src/lib/artEngine.js'
 import { getPainterRecipe, getPainterRecipeById, isPhysicalColor, recipeToPromptContext } from '../../../src/lib/painterRecipes.js'
 import { resolveSessionEmotions } from './emotionProvider.js'
@@ -67,6 +68,7 @@ const CHUNK_DECISION_SCHEMA = {
 }
 
 export async function decideArtPlan({ sessionSummary, latestFaceEmotion, config, fetchImpl = fetch }) {
+  // Decide el plan completo; OpenAI aporta intención y artEngine conserva la geometría segura.
   const artist = getArtistById(sessionSummary?.artist_id || latestFaceEmotion?.artist_id)
   const mainEmotions = resolveSessionEmotions(sessionSummary, latestFaceEmotion)
   const voiceProvider = resolveVoiceProvider(sessionSummary?.conversation_mode)
@@ -132,6 +134,7 @@ export async function decideArtPlan({ sessionSummary, latestFaceEmotion, config,
 }
 
 export async function decideArtChunk({ emotionWindow, sessionState = {}, config, fetchImpl = fetch }) {
+  // Decide un bloque acotado de la ventana actual sin exceder el presupuesto de trazos.
   const artist = getArtistById(emotionWindow?.artist_id || sessionState.artist_id)
   const recipe = getPainterRecipeById(emotionWindow?.artist_recipe_id) || getPainterRecipe(artist.id)
   const windowSummary = resolveSessionEmotions({
@@ -221,6 +224,7 @@ export async function decideArtChunk({ emotionWindow, sessionState = {}, config,
 }
 
 export function createSessionEndChunk({ sessionEnd, sessionState = {} }) {
+  // Crea la secuencia final de limpieza, secado y regreso a la estación de reposo.
   const calibration = sessionEnd?.calibration || sessionState.calibration || {}
   const z = { up: 30, dip: 2, paint: 8, ...(calibration.z || {}) }
   const water = calibration.water || { x: 330, y: 145, z: z.dip }

@@ -1,5 +1,7 @@
 #pragma once
 
+// Configuración física del brazo: modos, pines, HOME y límites de cada articulación.
+
 #include <Arduino.h>
 
 #define DEMO_MODE true

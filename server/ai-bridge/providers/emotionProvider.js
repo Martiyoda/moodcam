@@ -1,6 +1,8 @@
+// Resuelve el resumen emocional más fiable disponible para una sesión del bridge.
 import { physicalScoresToArtSummary, toPhysicalEmotionScores } from '../../../src/lib/emotionCategories.js'
 
 export function resolveSessionEmotions(sessionSummary, latestFaceEmotion) {
+  // Prioriza emoción combinada, después cara y finalmente la última muestra facial.
   const combined = normalizeSummary(sessionSummary?.combined_emotions)
   if (combined.length) return combined
 

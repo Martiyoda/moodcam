@@ -1,3 +1,4 @@
+// API local que crea sesiones OpenAI Realtime y mantiene las credenciales fuera del navegador.
 import express from 'express'
 import { loadServerEnv } from './loadEnv.js'
 

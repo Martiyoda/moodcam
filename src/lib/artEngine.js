@@ -1,5 +1,7 @@
+// Motor local que transforma emociones y recetas de pintor en trazos y comandos MQTT para el brazo.
 import { getPainterRecipe, getPhysicalColor, getRecipeColorsForEmotion } from './painterRecipes.js'
 
+// Coordenadas internas compactas; después se proyectan al lienzo A4 calibrado.
 const CANVAS_WIDTH = 220
 const CANVAS_HEIGHT = 160
 const SAFE_MARGIN = 6
@@ -110,6 +112,7 @@ export const EMOTION_PROFILES = {
   },
 }
 
+// Parámetros visuales y de movimiento base de cada artista disponible en la presentación WRO.
 export const ARTISTS = [
   {
     id: 'kandinsky',
@@ -166,14 +169,17 @@ export const ARTISTS = [
 ]
 
 export function getArtistById(artistId) {
+  // Un artista desconocido cae en Kandinsky para mantener siempre una receta válida.
   return ARTISTS.find((artist) => artist.id === artistId) || ARTISTS[0]
 }
 
 export function getEmotionLabel(emotion) {
+  // Traduce el identificador técnico a la etiqueta que se muestra en la interfaz.
   return EMOTION_PROFILES[emotion]?.label || emotion
 }
 
 export function calculateEmotionSummary(samples, limit = 2) {
+  // Acumula las muestras de una ventana y devuelve las emociones más representativas.
   const totals = {}
 
   samples.forEach((sample) => {
@@ -198,6 +204,7 @@ export function calculateEmotionSummary(samples, limit = 2) {
 }
 
 export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibration = null, colorPreferences = [], voiceSummary = null }) {
+  // Genera el plan completo de una sesión: parámetros artísticos, geometría y secuencia física.
   const artist = getArtistById(artistId)
   const primary = mainEmotions[0] || { emotion: 'neutral', percentage: 100, label: getEmotionLabel('neutral') }
   const secondary = mainEmotions[1] || primary
@@ -292,6 +299,7 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
 }
 
 export function generateArtChunk({ windowSummary = [], artistId, recipe = null, sessionState = {}, calibration = null, mobility = 85, directives = {}, seed = '' }) {
+  // Genera un único bloque incremental y limitado para no saturar la cola del firmware.
   const artist = getArtistById(artistId)
   const resolvedRecipe = recipe || getPainterRecipe(artist.id)
   const primary = windowSummary[0] || { emotion: 'neutral', percentage: 100, label: getEmotionLabel('neutral') }
@@ -407,6 +415,7 @@ function uniqueStrings(values) {
 }
 
 function normalizeCalibration(calibration) {
+  // Completa la calibración parcial con dimensiones A4 y estaciones físicas por defecto.
   const canvas = {
     originX: 0,
     originY: 0,
@@ -439,6 +448,7 @@ function normalizeCalibration(calibration) {
 }
 
 function selectPalette(profileColors, colorPreferences, paints) {
+  // Prioriza colores pedidos por la voz y después los compatibles con emoción y pinturas instaladas.
   const available = paints.map((paint) => ({
     name: paint.color,
     hex: paint.hex,
@@ -469,6 +479,7 @@ function uniquePalette(colors) {
 }
 
 function projectPointToCanvas(strokePoint, calibration) {
+  // Convierte las coordenadas internas del generador a milímetros del lienzo real.
   const { canvas, z } = calibration
   const usableWidth = Math.max(1, canvas.width - canvas.margin * 2)
   const usableHeight = Math.max(1, canvas.height - canvas.margin * 2)
@@ -482,6 +493,7 @@ function projectPointToCanvas(strokePoint, calibration) {
 }
 
 function createRobotCommands(strokes, calibration, options = {}) {
+  // Inserta carga de pintura, trazos, limpieza y reposo en el orden que espera el ESP32.
   const { finishWithRest = true, cleanAtEnd = true } = options
   const commands = []
   let currentPaintId = null
@@ -591,6 +603,7 @@ function createTowelCommands(calibration) {
 }
 
 function createStroke({ index, artist, shapes, colors, speed, pressure, randomness, movementLevel, direction }) {
+  // Combina estilo, emoción y azar controlado para producir un trazo ejecutable.
   const shape = pickShape(artist, shapes, index)
   const color = colors[index % colors.length]
   const jitter = randomness / 100
@@ -622,6 +635,7 @@ function pickShape(artist, shapes, index) {
 }
 
 function createPointsForShape(shape, direction, movementLevel, jitter, index) {
+  // Selecciona el generador geométrico según el gesto solicitado por la receta.
   if (shape.startsWith('moodcam_')) return moodcamStrokePoints(shape, movementLevel)
   if (shape === 'circle') return circlePoints(randomX(), randomY(), randomBetween(10, 24 + movementLevel * 0.1), 14)
   if (shape === 'spiral') return spiralPoints(randomX(), randomY(), randomBetween(8, 24 + movementLevel * 0.1), 18)
@@ -797,6 +811,7 @@ function gesturePoints(direction, movementLevel, jitter) {
 }
 
 function withLift(drawPoints) {
+  // Añade puntos con el pincel arriba al inicio y al final para evitar arrastres entre trazos.
   if (!drawPoints.length) return []
   const first = drawPoints[0]
   const last = drawPoints[drawPoints.length - 1]
@@ -839,6 +854,7 @@ function randomBetween(min, max) {
 }
 
 function withDeterministicRandom(seed, callback) {
+  // Hace reproducible cada chunk sin cambiar permanentemente el generador global de azar.
   const previousRandom = activeRandom
   activeRandom = createSeededRandom(seed)
   try {

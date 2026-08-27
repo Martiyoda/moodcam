@@ -1,3 +1,4 @@
+// Firmware principal: conecta el ESP32, recibe comandos MQTT y ejecuta la cola segura.
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
@@ -83,11 +84,15 @@ constexpr float PATH_MAX_Z = 35.0f;
 // solo despues de medir donde cae el pincel sobre el papel real.
 constexpr int CANVAS_BASE_LEFT_DEG = 120;
 constexpr int CANVAS_BASE_RIGHT_DEG = 50;
-constexpr int CANVAS_NEAR_SHOULDER_DEG = 155;
-constexpr int CANVAS_FAR_SHOULDER_DEG = 159;
+constexpr int CANVAS_NEAR_SHOULDER_DEG = 158;
+constexpr int CANVAS_FAR_SHOULDER_DEG = 162;
 constexpr int CANVAS_NEAR_ELBOW_DEG = 70;
 constexpr int CANVAS_FAR_ELBOW_DEG = 144;
 constexpr int CANVAS_WRIST_CONTACT_OFFSET_DEG = 3;
+// El eje de la base queda fuera del borde frontal del A4. La IK usa esta
+// distancia para extender el brazo de forma distinta en cada punto.
+constexpr float CANVAS_BASE_TO_PAPER_MM = 120.0f;
+constexpr float CANVAS_CENTER_X_MM = PATH_MAX_X * 0.5f;
 
 // Geometria medida del brazo impreso 3D (aprox):
 // - hombro -> codo: 230 mm
@@ -98,7 +103,7 @@ constexpr float ARM_ELBOW_TO_WRIST_MM = 180.0f;
 constexpr float ARM_BASE_TOP_DIAMETER_MM = 110.0f;
 
 // Margenes de seguridad para no usar extremos mecanicos en brazo ad-hoc 3D.
-constexpr int SHOULDER_SAFE_MARGIN_DEG = 6;
+constexpr int SHOULDER_SAFE_MARGIN_DEG = 3;
 constexpr int ELBOW_SAFE_MARGIN_DEG = 6;
 constexpr int WRIST_SAFE_MARGIN_DEG = 10;
 
@@ -1407,19 +1412,39 @@ ServoPose mapPointToPose(const PathPoint& point) {
     static_cast<float>(CANVAS_BASE_LEFT_DEG),
     static_cast<float>(CANVAS_BASE_RIGHT_DEG)
   ));
-  // Y usa el recorrido vertical historico, limitado a los margenes seguros
-  // actuales del hombro y codo.
+  // La distancia radial incluye X e Y: los puntos laterales ya no reciben
+  // siempre la misma profundidad aunque compartan la misma coordenada Y.
+  const float radialX = safeY + CANVAS_BASE_TO_PAPER_MM;
+  const float radialY = safeX - CANVAS_CENTER_X_MM;
+  const float radialDistance = sqrt(radialX * radialX + radialY * radialY);
+  const float linkA = ARM_SHOULDER_TO_ELBOW_MM;
+  const float linkB = ARM_ELBOW_TO_WRIST_MM;
+  const float minimumReach = fabs(linkA - linkB);
+  const float maximumReach = linkA + linkB;
+  const float reachableDistance = constrain(radialDistance, minimumReach + 1.0f, maximumReach - 1.0f);
+  const float elbowCosine = constrain(
+    (reachableDistance * reachableDistance - linkA * linkA - linkB * linkB) / (-2.0f * linkA * linkB),
+    -1.0f,
+    1.0f
+  );
+  const float elbowGeometryDeg = acos(elbowCosine) * 180.0f / PI;
+  const float shoulderGeometryDeg = atan2(radialY, radialX) * 180.0f / PI
+    + acos(constrain(
+      (linkA * linkA + reachableDistance * reachableDistance - linkB * linkB) / (2.0f * linkA * reachableDistance),
+      -1.0f,
+      1.0f
+    )) * 180.0f / PI;
   const int shoulder = static_cast<int>(mapFloatRange(
-    safeY,
-    PATH_MIN_Y,
-    PATH_MAX_Y,
+    shoulderGeometryDeg,
+    0.0f,
+    180.0f,
     static_cast<float>(CANVAS_NEAR_SHOULDER_DEG),
     static_cast<float>(CANVAS_FAR_SHOULDER_DEG)
   ));
   const int elbow = static_cast<int>(mapFloatRange(
-    safeY,
-    PATH_MIN_Y,
-    PATH_MAX_Y,
+    elbowGeometryDeg,
+    0.0f,
+    180.0f,
     static_cast<float>(CANVAS_NEAR_ELBOW_DEG),
     static_cast<float>(CANVAS_FAR_ELBOW_DEG)
   ));

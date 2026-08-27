@@ -1,3 +1,4 @@
+// Orquestador MQTT del AI Bridge: recuerda sesiones, decide arte y publica al robot.
 import mqtt from 'mqtt'
 import { pathToFileURL } from 'node:url'
 import { TOPIC_KEYS, buildPresencePayload, parseJsonMessage } from '../../packages/contracts/mqttContract.js'
@@ -9,6 +10,7 @@ const sessions = new Map()
 const BRIDGE_PRESENCE_INTERVAL_MS = 5000
 
 export function startAiBridge(config = loadBridgeConfig()) {
+  // Inicia la conexión, presencia y suscripciones del proceso de decisión.
   const client = mqtt.connect(config.mqttUrl, buildMqttOptions(config))
   const queueTracker = createRobotQueueTracker(config)
   const startedAt = Date.now()

@@ -1,3 +1,4 @@
+// Hook de captura facial local: carga Human, procesa frames y suaviza las emociones detectadas.
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Human } from '@vladmandic/human'
 

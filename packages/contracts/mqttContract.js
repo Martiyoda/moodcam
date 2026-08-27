@@ -1,3 +1,4 @@
+// Contrato compartido por la web, el AI Bridge y el firmware para topics y payloads MQTT.
 export const DEFAULT_DEVICE_ID = 'device1'
 
 export const ARM_CALIBRATION_COMMAND_TYPES = [
@@ -48,6 +49,7 @@ export const TOPIC_TEMPLATES = {
 }
 
 export function normalizeDeviceId(deviceId = DEFAULT_DEVICE_ID) {
+    // Normaliza el identificador para que pueda formar parte segura de un topic MQTT.
     return String(deviceId || DEFAULT_DEVICE_ID)
         .trim()
         .replace(/[^a-zA-Z0-9_-]/g, '-')
@@ -56,18 +58,21 @@ export function normalizeDeviceId(deviceId = DEFAULT_DEVICE_ID) {
 }
 
 export function topicFor(key, deviceId = DEFAULT_DEVICE_ID) {
+    // Resuelve una clave lógica al topic concreto de un dispositivo.
     const template = TOPIC_TEMPLATES[key]
     if (!template) throw new Error(`Topic desconocido: ${key}`)
     return template.replace('{deviceId}', normalizeDeviceId(deviceId))
 }
 
 export function createTopicMap(deviceId = DEFAULT_DEVICE_ID) {
+    // Construye todos los topics de un dispositivo manteniendo una única fuente de verdad.
     return Object.fromEntries(
         Object.values(TOPIC_KEYS).map((key) => [key, topicFor(key, deviceId)])
     )
 }
 
 export function createMqttClientId(role, deviceId = DEFAULT_DEVICE_ID, suffix = '') {
+    // Genera ids de cliente legibles y distintos por rol y dispositivo.
     const base = `emotion-${normalizeDeviceId(role)}-${normalizeDeviceId(deviceId)}`
     const normalizedSuffix = String(suffix || '').trim()
     return normalizedSuffix ? `${base}-${normalizedSuffix}` : base

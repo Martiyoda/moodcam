@@ -1,5 +1,7 @@
 #pragma once
 
+// API de motores: conexión de servos, calibración, interpolación y poses seguras.
+
 #include <Arduino.h>
 #include "../robot_config.h"
 

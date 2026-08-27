@@ -1,3 +1,4 @@
+// Agrupa las emociones del detector en las cuatro categorías que entiende el brazo.
 export const PHYSICAL_EMOTIONS = {
   happy: { id: 'happy', label: 'alegre', color: 'yellow', colorLabel: 'amarillo' },
   angry: { id: 'angry', label: 'enfadado', color: 'red', colorLabel: 'rojo' },
@@ -23,14 +24,17 @@ const RAW_EMOTION_TO_PHYSICAL = {
 }
 
 export function getPhysicalEmotion(id = 'neutral') {
+  // Devuelve la definición visual y física de una emoción normalizada.
   return PHYSICAL_EMOTIONS[id] || PHYSICAL_EMOTIONS.neutral
 }
 
 export function toPhysicalEmotionId(id = 'neutral') {
+  // Traduce emociones del modelo facial o de voz a una categoría física.
   return RAW_EMOTION_TO_PHYSICAL[id] || 'neutral'
 }
 
 export function toPhysicalEmotionScores(scores = {}) {
+  // Fusiona puntuaciones equivalentes y las normaliza para poder compararlas.
   const physicalScores = {}
   Object.entries(scores).forEach(([emotion, value]) => {
     const physicalEmotion = toPhysicalEmotionId(emotion)
@@ -47,11 +51,13 @@ export function normalizePhysicalEmotionScores(scores = {}) {
 }
 
 export function dominantPhysicalEmotion(scores = {}) {
+  // Selecciona la categoría con mayor peso para mostrarla o publicarla.
   const normalized = normalizePhysicalEmotionScores(scores)
   return Object.entries(normalized).sort(([, left], [, right]) => right - left)[0][0]
 }
 
 export function physicalScoresToArtSummary(scores = {}, limit = 2) {
+  // Convierte puntuaciones normalizadas al formato que consume artEngine y la UI.
   const normalized = normalizePhysicalEmotionScores(scores)
   return Object.entries(normalized)
     .map(([emotionId, score]) => {

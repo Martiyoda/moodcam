@@ -1,3 +1,4 @@
+// Punto de entrada React; selecciona la vista operativa o la página explicativa según la ruta.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'

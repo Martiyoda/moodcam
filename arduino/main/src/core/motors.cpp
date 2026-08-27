@@ -1,5 +1,7 @@
 #include "motors.h"
 
+// Implementa el control de los cuatro servos y la interpolación no bloqueante.
+
 #include <ESP32Servo.h>
 #include <string.h>
 
