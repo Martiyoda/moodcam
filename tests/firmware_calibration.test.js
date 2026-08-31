@@ -30,7 +30,7 @@ test('configura el mapa Moodcam y los limites de calibracion', () => {
 })
 
 test('conserva las poses Moodcam validadas solo como referencia de migracion', () => {
-  assert.match(legacyMoodcamPoses, /Reference only/)
+  assert.match(legacyMoodcamPoses, /Solo como referencia/)
   assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_REST = \{90, 90, 90, 90\}/)
   assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_PAINT_YELLOW = \{172, 158, 73, 17\}/)
   assert.match(legacyMoodcamPoses, /LEGACY_MOODCAM_PAINT_RED = \{143, 158, 85, 30\}/)

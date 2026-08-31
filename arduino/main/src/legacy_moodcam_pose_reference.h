@@ -2,9 +2,9 @@
 // No debe confundirse con los limites activos del firmware actual.
 #pragma once
 
-// Reference only: these are the physically validated poses from
-// moodcam/arduino/main.ino. Do not execute them until pins, directions, and
-// limits have been recalibrated for the Inner Synergy arm.
+// Solo como referencia: estas son las poses validadas físicamente de
+// moodcam/arduino/main.ino. No las ejecutes hasta recalibrar los pines, las
+// direcciones y los límites para el brazo de Inner Synergy.
 struct LegacyMoodcamPose {
   int base;
   int shoulder;
