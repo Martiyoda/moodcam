@@ -1,3 +1,4 @@
+// Comprueba la fusion de voz y cara antes de que sus resultados lleguen al bridge.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {

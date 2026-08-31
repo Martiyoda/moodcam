@@ -1,3 +1,5 @@
+// Referencia historica de poses de Moodcam conservada para comparar calibraciones.
+// No debe confundirse con los limites activos del firmware actual.
 #pragma once
 
 // Reference only: these are the physically validated poses from

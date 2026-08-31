@@ -1,3 +1,5 @@
+// Estas pruebas protegen el motor que convierte emociones y recetas en trazos.
+// Si fallan, no conviene enviar el plan al brazo porque podria estar incompleto.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { generateArtChunk, generateArtPlan } from './artEngine.js'
@@ -30,8 +32,14 @@ test('genera plan dentro de A4 horizontal', () => {
     assert.ok(point.y >= DEFAULT_ROBOT_CALIBRATION.canvas.originY + DEFAULT_ROBOT_CALIBRATION.canvas.margin)
     assert.ok(point.y <= DEFAULT_ROBOT_CALIBRATION.canvas.height - DEFAULT_ROBOT_CALIBRATION.canvas.margin)
   })
-  assert.ok(strokePoints.some((point) => point.brush === 0 && point.z === DEFAULT_ROBOT_CALIBRATION.z.up))
+  assert.ok(strokePoints.some((point) => point.brush === 0 && point.z === DEFAULT_ROBOT_CALIBRATION.z.paint))
   assert.ok(strokePoints.some((point) => point.brush === 1 && point.z === DEFAULT_ROBOT_CALIBRATION.z.paint))
+
+  const firstStroke = plan.robot_commands.find((command) => command.type === 'stroke')
+  assert.equal(firstStroke.points[0].brush, 0)
+  assert.equal(firstStroke.points[0].z, DEFAULT_ROBOT_CALIBRATION.z.paint)
+  assert.equal(firstStroke.points[1].brush, 1)
+  assert.equal(firstStroke.points[1].z, DEFAULT_ROBOT_CALIBRATION.z.paint)
 })
 
 test('genera trazos propios para cada pintor dentro del limite seguro', () => {
@@ -69,13 +77,18 @@ test('incluye comandos de pintura, agua, trazos y reposo', () => {
 
   const commandTypes = plan.robot_commands.map((command) => command.type)
 
-  assert.ok(commandTypes.includes('dip_paint'))
+  assert.equal(commandTypes.includes('dip_paint'), false)
+  assert.equal(commandTypes.includes('move_to_paint'), false)
   assert.ok(commandTypes.includes('stroke'))
   assert.ok(commandTypes.includes('move_to_water'))
   assert.ok(commandTypes.includes('rinse_brush'))
   assert.ok(commandTypes.includes('move_to_towel'))
   assert.ok(commandTypes.includes('dry_brush'))
   assert.equal(commandTypes.at(-1), 'move_to_rest')
+
+  const strokeCommands = plan.robot_commands.filter((command) => command.type === 'stroke')
+  assert.equal(strokeCommands.length, plan.strokes.length)
+  assert.ok(strokeCommands.every((command) => command.paint_id))
 })
 
 test('elige solamente colores fisicos segun la emocion y el pintor', () => {
@@ -88,7 +101,7 @@ test('elige solamente colores fisicos segun la emocion y el pintor', () => {
 
   assert.ok(plan.colors.every((color) => ['blue', 'violet'].includes(color)))
   assert.ok(plan.robot_commands
-    .filter((command) => command.type === 'dip_paint' || command.type === 'stroke')
+    .filter((command) => command.type === 'stroke')
     .every((command) => ['blue', 'violet'].includes(command.paint_id)))
 })
 

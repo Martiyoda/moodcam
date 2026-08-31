@@ -1,3 +1,5 @@
+// Reglas de seguridad que deben ejecutarse antes de permitir un movimiento.
+// La seguridad se mantiene separada para que sea visible y revisable.
 #include "safety.h"
 
 namespace {

@@ -1,3 +1,5 @@
+// Panel para enviar ordenes de calibracion y observar la respuesta del robot.
+// La interfaz refleja limites conocidos, pero el firmware vuelve a validarlos.
 import { useEffect, useMemo, useState } from 'react'
 
 import {

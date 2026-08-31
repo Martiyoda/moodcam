@@ -1,3 +1,4 @@
+// Comprueba las reglas que conectan emociones detectadas con la experiencia visual.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { calculateToneMetrics, scoreToneEmotion } from './audioToneAnalyzer.js'

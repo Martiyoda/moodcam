@@ -1,4 +1,5 @@
 // Contrato compartido por la web, el AI Bridge y el firmware para topics y payloads MQTT.
+// Si una capa cambia un nombre sin actualizar este archivo, las otras capas dejan de encontrarse.
 export const DEFAULT_DEVICE_ID = 'device1'
 
 export const ARM_CALIBRATION_COMMAND_TYPES = [

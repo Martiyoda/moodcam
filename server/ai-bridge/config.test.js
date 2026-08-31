@@ -1,3 +1,4 @@
+// Comprueba que la configuracion del bridge aplica valores por defecto y limites.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildMqttOptions, loadBridgeConfig } from './config.js'

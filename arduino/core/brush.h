@@ -1,3 +1,5 @@
+// Declaraciones publicas del pincel para que el firmware pueda usarlo sin conocer
+// los detalles internos de su implementacion.
 #pragma once
 
 #include <Arduino.h>

@@ -1,3 +1,5 @@
+// Ejemplo minimo para publicar una muestra emocional con el formato del contrato.
+// Es util para probar el bridge sin necesitar camara ni interfaz grafica.
 import mqtt from 'mqtt'
 import { DEFAULT_DEVICE_ID, TOPIC_KEYS, createMqttClientId, createTopicMap, normalizeDeviceId } from '../packages/contracts/mqttContract.js'
 import { loadServerEnv } from '../server/loadEnv.js'

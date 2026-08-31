@@ -1,3 +1,5 @@
+// Ejemplo de extremo a extremo: publica una entrada emocional y observa
+// el plan o los comandos que el sistema genera para el hardware.
 import mqtt from 'mqtt'
 import { DEFAULT_DEVICE_ID, TOPIC_KEYS, createMqttClientId, createTopicMap, normalizeDeviceId } from '../packages/contracts/mqttContract.js'
 import { loadServerEnv } from '../server/loadEnv.js'

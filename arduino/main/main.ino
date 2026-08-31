@@ -89,6 +89,7 @@ constexpr int CANVAS_FAR_SHOULDER_DEG = 162;
 constexpr int CANVAS_NEAR_ELBOW_DEG = 70;
 constexpr int CANVAS_FAR_ELBOW_DEG = 144;
 constexpr int CANVAS_WRIST_CONTACT_OFFSET_DEG = 3;
+constexpr int CANVAS_SHOULDER_CONTACT_OFFSET_DEG = 15;
 // El eje de la base queda fuera del borde frontal del A4. La IK usa esta
 // distancia para extender el brazo de forma distinta en cada punto.
 constexpr float CANVAS_BASE_TO_PAPER_MM = 120.0f;
@@ -148,7 +149,6 @@ size_t realCommandQueueTail = 0;
 size_t realCommandQueueDepth = 0;
 bool realCommandExecuting = false;
 String activePaintId;
-int strokesSincePaintLoad = 0;
 
 void printHelp();
 void printStatus();
@@ -203,6 +203,8 @@ int extractIntValue(const String& json, const char* key, int fallback);
 bool extractBoolValue(const String& json, const char* key, bool fallback);
 
 void setup() {
+  // setup se ejecuta una sola vez al encender. Inicializa primero las barreras
+  // de seguridad y despues la comunicacion, para que el brazo empiece detenido.
   Serial.begin(SERIAL_BAUD);
   delay(200);
   Serial.setTimeout(50);
@@ -244,6 +246,8 @@ void setup() {
 }
 
 void loop() {
+  // loop debe volver rapidamente una y otra vez: asi se atienden MQTT, presencia,
+  // cola de comandos y parada de emergencia sin bloquear el microcontrolador.
   printHeartbeat();
 
   if (NETWORK_ENABLED) {
@@ -997,14 +1001,10 @@ void handleRealModeCommand(const String& json, const String& type) {
 
 bool executeRealPathCommand(const String& json, const String& type) {
   if (type == "paint_sequence_start") {
-    activePaintId = "";
-    strokesSincePaintLoad = 0;
     return true;
   }
   if (type == "paint_sequence_end") {
-    return rinseMoodcamBrush(REAL_SPEED_CONTACT_DEFAULT)
-      && dryMoodcamBrush(REAL_SPEED_CONTACT_DEFAULT)
-      && moveToHomeSlowly();
+    return true;
   }
 
   if (type == "move_to_paint" || type == "dip_paint" || type == "move_to_water"
@@ -1035,22 +1035,17 @@ bool executeRealPathCommand(const String& json, const String& type) {
   const float canvasDiagonalMm = sqrt(PATH_MAX_X * PATH_MAX_X + PATH_MAX_Y * PATH_MAX_Y);
   const float reachToCanvasRatio = canvasDiagonalMm <= 0.0f ? 1.0f : armReachMm / canvasDiagonalMm;
   bool previousPointWasContact = false;
+  const bool strokePath = type == "stroke" && !profile.forceBrushUp;
 
   if (type == "stroke") {
     String requestedPaintId = extractStringValue(json, "paint_id");
     if (requestedPaintId.length() == 0) {
       requestedPaintId = extractStringValue(json, "color");
     }
-    if (requestedPaintId.length() > 0 && requestedPaintId != activePaintId) {
-      if (!loadMoodcamPaint(requestedPaintId, REAL_SPEED_CONTACT_DEFAULT)) {
-        publishError("color de pintura no configurado en Moodcam");
-        return false;
-      }
-    } else if (requestedPaintId.length() > 0 && strokesSincePaintLoad >= 2) {
-      if (!loadMoodcamPaint(requestedPaintId, REAL_SPEED_CONTACT_DEFAULT)) {
-        publishError("no se pudo recargar la pintura Moodcam");
-        return false;
-      }
+    if (requestedPaintId.length() > 0
+        && !loadMoodcamPaint(requestedPaintId, REAL_SPEED_CONTACT_DEFAULT)) {
+      publishError("color de pintura no configurado en Moodcam");
+      return false;
     }
   }
 
@@ -1061,8 +1056,15 @@ bool executeRealPathCommand(const String& json, const String& type) {
       return false;
     }
 
-    const ServoPose target = mapPointToPose(points[index]);
     const bool contactPoint = !profile.forceBrushUp && (profile.forceBrushDown || points[index].brush > 0);
+    ServoPose target = mapPointToPose(points[index]);
+    if (strokePath) {
+      target.shoulder = constrain(
+        target.shoulder + CANVAS_SHOULDER_CONTACT_OFFSET_DEG,
+        SHOULDER_SERVO_CONFIG.minAngle + SHOULDER_SAFE_MARGIN_DEG,
+        SHOULDER_SERVO_CONFIG.maxAngle - SHOULDER_SAFE_MARGIN_DEG
+      );
+    }
 
     const float minEdgeDistance = min(
       min(points[index].x - PATH_MIN_X, PATH_MAX_X - points[index].x),
@@ -1111,9 +1113,6 @@ bool executeRealPathCommand(const String& json, const String& type) {
     }
   }
 
-  if (type == "stroke" && activePaintId.length() > 0) {
-    strokesSincePaintLoad++;
-  }
   if (type == "stroke" && !moveToHomeSlowly()) {
     publishError("fallo al volver a HOME despues del trazo");
     return false;
@@ -1195,7 +1194,6 @@ bool loadMoodcamPaint(const String& paintId, int speed) {
     }
   }
   activePaintId = paintId;
-  strokesSincePaintLoad = 0;
   return moveToHomeSlowly();
 }
 
@@ -1213,7 +1211,6 @@ bool rinseMoodcamBrush(int speed) {
     }
   }
   activePaintId = "";
-  strokesSincePaintLoad = 0;
   return moveMoodcamPose(waterPose, speed) && moveToHomeSlowly();
 }
 

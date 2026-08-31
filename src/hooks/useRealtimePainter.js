@@ -1,3 +1,5 @@
+// Hook que mantiene los datos de la obra mientras llegan chunks del AI Bridge.
+// Separa la llegada de mensajes de la interfaz para que React pueda redibujarla.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createVoiceSample } from '../lib/voiceEngine'
 

@@ -1,3 +1,5 @@
+// Arranca juntas las piezas necesarias para trabajar localmente: cliente web,
+// servidor y, cuando corresponde, el proceso que conecta la decision artistica.
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 

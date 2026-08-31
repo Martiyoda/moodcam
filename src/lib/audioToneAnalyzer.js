@@ -1,3 +1,5 @@
+// Convierte caracteristicas sencillas del sonido en senales emocionales.
+// No interpreta palabras ni pretende diagnosticar: solo aporta una pista mas.
 import { normalizePhysicalEmotionScores } from './emotionCategories.js'
 
 export function createAudioToneAnalyzer(stream, { sampleMs = 500, onSample } = {}) {

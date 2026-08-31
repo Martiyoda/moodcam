@@ -1,3 +1,5 @@
+// Plantilla publica de configuracion del ESP32.
+// Copiala como config.h y rellena valores locales; nunca pongas credenciales reales aqui.
 #pragma once
 
 // Copia este archivo como config.h y rellena tus datos reales.

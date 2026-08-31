@@ -1,3 +1,4 @@
+// Interfaz de los motores del firmware activo: nombres, limites y operaciones.
 #pragma once
 
 // API de motores: conexión de servos, calibración, interpolación y poses seguras.

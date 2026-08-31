@@ -1,4 +1,5 @@
-// Analiza tono y transcripción temporal para obtener señales emocionales y preferencias de color.
+// Analiza tono y transcripcion temporal para obtener senales emocionales y preferencias de color.
+// Su resultado es una pista para el arte, nunca un diagnostico sobre la persona.
 import { dominantPhysicalEmotion, physicalScoresToArtSummary, toPhysicalEmotionId, toPhysicalEmotionScores } from './emotionCategories.js'
 
 export const DEFAULT_ROBOT_CALIBRATION = {

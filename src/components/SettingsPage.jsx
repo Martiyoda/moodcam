@@ -1,3 +1,5 @@
+// Pagina de ajustes locales de la experiencia, como MQTT y preferencias de captura.
+// Guardar estos valores no significa guardar imagenes, audio ni emociones.
 import { useState } from 'react'
 import RobotCalibrationPanel from './RobotCalibrationPanel'
 

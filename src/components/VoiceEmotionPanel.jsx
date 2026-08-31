@@ -1,3 +1,5 @@
+// Presenta las senales de voz y cara como una orientacion artistica aproximada.
+// La interfaz debe dejar claro que una emocion detectada no es un diagnostico.
 export default function VoiceEmotionPanel({ latestSample, summary, combinedSummary, faceSummary, title = '3. Voz + emociones', description = 'Estimación aproximada: texto, tono básico y rostro. No es diagnóstico.' }) {
   const intensity = latestSample?.intensity || summary.average_intensity || 0
 

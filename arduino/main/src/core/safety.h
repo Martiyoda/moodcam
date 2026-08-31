@@ -1,3 +1,5 @@
+// Interfaz de seguridad del firmware activo.
+// Estas funciones son la ultima barrera antes de mover el hardware.
 #pragma once
 
 #include <Arduino.h>

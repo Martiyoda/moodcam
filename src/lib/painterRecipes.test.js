@@ -1,3 +1,4 @@
+// Verifica que las recetas usan colores y parametros disponibles en la estacion.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {

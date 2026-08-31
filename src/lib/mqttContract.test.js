@@ -1,3 +1,4 @@
+// Comprueba que web, bridge y firmware siguen hablando el mismo idioma MQTT.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {

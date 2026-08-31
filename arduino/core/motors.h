@@ -1,3 +1,4 @@
+// Interfaz comun para mover articulaciones sin exponer todos los detalles electricos.
 #pragma once
 
 #include <Arduino.h>

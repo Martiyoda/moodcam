@@ -1,3 +1,5 @@
+// Implementacion de los motores y servos del brazo de prueba.
+// Aqui se convierten ordenes abstractas en movimientos de hardware.
 #include "motors.h"
 
 #include <ESP32Servo.h>

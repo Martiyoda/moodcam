@@ -1,3 +1,5 @@
+// Sketch alternativo de pruebas del firmware. Solo se activa cuando se define
+// MOTOR_TEST_SKETCH; no forma parte del arranque normal del brazo.
 #if defined(MOTOR_TEST_SKETCH)
 /*
   ==========================================================
@@ -40,8 +42,10 @@
 #define PIN_MUNECA  32
 
 // ---------- Limites de angulo (ajusta si tu servo lo requiere) ----------
-const int ANGULO_MIN = 0;
-const int ANGULO_MAX = 180;
+const int ANGULO_MIN_BASE = -30;
+const int ANGULO_MIN_OTROS = 0;
+const int ANGULO_MAX_BASE = 180;
+const int ANGULO_MAX_OTROS = 180;
 
 // ---------- Objetos Servo ----------
 Servo servoBase;
@@ -55,11 +59,11 @@ int posHombro = 90;
 int posCodo   = 90;
 int posMuneca = 90;
 
-void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, bool invertirDireccion);
+void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, bool invertirDireccion, int anguloMin, int anguloMax);
 void moverServo(Servo &servo, int grados, const char* nombre);
 void mostrarPosiciones();
 void testBarrido();
-void testUnServo(Servo &servo, int &posActual, const char* nombre, int posicionHome);
+void testUnServo(Servo &servo, int &posActual, const char* nombre, int posicionHome, int anguloMin, int anguloMax);
 
 void setup() {
   Serial.begin(115200);
@@ -111,16 +115,16 @@ void loop() {
 
     switch (comando) {
       case 'b':
-        procesarComando(servoBase, posBase, resto, "BASE", false);
+        procesarComando(servoBase, posBase, resto, "BASE", false, ANGULO_MIN_BASE, ANGULO_MAX_BASE);
         break;
       case 'h':
-        procesarComando(servoHombro, posHombro, resto, "HOMBRO", true);
+        procesarComando(servoHombro, posHombro, resto, "HOMBRO", true, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
         break;
       case 'c':
-        procesarComando(servoCodo, posCodo, resto, "CODO", true);
+        procesarComando(servoCodo, posCodo, resto, "CODO", true, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
         break;
       case 'm':
-        procesarComando(servoMuneca, posMuneca, resto, "MUNECA", false);
+        procesarComando(servoMuneca, posMuneca, resto, "MUNECA", false, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
         break;
       case 't':
         testBarrido();
@@ -137,7 +141,7 @@ void loop() {
 
 // ---------- Funciones auxiliares ----------
 
-void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, bool invertirDireccion) {
+void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, bool invertirDireccion, int anguloMin, int anguloMax) {
   if (valor.length() == 0) {
     Serial.print("Falta el desplazamiento. Ejemplo: b10 o b-10 para mover ");
     Serial.println(nombre);
@@ -146,9 +150,9 @@ void procesarComando(Servo &servo, int &posActual, String valor, const char* nom
 
   int desplazamiento = valor.toInt();
   int posicionObjetivo = posActual + desplazamiento;
-  int posicionLimitada = constrain(posicionObjetivo, ANGULO_MIN, ANGULO_MAX);
+  int posicionLimitada = constrain(posicionObjetivo, anguloMin, anguloMax);
   int posicionServo = invertirDireccion
-    ? ANGULO_MAX - posicionLimitada
+    ? anguloMax - posicionLimitada
     : posicionLimitada;
 
   moverServo(servo, posicionServo, nombre);
@@ -177,26 +181,26 @@ void mostrarPosiciones() {
   Serial.println("------------------------------");
 }
 
-// Test automatico: mueve cada servo de 0 a 180 y vuelta, uno por uno
+// Test automatico: mueve la base de -30 a 180 y los otros servos de 0 a 180.
 void testBarrido() {
   Serial.println(">> Iniciando test de barrido automatico...");
 
-  testUnServo(servoBase, posBase, "BASE", 90);
-  testUnServo(servoHombro, posHombro, "HOMBRO", 90);
-  testUnServo(servoCodo, posCodo, "CODO", 90);
-  testUnServo(servoMuneca, posMuneca, "MUNECA", 90);
+  testUnServo(servoBase, posBase, "BASE", 90, ANGULO_MIN_BASE, ANGULO_MAX_BASE);
+  testUnServo(servoHombro, posHombro, "HOMBRO", 90, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
+  testUnServo(servoCodo, posCodo, "CODO", 90, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
+  testUnServo(servoMuneca, posMuneca, "MUNECA", 90, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
 
   Serial.println(">> Test de barrido finalizado.");
 }
 
-void testUnServo(Servo &servo, int &posActual, const char* nombre, int posicionHome) {
+void testUnServo(Servo &servo, int &posActual, const char* nombre, int posicionHome, int anguloMin, int anguloMax) {
   Serial.print(">> Probando "); Serial.println(nombre);
 
-  for (int angulo = ANGULO_MIN; angulo <= ANGULO_MAX; angulo += 5) {
+  for (int angulo = anguloMin; angulo <= anguloMax; angulo += 5) {
     servo.write(angulo);
     delay(30);
   }
-  for (int angulo = ANGULO_MAX; angulo >= ANGULO_MIN; angulo -= 5) {
+  for (int angulo = anguloMax; angulo >= anguloMin; angulo -= 5) {
     servo.write(angulo);
     delay(30);
   }

@@ -1,3 +1,5 @@
+// Resumen rapido de si la demostracion esta lista para comenzar.
+// No realiza acciones fisicas: ayuda a detectar conexiones o permisos pendientes.
 export default function DemoReadinessPanel({
   mqttStatus,
   aiPlan,

@@ -1,3 +1,5 @@
+// Traduce nombres internos de emociones a textos entendibles para la interfaz.
+// El mapa tambien permite mostrar un valor razonable si llega una emocion nueva.
 const EMOTION_MAP = {
   neutral: { label: 'Neutral', emoji: '😐', color: 'text-gray-400' },
   happy: { label: 'Feliz', emoji: '😊', color: 'text-yellow-400' },

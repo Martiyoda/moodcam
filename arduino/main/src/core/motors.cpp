@@ -1,3 +1,5 @@
+// Implementacion activa de los motores usada por main.ino.
+// Cada movimiento termina pasando por los limites y estados de seguridad.
 #include "motors.h"
 
 // Implementa el control de los cuatro servos y la interpolación no bloqueante.

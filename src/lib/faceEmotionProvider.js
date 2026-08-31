@@ -1,3 +1,5 @@
+// Normaliza el resultado del detector facial del navegador al formato del proyecto.
+// La imagen se procesa localmente; este modulo trabaja con numeros, no con fotos.
 import { normalizePhysicalEmotionScores } from './emotionCategories.js'
 
 const FACE_TO_PHYSICAL = {

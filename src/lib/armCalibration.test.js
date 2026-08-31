@@ -1,3 +1,5 @@
+// Estas pruebas comprueban que los valores enviados para calibrar el brazo
+// tienen nombres, limites y formas compatibles con el resto de la aplicacion.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -23,7 +25,13 @@ test('construye únicamente comandos de calibración permitidos', () => {
 })
 
 test('rechaza ángulos y duraciones fuera de límites', () => {
-  assert.throws(() => buildSetAngleCommand('base', -1, 500))
+  assert.deepEqual(buildSetAngleCommand('base', -30, 500), {
+    type: 'set_angle', servo: 'base', angle: -30, duration_ms: 500,
+  })
+  assert.deepEqual(buildSetAngleCommand('base', 180, 500), {
+    type: 'set_angle', servo: 'base', angle: 180, duration_ms: 500,
+  })
+  assert.throws(() => buildSetAngleCommand('base', 181, 500))
   assert.throws(() => buildSetAngleCommand('shoulder', 166, 400))
   assert.throws(() => buildSetAngleCommand('shoulder', 59, 400))
   assert.throws(() => buildSetAngleCommand('shoulder', 85, 100))

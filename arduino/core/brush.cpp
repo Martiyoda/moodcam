@@ -1,3 +1,5 @@
+// Implementacion del pincel: controla el mecanismo que toca o se separa del lienzo.
+// Este archivo contiene acciones fisicas, por eso los limites y estados se comprueban.
 #include "brush.h"
 
 #include <ESP32Servo.h>

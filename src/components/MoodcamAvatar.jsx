@@ -1,3 +1,5 @@
+// Paletas pequenas para que el avatar acompan e visualmente al pintor elegido.
+// Son solo datos de presentacion y no sustituyen la paleta enviada al robot.
 const ARTIST_PALETTES = {
   kandinsky: { primary: '#f6c453', accent: '#3ee7c7' },
   pollock: { primary: '#ff6b5f', accent: '#f6c453' },

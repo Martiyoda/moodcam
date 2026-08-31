@@ -179,7 +179,8 @@ export function getEmotionLabel(emotion) {
 }
 
 export function calculateEmotionSummary(samples, limit = 2) {
-  // Acumula las muestras de una ventana y devuelve las emociones más representativas.
+  // Acumula las muestras de una ventana y devuelve las emociones mas representativas.
+  // Primero sumamos cada senal y despues convertimos las sumas en porcentajes.
   const totals = {}
 
   samples.forEach((sample) => {
@@ -204,7 +205,8 @@ export function calculateEmotionSummary(samples, limit = 2) {
 }
 
 export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibration = null, colorPreferences = [], voiceSummary = null }) {
-  // Genera el plan completo de una sesión: parámetros artísticos, geometría y secuencia física.
+  // Generacion del plan completo: parametros artisticos, geometria y secuencia fisica.
+  // OpenAI puede sugerir intencion, pero este motor es quien crea y limita coordenadas.
   const artist = getArtistById(artistId)
   const primary = mainEmotions[0] || { emotion: 'neutral', percentage: 100, label: getEmotionLabel('neutral') }
   const secondary = mainEmotions[1] || primary
@@ -245,6 +247,8 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
   )
 
   const strokeCount = clamp(Math.round(6 + density / 8 + movementLevel / 7), 8, MAX_SESSION_STROKES)
+  // Limitamos el numero de trazos para que una sesion sea manejable por la cola
+  // del ESP32 y no crezca indefinidamente por una entrada emocional inesperada.
   const shapes = uniqueStrings([...artist.shapes, ...primaryProfile.shapes, ...secondaryProfile.shapes]).slice(0, 7)
   const planId = `plan-${Date.now()}`
 
@@ -299,7 +303,7 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
 }
 
 export function generateArtChunk({ windowSummary = [], artistId, recipe = null, sessionState = {}, calibration = null, mobility = 85, directives = {}, seed = '' }) {
-  // Genera un único bloque incremental y limitado para no saturar la cola del firmware.
+  // Generación de un único bloque incremental y limitado para no saturar la cola del firmware.
   const artist = getArtistById(artistId)
   const resolvedRecipe = recipe || getPainterRecipe(artist.id)
   const primary = windowSummary[0] || { emotion: 'neutral', percentage: 100, label: getEmotionLabel('neutral') }
@@ -487,23 +491,18 @@ function projectPointToCanvas(strokePoint, calibration) {
   return {
     x: round(canvas.originX + canvas.margin + (strokePoint.x / CANVAS_WIDTH) * usableWidth),
     y: round(canvas.originY + canvas.margin + (strokePoint.y / CANVAS_HEIGHT) * usableHeight),
-    z: strokePoint.brush ? z.paint : z.up,
+    z: strokePoint.z === undefined ? (strokePoint.brush ? z.paint : z.up) : strokePoint.z,
     brush: strokePoint.brush,
   }
 }
 
 function createRobotCommands(strokes, calibration, options = {}) {
-  // Inserta carga de pintura, trazos, limpieza y reposo en el orden que espera el ESP32.
+  // Inserta trazos, limpieza y reposo en el orden que espera el ESP32.
   const { finishWithRest = true, cleanAtEnd = true } = options
   const commands = []
-  let currentPaintId = null
 
   strokes.forEach((stroke) => {
     const station = findPaintStation(stroke.color, calibration)
-    if (station.id !== currentPaintId) {
-      commands.push(...createPaintLoadCommands(station, calibration))
-      currentPaintId = station.id
-    }
 
     commands.push({
       type: 'stroke',
@@ -517,7 +516,7 @@ function createRobotCommands(strokes, calibration, options = {}) {
     })
   })
 
-  if (currentPaintId && cleanAtEnd) commands.push(...createBrushCleaningCommands(calibration))
+  if (strokes.length && cleanAtEnd) commands.push(...createBrushCleaningCommands(calibration))
   if (finishWithRest) {
     commands.push({
       type: 'move_to_rest',
@@ -540,20 +539,6 @@ function createBrushCleaningCommands(calibration) {
 function findPaintStation(color, calibration) {
   const colorName = color.paint_id || color.name
   return calibration.paints.find((paint) => paint.id === colorName || paint.color === color.name) || calibration.paints[0]
-}
-
-function createPaintLoadCommands(station, calibration) {
-  const upPoint = { x: station.x, y: station.y, z: calibration.z.up, brush: 0 }
-  const dipPoint = { x: station.x, y: station.y, z: station.z ?? calibration.z.dip, brush: 0 }
-
-  return [
-    {
-      type: 'dip_paint',
-      color: station.color,
-      paint_id: station.id,
-      points: [upPoint, dipPoint, upPoint],
-    },
-  ]
 }
 
 function createWaterCommands(calibration) {
@@ -811,13 +796,13 @@ function gesturePoints(direction, movementLevel, jitter) {
 }
 
 function withLift(drawPoints) {
-  // Añade puntos con el pincel arriba al inicio y al final para evitar arrastres entre trazos.
+  // Preposiciona la muneca en contacto antes de apoyar el pincel en el primer trazo.
   if (!drawPoints.length) return []
   const first = drawPoints[0]
   const last = drawPoints[drawPoints.length - 1]
 
   return [
-    point(first.x, first.y, Z_UP, 0),
+    point(first.x, first.y, Z_PAINT, 0),
     ...drawPoints,
     point(last.x, last.y, Z_UP, 0),
   ]

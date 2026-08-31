@@ -1,3 +1,4 @@
+// Implementacion de las barreras que impiden ordenes peligrosas o fuera de rango.
 #include "safety.h"
 
 namespace {

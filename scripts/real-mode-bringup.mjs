@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Guia automatizada para poner el brazo en modo real paso a paso.
+// Las comprobaciones previas reducen el riesgo de mandar movimiento inesperado.
 // Asistente interactivo para los 3 movimientos del paso 4 del protocolo de
 // puesta en marcha del modo real. Publica un comando, espera ack/ejecucion
 // del firmware y pide confirmacion humana antes de pasar al siguiente.

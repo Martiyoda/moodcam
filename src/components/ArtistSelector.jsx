@@ -1,3 +1,5 @@
+// Este componente muestra las opciones de pintor que puede elegir la persona.
+// La seleccion solo cambia la receta artistica; no mueve el brazo por si sola.
 import { ARTISTS } from '../lib/artEngine'
 import { WRO_PRESENTATION_ARTIST_IDS } from '../lib/painterRecipes'
 

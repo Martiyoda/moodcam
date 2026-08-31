@@ -35,6 +35,8 @@ export function startAiBridge(config = loadBridgeConfig()) {
   })
 
   client.on('message', async (topic, message) => {
+    // MQTT entrega bytes; primero intentamos convertirlos en un objeto JSON.
+    // Un mensaje incompleto se ignora para no derribar todo el bridge.
     const payload = parseJsonMessage(message)
     if (!payload || typeof payload !== 'object') return
 
@@ -54,6 +56,8 @@ export function startAiBridge(config = loadBridgeConfig()) {
       }
 
       if (topic === config.topics[TOPIC_KEYS.sessionSummary]) {
+        // El resumen cierra la decision global. Si ya llegaron chunks durante
+        // la sesion, publicamos el plan informativo sin repetir comandos fisicos.
         rememberSession(payload)
         const sessionState = getSession(payload.session_id) || {}
         const latestFaceEmotion = sessionState.latestFaceEmotion
@@ -84,6 +88,8 @@ export function startAiBridge(config = loadBridgeConfig()) {
       }
 
       if (topic === config.topics[TOPIC_KEYS.sessionWindow]) {
+        // Cada ventana permite que la obra avance mientras la persona sigue
+        // participando; la cola del robot se vigila antes de enviar mas trabajo.
         rememberSessionWindow(payload)
         const sessionState = getSession(payload.session_id) || {}
         const queueBlockReason = queueBackpressureReason(sessionState.latestRobotStatus, config)
@@ -161,6 +167,8 @@ function publishBridgePresence(client, config, startedAt) {
 }
 
 function rememberSession(payload) {
+  // Guardamos solo estado temporal necesario para unir mensajes de una misma sesion.
+  // La clave de reserva latest permite aceptar estados del robot sin session_id.
   const key = payload.session_id || 'latest'
   sessions.set(key, {
     ...getSession(key),
@@ -245,6 +253,8 @@ function queueBackpressureReason(robotStatus, config) {
 }
 
 function createRobotQueueTracker(config) {
+  // El tracker combina lo que el ESP32 confirma con lo que acabamos de reservar.
+  // Esto evita llenar la cola entre dos mensajes de estado consecutivos.
   let observedDepth = 0
   let reservedDepth = 0
 

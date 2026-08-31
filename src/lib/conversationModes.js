@@ -1,3 +1,5 @@
+// Modos de conversacion que indican al sistema que tipo de interaccion espera.
+// Mantenerlos centralizados evita que cada pantalla invente nombres distintos.
 export const CONVERSATION_MODES = {
   voice_detector: {
     id: 'voice_detector',

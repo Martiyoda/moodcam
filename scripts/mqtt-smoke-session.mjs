@@ -1,3 +1,5 @@
+// Simula una sesion MQTT pequena para comprobar el cableado entre web y bridge.
+// No mueve hardware por si mismo: sirve para revisar mensajes y respuestas.
 import mqtt from 'mqtt'
 import { loadServerEnv } from '../server/loadEnv.js'
 import {

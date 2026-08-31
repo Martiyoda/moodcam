@@ -1,3 +1,5 @@
+// Une el identificador interno de cada pintor con sus datos de presentacion.
+// Asi la interfaz puede mostrar nombres y estilos sin duplicar informacion.
 import { ARTISTS } from './artEngine.js'
 
 const SIMPLE_EMOTIONS = ['neutral', 'joyful', 'calm', 'sad', 'nervous', 'tired', 'confused']

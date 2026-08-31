@@ -1,3 +1,4 @@
+// Declaraciones de las comprobaciones que protegen al brazo y a quien lo rodea.
 #pragma once
 
 #include <Arduino.h>

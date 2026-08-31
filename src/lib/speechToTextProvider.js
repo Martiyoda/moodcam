@@ -1,3 +1,5 @@
+// Crea una pequena capa sobre la API de reconocimiento de voz del navegador.
+// Solo entrega texto temporal mediante callbacks; no almacena audio por su cuenta.
 export function createBrowserSpeechToTextProvider({ lang = 'es-ES', onTranscript, onStatus, onError } = {}) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
   if (!SpeechRecognition) {

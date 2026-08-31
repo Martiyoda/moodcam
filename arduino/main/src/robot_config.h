@@ -39,7 +39,7 @@ struct RobotServoConfig {
 // Rangos verificados por la coreografia fisica de Moodcam para pinturas,
 // agua y toalla. Ajustar solo tras una nueva calibracion mecanica.
 constexpr RobotServoConfig BASE_SERVO_CONFIG = {
-  SERVO_BASE, "base", 26, true, 0, 180, 90, DEFAULT_SAFE_SPEED
+  SERVO_BASE, "base", 26, true, -30, 180, 90, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig SHOULDER_SERVO_CONFIG = {

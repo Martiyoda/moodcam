@@ -1,3 +1,5 @@
+// Protege la decision artistica: OpenAI debe devolver datos validos o el sistema
+// debe conservar un plan local seguro para no dejar la sesion a medias.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createSessionEndChunk, decideArtChunk, decideArtPlan } from './providers/artDecisionProvider.js'

@@ -1,3 +1,5 @@
+// Une varias fuentes de senales, por ejemplo rostro, voz y texto temporal.
+// El resultado se limita a las categorias que el sistema artistico entiende.
 import { dominantPhysicalEmotion, getPhysicalEmotion, normalizePhysicalEmotionScores, physicalScoresToArtSummary } from './emotionCategories.js'
 
 export function fuseEmotionSignals({ textScores, toneScores, faceScores }, weights = { text: 0.45, tone: 0.2, face: 0.35 }) {

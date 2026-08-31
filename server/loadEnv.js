@@ -1,3 +1,5 @@
+// Carga la configuracion local desde archivos de entorno sin reemplazar
+// variables que ya haya proporcionado el sistema operativo.
 import dotenv from 'dotenv'
 
 export function loadServerEnv() {

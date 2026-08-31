@@ -1,3 +1,5 @@
+// Agrupa la parte visual principal de la experiencia artistica.
+// Sus propiedades representan el estado que ya calcularon App y los hooks.
 export default function ExperiencePanel({
   sessionActive,
   remainingSeconds,

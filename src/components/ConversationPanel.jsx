@@ -1,3 +1,5 @@
+// Panel de conversacion: une el avatar con el texto y el estado de la sesion.
+// Recibe datos ya preparados para concentrarse solo en presentarlos.
 import MoodcamAvatar from './MoodcamAvatar'
 
 export default function ConversationPanel({

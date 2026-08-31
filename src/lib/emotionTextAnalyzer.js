@@ -1,3 +1,5 @@
+// Busca indicios muy basicos en el texto transcrito para completar otras senales.
+// El texto es temporal y se usa como orientacion, no como una etiqueta definitiva.
 import { normalizePhysicalEmotionScores } from './emotionCategories.js'
 
 const TEXT_KEYWORDS = {

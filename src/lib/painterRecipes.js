@@ -1,4 +1,5 @@
-// Colores realmente disponibles en la estación de pintura del prototipo WRO.
+// Colores realmente disponibles en la estacion de pintura del prototipo WRO.
+// Estas recetas convierten el estilo de un pintor en reglas que el motor puede usar.
 export const WRO_PHYSICAL_COLORS = [
     { id: 'blue', label: 'Azul', hex: '#2563eb' },
     { id: 'violet', label: 'Violeta', hex: '#7c3aed' },

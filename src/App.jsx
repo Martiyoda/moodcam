@@ -29,6 +29,8 @@ const FACE_SAMPLE_INTERVAL_MS = 650
 const VOICE_CAPTURE_ENABLED = true
 
 function App() {
+  // Cada hook se ocupa de una fuente distinta de informacion. App los coordina:
+  // camara y voz producen senales, MQTT las comparte y la pantalla muestra el estado.
   const {
     videoRef,
     canvasRef,
@@ -128,6 +130,8 @@ function App() {
   const physicalFaceEmotions = useMemo(() => mapFaceEmotionToPhysical(emotions || {}), [emotions])
   const physicalDominant = useMemo(() => dominantPhysicalEmotion(physicalFaceEmotions), [physicalFaceEmotions])
 
+  // Las refs guardan la version mas reciente para callbacks que pueden ejecutarse
+  // despues de un render. Asi una ventana MQTT no usa una copia antigua de los datos.
   useEffect(() => {
     faceSamplesRef.current = faceEmotionSamples
   }, [faceEmotionSamples])
@@ -154,6 +158,8 @@ function App() {
   }, [captureDurationMs, combinedEmotionSummary.length, sessionActive])
 
   useEffect(() => {
+    // La emocion facial puede publicarse durante la sesion, pero nunca mientras
+    // el brazo esta ocupado calibrandose: calibrar tiene prioridad fisica.
     if (calibrationLocked) return
     if (emotions && dominant) {
       publishFaceEmotion({
@@ -188,6 +194,8 @@ function App() {
   }, [dominant, emotions, physicalDominant, physicalFaceEmotions, sessionActive])
 
   const publishEmotionWindow = useCallback(({ isFinalWindow = false, windowIndex, windowStartMs, windowEndMs } = {}) => {
+    // Una ventana es un resumen de un periodo, no una fotografia ni una grabacion.
+    // Los cursores evitan publicar dos veces la misma muestra.
     if (!sessionId || !sessionStartedAt) return false
 
     const elapsedMs = windowEndMs ?? Math.max(0, Date.now() - sessionStartedAt)
@@ -240,6 +248,8 @@ function App() {
   }, [captureDurationMs, conversationMode.id, mobility, publishSessionWindow, robotCalibration, selectedArtistInfo, selectedPainterRecipe.id, selectedPainterRecipe.version, sessionId, sessionStartedAt, voiceCaptureActive])
 
   const finishSession = useCallback(() => {
+    // Al terminar reunimos lo que queda pendiente y enviamos una ultima ventana
+    // para que el bridge pueda cerrar la obra aunque el temporizador no coincida.
     const nextFaceSummary = calculateEmotionSummary(faceSamplesRef.current)
     const currentVoiceSummary = voiceSummaryRef.current
     const fusedEmotion = voiceCaptureActive ? buildVoiceFusion(emotionsRef.current) : null
