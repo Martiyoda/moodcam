@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import ssl
 from pathlib import Path
 
 import websockets
@@ -47,6 +48,9 @@ app.add_middleware(
 
 VOICE_AGENT_TYPE = os.getenv("VOICE_AGENT_TYPE", "fulgencio_agent").strip()
 FULGENCIO_AGENT_URL = os.getenv("FULGENCIO_AGENT_URL", "").strip()
+FULGENCIO_AGENT_TLS_VERIFY = os.getenv(
+    "FULGENCIO_AGENT_TLS_VERIFY", "true"
+).strip().lower() not in {"0", "false", "no", "off"}
 FULGENCIO_CONVERSATION_INSTRUCTIONS = load_instructions()
 
 
@@ -138,7 +142,13 @@ async def handle_fulgencio_agent(websocket: WebSocket) -> None:
         else FULGENCIO_AGENT_URL
     )
 
-    async with websockets.connect(connection_url) as agent_ws:
+    ssl_context = None
+    if connection_url.startswith("wss://") and not FULGENCIO_AGENT_TLS_VERIFY:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
+    async with websockets.connect(connection_url, ssl=ssl_context) as agent_ws:
         if FULGENCIO_CONVERSATION_INSTRUCTIONS:
             await agent_ws.send(
                 json.dumps(
@@ -193,7 +203,8 @@ async def websocket_endpoint(websocket: WebSocket):
         await handle_fulgencio_agent(websocket)
     except WebSocketDisconnect:
         pass
-    except Exception:
+    except Exception as exc:
+        print(f"Voice agent connection error: {type(exc).__name__}: {exc}")
         if websocket.client_state.name != "DISCONNECTED":
             try:
                 await websocket.send_json(
