@@ -9,7 +9,6 @@ import { generateArtPlan } from './lib/artEngine'
 import client from './lib/mqttClient'
 import { useVoiceConversation } from './components/Avatar/hooks/useVoiceConversation.js'
 import VideoLoop from './components/Avatar/VideoLoop'
-import { AI_PROMPTS } from './components/Avatar/constants'
 import { publishPoints } from "./lib/MQTTPublisher";
 
 const EMOTION_LABELS = {
@@ -251,7 +250,7 @@ const runSimpleArtPlan = () => {
     }
 
     if (!isRecording) {
-      await startConversation(AI_PROMPTS.cameraWelcomePrompt)
+      await startConversation()
     }
   }
 

@@ -1,53 +1,49 @@
 # Backend - Voice Relay API
 
-Backend en Python con FastAPI para relaying de conversación por voz con el modelo realtime de Azure Foundry.
+Backend FastAPI que conecta Moodcam con el agente de voz externo usado por Fulgencio.
 
-## Setup
+## Configuración
 
-1. Crear un entorno virtual:
-```bash
-python -m venv venv
-```
+1. Crear y activar un entorno virtual.
+2. Instalar las dependencias:
 
-2. Activarlo:
-- Windows: `venv\Scripts\activate`
-- Linux/Mac: `source venv/bin/activate`
-
-3. Instalar dependencias:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Configurar variables de entorno:
-- `AZURE_OPENAI_ENDPOINT`
-- `AZURE_OPENAI_API_KEY`
-- `AZURE_OPENAI_API_VERSION` opcional, por defecto `2024-10-01-preview`
-- `MODEL_NAME` opcional, por defecto `gpt-realtime`
+3. Crear `back/.env` con:
 
-5. Ejecutar el servidor:
+```dotenv
+VOICE_AGENT_TYPE=fulgencio_agent
+FULGENCIO_AGENT_URL=wss://usuario:clave@fulgencio-agent.example/ws
+```
+
+Aunque Moodcam se ejecute localmente, `FULGENCIO_AGENT_URL` apunta al servicio
+Azure e incluye sus credenciales Basic Auth. No debe versionarse.
+
+4. Ejecutar el backend:
+
 ```bash
 python main.py
 ```
 
-O con uvicorn:
+También puede iniciarse con:
+
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## Endpoints
 
-- `GET /`: comprobación básica
-- `GET /health`: estado de configuración
-- `WebSocket /ws`: relay en tiempo real de audio y eventos
+- `GET /`: estado básico y agente seleccionado.
+- `GET /health`: estado de configuración sin exponer credenciales.
+- `WebSocket /ws`: proxy de audio y eventos de conversación.
 
-## Qué hace
+## Protocolo
 
-- Recibe audio PCM16 desde el frontend
-- Lo reenvía al websocket realtime de Azure Foundry
-- Devuelve audio y eventos al navegador
+- Entrada: audio PCM16, mono, 16 kHz, enviado como frames binarios.
+- Salida: eventos JSON `stt_output`, `agent_chunk`, `agent_end` y `tts_chunk`.
+- El agente gestiona los turnos y las respuestas.
+- `back/prompts.py` contiene la personalidad y el saludo de Dalí.
 
-## Qué no hace
-
-- No usa Firebase
-- No genera imágenes
-- No guarda contexto de usuario
+Este backend no usa Firebase, Azure SQL ni generación de imágenes.

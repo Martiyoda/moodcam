@@ -1,14 +1,15 @@
 import asyncio
-import base64
 import json
 import os
-import ssl
 from pathlib import Path
 
 import websockets
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from websockets.exceptions import ConnectionClosed
+
+from fulgencio_conversation import add_config_query, load_instructions
 
 ENV_FILE = Path(__file__).resolve().parent / ".env"
 load_dotenv(ENV_FILE, override=False)
@@ -44,81 +45,134 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "").strip()
-AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "").strip()
-AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-01-preview").strip()
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-realtime").strip()
-
-
-def build_realtime_url() -> str:
-    endpoint = AZURE_OPENAI_ENDPOINT.rstrip("/")
-    if endpoint.startswith("https://"):
-        endpoint = endpoint.replace("https://", "wss://", 1)
-    elif endpoint.startswith("http://"):
-        endpoint = endpoint.replace("http://", "ws://", 1)
-
-    return f"{endpoint}/openai/realtime?deployment={MODEL_NAME}&api-version={AZURE_OPENAI_API_VERSION}"
+VOICE_AGENT_TYPE = os.getenv("VOICE_AGENT_TYPE", "fulgencio_agent").strip()
+FULGENCIO_AGENT_URL = os.getenv("FULGENCIO_AGENT_URL", "").strip()
+FULGENCIO_CONVERSATION_INSTRUCTIONS = load_instructions()
 
 
 def is_backend_configured() -> bool:
-    return bool(AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY)
+    return VOICE_AGENT_TYPE == "fulgencio_agent" and bool(FULGENCIO_AGENT_URL)
 
 
-def is_ssl_certificate_error(exc: Exception) -> bool:
-    message = str(exc).lower()
-    return "certificate verify failed" in message or "ssl" in message and "certificate" in message
+def normalize_external_agent_event(data: dict) -> dict:
+    if data.get("type") != "session.created":
+        return data
+
+    return {
+        **data,
+        "voice_agent": "fulgencio_agent",
+        "server_manages_responses": True,
+    }
 
 
-async def relay_realtime_session(websocket: WebSocket, realtime_url: str, headers: dict) -> None:
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-
+async def forward_client_to_agent(websocket: WebSocket, agent_ws) -> None:
     try:
-        async with websockets.connect(
-            realtime_url,
-            additional_headers=headers,
-            ssl=ssl_context,
-        ) as realtime_ws:
-            client_task = asyncio.create_task(
-                forward_client_to_azure(websocket, realtime_ws)
-            )
-            azure_task = asyncio.create_task(
-                forward_azure_to_client(websocket, realtime_ws)
-            )
-            done, pending = await asyncio.wait(
-                {client_task, azure_task},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+        while True:
+            data = await websocket.receive()
+            if data.get("type") == "websocket.disconnect":
+                return
 
-            for task in pending:
-                task.cancel()
+            payload = data.get("bytes")
 
-            await asyncio.gather(*pending, return_exceptions=True)
-            for task in done:
-                task.result()
-    except WebSocketDisconnect:
+            if payload:
+                await agent_ws.send(payload)
+            # El agente gestiona la sesión y las respuestas. Los antiguos
+            # mensajes de control de Azure no se reenvían.
+    except (WebSocketDisconnect, ConnectionClosed):
         return
-    except Exception as exc:
-        raise exc
+
+
+async def forward_agent_to_client(websocket: WebSocket, agent_ws) -> None:
+    try:
+        while True:
+            message = await agent_ws.recv()
+            if not isinstance(message, str):
+                continue
+
+            try:
+                data = json.loads(message)
+            except json.JSONDecodeError:
+                continue
+
+            await websocket.send_json(normalize_external_agent_event(data))
+    except (WebSocketDisconnect, ConnectionClosed):
+        return
+
+
+async def relay_external_agent_connection(agent_ws, websocket: WebSocket) -> None:
+    await websocket.send_json(
+        {
+            "type": "session.created",
+            "message": "Conectado a Fulgencio Agent",
+            "voice_agent": "fulgencio_agent",
+            "server_manages_responses": True,
+        }
+    )
+
+    client_task = asyncio.create_task(forward_client_to_agent(websocket, agent_ws))
+    agent_task = asyncio.create_task(forward_agent_to_client(websocket, agent_ws))
+    done, pending = await asyncio.wait(
+        {client_task, agent_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    for task in pending:
+        task.cancel()
+
+    await asyncio.gather(*done, *pending, return_exceptions=True)
+
+
+async def handle_fulgencio_agent(websocket: WebSocket) -> None:
+    if not FULGENCIO_AGENT_URL:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": "El agente de voz no está configurado.",
+            }
+        )
+        return
+
+    connection_url = (
+        add_config_query(FULGENCIO_AGENT_URL)
+        if FULGENCIO_CONVERSATION_INSTRUCTIONS
+        else FULGENCIO_AGENT_URL
+    )
+
+    async with websockets.connect(connection_url) as agent_ws:
+        if FULGENCIO_CONVERSATION_INSTRUCTIONS:
+            await agent_ws.send(
+                json.dumps(
+                    {
+                        "type": "conversation.configure",
+                        "instructions": FULGENCIO_CONVERSATION_INSTRUCTIONS,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+        await relay_external_agent_connection(agent_ws, websocket)
 
 
 @app.get("/")
 async def root():
-    return {"ok": True, "service": "voice-relay"}
+    return {
+        "ok": True,
+        "service": "voice-relay",
+        "voice_agent": VOICE_AGENT_TYPE,
+        "configured": is_backend_configured(),
+    }
 
 
 @app.get("/health")
 async def health():
     return {
         "ok": True,
-        "azure_openai_configured": is_backend_configured(),
-        "model_name": MODEL_NAME,
-        "api_version": AZURE_OPENAI_API_VERSION,
+        "voice_agent": VOICE_AGENT_TYPE,
+        "configured": is_backend_configured(),
+        "endpoint_configured": bool(FULGENCIO_AGENT_URL),
+        "conversation_configured": bool(FULGENCIO_CONVERSATION_INSTRUCTIONS),
         "env_file": str(ENV_FILE),
         "env_file_exists": ENV_FILE.exists(),
-        "endpoint_configured": bool(AZURE_OPENAI_ENDPOINT),
-        "api_key_configured": bool(AZURE_OPENAI_API_KEY),
     }
 
 
@@ -126,40 +180,28 @@ async def health():
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    if not is_backend_configured():
-        await websocket.send_json(
-            {
-                "type": "error",
-                "message": "Azure OpenAI no está configurado. Revisa las variables de entorno.",
-            }
-        )
-        await websocket.close()
-        return
-
-    headers = {"api-key": AZURE_OPENAI_API_KEY}
-    realtime_url = build_realtime_url()
-
     try:
-        await relay_realtime_session(websocket, realtime_url, headers)
+        if VOICE_AGENT_TYPE != "fulgencio_agent":
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "message": "El tipo de agente de voz configurado no es compatible.",
+                }
+            )
+            return
+
+        await handle_fulgencio_agent(websocket)
     except WebSocketDisconnect:
         pass
-    except Exception as exc:
+    except Exception:
         if websocket.client_state.name != "DISCONNECTED":
             try:
-                error_message = str(exc)
-                if not error_message:
-                    error_message = "Error desconocido al conectar con Azure OpenAI"
                 await websocket.send_json(
                     {
                         "type": "error",
-                        "message": error_message,
-                        "error": {
-                            "type": "azure_connection_error",
-                            "message": error_message,
-                        },
+                        "message": "No se ha podido conectar con el agente de voz.",
                     }
                 )
-                await asyncio.sleep(0.1)
             except Exception:
                 pass
     finally:
@@ -168,54 +210,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.close()
         except Exception:
             pass
-
-
-async def forward_client_to_azure(websocket: WebSocket, realtime_ws) -> None:
-    try:
-        while True:
-            data = await websocket.receive()
-
-            if "bytes" in data and data["bytes"] is not None:
-                payload = data["bytes"]
-                if payload:
-                    audio_event = {
-                        "type": "input_audio_buffer.append",
-                        "audio": base64.b64encode(payload).decode("utf-8"),
-                    }
-                    await realtime_ws.send(json.dumps(audio_event))
-                continue
-
-            if "text" in data and data["text"] is not None:
-                message = data["text"]
-                if message:
-                    await realtime_ws.send(message)
-    except WebSocketDisconnect:
-        return
-    except Exception:
-        return
-
-
-async def forward_azure_to_client(websocket: WebSocket, realtime_ws) -> None:
-    try:
-        while True:
-            message = await realtime_ws.recv()
-
-            if isinstance(message, bytes):
-                await websocket.send_bytes(message)
-                continue
-
-            if isinstance(message, str):
-                try:
-                    json.loads(message)
-                    await websocket.send_text(message)
-                except json.JSONDecodeError:
-                    await websocket.send_text(message)
-    except websockets.exceptions.ConnectionClosed:
-        return
-    except WebSocketDisconnect:
-        return
-    except Exception:
-        return
 
 
 if __name__ == "__main__":
@@ -236,6 +230,9 @@ if __name__ == "__main__":
 
     print(f"Starting backend on port {port}")
     print(
-        f"Azure env status: endpoint={bool(AZURE_OPENAI_ENDPOINT)} api_key={bool(AZURE_OPENAI_API_KEY)} model={MODEL_NAME or '(empty)'}"
+        "Voice agent status: "
+        f"type={VOICE_AGENT_TYPE or '(empty)'} "
+        f"endpoint={bool(FULGENCIO_AGENT_URL)} "
+        f"conversation={bool(FULGENCIO_CONVERSATION_INSTRUCTIONS)}"
     )
     uvicorn.run(app, host="0.0.0.0", port=port)

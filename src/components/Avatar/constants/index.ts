@@ -1,5 +1,3 @@
-import { VOICE_ASSISTANT_INSTRUCTIONS } from "./aiPrompts";
-
 export const WEBSOCKET_URL =
   import.meta.env.VITE_WS_URL ||
   (typeof window !== "undefined"
@@ -29,24 +27,4 @@ export const VOICE_DETECTION = {
   speakingThreshold: 0.005,
   silenceDurationMs: 1000,
 } as const;
-
-export const SESSION_CONFIG = {
-  modalities: ["text", "audio"],
-  instructions: VOICE_ASSISTANT_INSTRUCTIONS,
-  voice: "shimmer",
-  input_audio_format: "pcm16",
-  output_audio_format: "pcm16",
-  input_audio_transcription: {
-    model: "whisper-1",
-  },
-  turn_detection: {
-    type: "server_vad",
-    threshold: 0.5,
-    prefix_padding_ms: 300,
-    silence_duration_ms: 1000,
-    create_response: true,
-  },
-} as const;
-
-export * from "./aiPrompts";
 

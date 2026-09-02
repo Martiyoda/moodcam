@@ -1,5 +1,4 @@
-import { SESSION_CONFIG } from "../constants";
-import { WebSocketMessage, SessionConfig } from "../types";
+import { WebSocketMessage } from "../types";
 
 /**
  * Servicio para manejar la comunicación WebSocket
@@ -19,8 +18,7 @@ export class WebSocketService {
         this.ws = new WebSocket(url);
 
         this.ws.onopen = () => {
-          console.log("🔌 WebSocket abierto, inicializando sesión...");
-          this.initializeSession();
+          console.log("🔌 WebSocket abierto");
           // Disparar handler de conexión
           // Los handlers ya deberían estar registrados antes de conectar
           console.log("📢 Disparando onOpen handler, handlers registrados:", !!this.connectionHandlers.onOpen);
@@ -46,21 +44,6 @@ export class WebSocketService {
       } catch (error) {
         reject(error);
       }
-    });
-  }
-
-  private initializeSession() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
-    // Inicializar la sesión con GPT Realtime
-    this.send({
-      type: "session.update",
-      session: {
-        ...SESSION_CONFIG,
-        modalities: [...SESSION_CONFIG.modalities],
-        turn_detection: { ...SESSION_CONFIG.turn_detection },
-        input_audio_transcription: { ...SESSION_CONFIG.input_audio_transcription },
-      } as SessionConfig,
     });
   }
 

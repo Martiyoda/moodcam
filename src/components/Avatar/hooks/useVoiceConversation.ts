@@ -13,7 +13,7 @@ interface UseVoiceConversationReturn {
   error: string;
   connectionStatus: ConnectionStatus;
   isSpeaking: boolean;
-  startConversation: (initialPrompt?: string) => Promise<void>;
+  startConversation: () => Promise<void>;
   stopConversation: () => void;
   toggleConversation: () => void;
   clearError: () => void;
@@ -46,6 +46,7 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
     useAudioPlayback();
 
   const currentResponseIdRef = useRef<string | null>(null);
+  const externalAgentResponseActiveRef = useRef<boolean>(false);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const wasAssistantSpeakingRef = useRef<boolean>(false);
@@ -102,6 +103,10 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
 
   const handleUserSpeaking = useCallback(
     (speaking: boolean, wasSpeaking: boolean) => {
+      if (speaking && !wasSpeaking) {
+        externalAgentResponseActiveRef.current = false;
+      }
+
       const isHalfDuplexBlocked =
         hasActiveAudio() || Date.now() < halfDuplexHoldUntilRef.current;
       if (isHalfDuplexBlocked) {
@@ -120,7 +125,7 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
   );
 
   const startConversation = useCallback(
-    async (initialPrompt?: string) => {
+    async () => {
       try {
         setError("");
         setConnectionStatus("Connecting");
@@ -306,6 +311,77 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
           isInterruptedRef.current = false;
         });
 
+        onMessage("stt_output", (data: WebSocketMessage) => {
+          const transcript = (data.transcript as string) || "";
+          externalAgentResponseActiveRef.current = false;
+
+          if (!transcript.trim()) {
+            return;
+          }
+
+          setTranscription((prev) => [
+            ...prev,
+            {
+              role: "user",
+              content: transcript,
+              timestamp: new Date(),
+            },
+          ]);
+        });
+
+        onMessage("agent_chunk", (data: WebSocketMessage) => {
+          const chunkText = (data.text as string) || "";
+          if (!chunkText.trim()) {
+            return;
+          }
+
+          setTranscription((prev) => {
+            const lastMessage = prev[prev.length - 1];
+            if (
+              externalAgentResponseActiveRef.current &&
+              lastMessage?.role === "assistant"
+            ) {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  ...lastMessage,
+                  content: lastMessage.content + chunkText,
+                },
+              ];
+            }
+
+            externalAgentResponseActiveRef.current = true;
+            return [
+              ...prev,
+              {
+                role: "assistant",
+                content: chunkText,
+                timestamp: new Date(),
+              },
+            ];
+          });
+        });
+
+        onMessage("agent_end", () => {
+          externalAgentResponseActiveRef.current = false;
+          currentResponseIdRef.current = null;
+        });
+
+        onMessage("tts_chunk", (data: WebSocketMessage) => {
+          if (isInterruptedRef.current) {
+            return;
+          }
+
+          try {
+            const audioBase64 = (data.audio as string) || "";
+            if (audioBase64) {
+              playAudio(base64ToFloat32(audioBase64));
+            }
+          } catch (audioErr) {
+            console.error("Error procesando audio TTS:", audioErr);
+          }
+        });
+
         onMessage("error", (data: WebSocketMessage) => {
           const directMessage =
             typeof data.message === "string" ? data.message : "";
@@ -326,6 +402,7 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
             setConnectionStatus("Connected");
             setIsRecording(true);
             currentResponseIdRef.current = null;
+            externalAgentResponseActiveRef.current = false;
             isInterruptedRef.current = false;
 
             if (silenceTimerRef.current) {
@@ -346,16 +423,6 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
 
         await connect(WEBSOCKET_URL);
         await startRecording(handleAudioChunk, handleUserSpeaking);
-
-        if (initialPrompt) {
-          send({
-            type: "response.create",
-            response: {
-              modalities: ["text", "audio"],
-              instructions: initialPrompt,
-            },
-          });
-        }
       } catch (err) {
         console.error("Error iniciando conversacion:", err);
         setError(
@@ -376,7 +443,6 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
       playAudio,
       stopAllAudio,
       handleUserSpeaking,
-      send,
     ]
   );
 
@@ -402,6 +468,7 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
     setIsConnected(false);
     setConnectionStatus("Disconnected");
     currentResponseIdRef.current = null;
+    externalAgentResponseActiveRef.current = false;
     isInterruptedRef.current = false;
     setTranscription([]);
   }, [disconnect, stopRecording, stopAllAudio, send, wsIsConnected]);
