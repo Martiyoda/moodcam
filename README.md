@@ -15,7 +15,9 @@ Moodcam uses machine learning models running entirely in the browser to detect f
 - **Face mesh overlay** — Draws facial polygon meshes on a canvas layer over the live video.
 - **100% client-side** — All inference happens locally in the browser via TensorFlow.js (through the `@vladmandic/human` library). No images or data are sent to any server.
 - **Responsive UI** — Two-column layout on desktop, single-column on mobile. Built with Tailwind CSS v4.
-- **MQTT telemetry** — Optionally publish emotional state to an MQTT broker via WebSocket. Hybrid strategy: sends on dominant emotion change or as a periodic heartbeat.
+- **Voice avatar** — Connects to the Fulgencio voice agent through the local backend relay, with live transcription and audio responses.
+- **Robot integration** — Publishes emotion session summaries and arm/servo commands through MQTT over WebSocket.
+- **MQTT telemetry** — Connects to a configurable MQTT broker and publishes session results, online/offline status, and robot commands.
 - **Deployable to Vercel** — Includes `vercel.json` with aggressive caching headers for model files.
 
 ## 🛠 Tech Stack
@@ -47,10 +49,11 @@ moodcam/
 │   ├── index.css                  # Tailwind CSS import
 │   ├── components/
 │   │   ├── CameraView.jsx         # Video + canvas overlay with live indicator
-│   │   └── EmotionDisplay.jsx     # Dominant emotion, emotion bars
+│   │   ├── EmotionDisplay.jsx     # Dominant emotion, emotion bars
+│   │   └── Avatar/                # Voice avatar, audio capture/playback and relay client
 │   └── hooks/
 │       ├── useFaceDetection.js    # Core hook: model loading, camera, detection loop
-│       └── useMqtt.js             # MQTT connection, hybrid publishing, LWT
+│       └── useMqtt.js             # MQTT connection, session and robot publishing, LWT
 ├── index.html                     # HTML shell (lang="es")
 ├── vite.config.js                 # Vite + React + Tailwind plugins
 ├── eslint.config.js               # ESLint flat config
@@ -76,6 +79,16 @@ moodcam/
 - **Lazy description** — `description` (age/gender) is disabled in config but age/gender are still extracted from `faceres` when available.
 - **Frame-rate adaptive** — Uses `requestAnimationFrame` so detection speed adapts to device capabilities.
 
+### Voice and Robot Flow
+
+1. The browser connects to the backend relay at `ws://localhost:8000/ws` (or
+  the URL provided by `VITE_WS_URL`), so Fulgencio credentials remain on the server.
+2. The relay connects to `FULGENCIO_AGENT_URL`, forwards microphone audio, and
+  returns transcription, agent text, and TTS audio events.
+3. Face detection continues locally while the voice conversation is active.
+4. MQTT publishes the completed emotion session to `{topicBase}/emotion` and
+  robot commands to `robot/arm` and `robot/servo1`.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -99,6 +112,15 @@ npm run dev
 ```
 
 Opens at `http://localhost:5173`. Click **"📷 Iniciar Cámara"**, grant camera permissions, and see your emotions detected live.
+
+To use the voice avatar, configure `back/.env` as described in
+[`back/README.md`](back/README.md) and start both services with:
+
+```bash
+./macrun
+```
+
+The robot can remain connected through MQTT while the avatar is conversing.
 
 ### Build for Production
 
@@ -187,17 +209,24 @@ For the most stable emotion readings, try this combination:
 
 ## 🔒 Privacy
 
-All processing happens **entirely in your browser**. No video frames, images, or detection results are ever transmitted to a server. The ML models are static files served alongside the app.
+Face detection and emotion inference happen **entirely in your browser**. No
+video frames or images are sent to the backend. When the voice avatar is active,
+microphone audio is sent through the relay to Fulgencio so it can transcribe and
+answer. MQTT receives only the configured emotion/session payloads and robot
+commands, never camera images or video.
 
 **Note on MQTT:** When MQTT is enabled, only the detected emotion label, confidence scores, and a timestamp are published to the configured broker. No images or video data are ever sent. MQTT is disabled by default.
 
 ## 📡 MQTT Telemetry
 
-Moodcam can optionally publish the detected emotional state to an MQTT broker via WebSocket, enabling integration with dashboards, IoT devices, home automation, or any MQTT-compatible system.
+Moodcam can publish emotion session data and robot commands to an MQTT broker via
+WebSocket, enabling integration with dashboards, IoT devices, home automation,
+or any MQTT-compatible robot.
 
 ### How It Works
 
-The publishing follows a **hybrid strategy**:
+Emotion publishing currently occurs when a camera session finishes and produces a
+session summary. The same MQTT connection is also used for robot controls.
 
 1. **On change** — A message is published immediately when the dominant emotion changes (e.g. "happy" → "surprised").
 2. **Heartbeat** — If the dominant emotion stays the same, a heartbeat message is sent after a configurable interval (default: 2 seconds).
@@ -210,29 +239,29 @@ This minimizes traffic while ensuring subscribers always have up-to-date data.
 |---|---|---|---|
 | `{topicBase}/emotion` | 0 | No | Emotion data payload (published on change or heartbeat) |
 | `{topicBase}/status` | 1 | Yes | Online/offline status. Uses MQTT Last Will and Testament (LWT) for automatic offline notification on disconnect. |
+| `robot/arm` | 0 | No | Emotion pose commands such as `SOFT`, `STRONG`, or `REST`. |
+| `robot/servo1` | 0 | No | Servo commands and generated drawing points. |
 
 ### Emotion Payload
 
 ```json
 {
-  "dominant": "happy",
-  "confidence": 0.87,
-  "emotions": {
-    "happy": 0.87,
-    "neutral": 0.10,
-    "surprised": 0.03
-  },
-  "trigger": "change",
+  "duration": 12,
+  "samples": 42,
+  "emotion1": "happy",
+  "value1": 0.87,
+  "emotion2": "neutral",
+  "value2": 0.10,
   "timestamp": 1719500000000
 }
 ```
 
 | Field | Type | Description |
 |---|---|---|
-| `dominant` | string | The emotion with the highest confidence score. |
-| `confidence` | number | Confidence score (0–1) of the dominant emotion. |
-| `emotions` | object | All emotions above the min. confidence threshold with their scores. |
-| `trigger` | string | `"change"` if the dominant emotion just changed, `"heartbeat"` if it's a periodic update. |
+| `duration` | number | Session duration in seconds. |
+| `samples` | number | Number of samples captured during the session. |
+| `emotion1`, `emotion2` | string | The two most representative emotions in the session. |
+| `value1`, `value2` | number | Session score for each representative emotion (0–1). |
 | `timestamp` | number | Unix timestamp in milliseconds. |
 
 ### Configuration
@@ -241,12 +270,12 @@ All MQTT settings are available in the settings panel under **📡 MQTT** and ar
 
 | Parameter | Default | Description |
 |---|---|---|
-| **Enable MQTT** | `off` | Enables or disables the MQTT connection. |
-| **Broker URL** | `wss://broker.emqx.io:8084/mqtt` | WebSocket URL of the MQTT broker. Must use `wss://` when the app is served over HTTPS. |
+| **Enable MQTT** | `on` | Enables or disables the MQTT connection used by the robot and session publishing. |
+| **Broker URL** | `wss://6a2904749cd54c2d9d727a3a85a645b5.s1.eu.hivemq.cloud:8884/mqtt` | WebSocket URL of the MQTT broker. Must use `wss://` when the app is served over HTTPS. |
 | **Topic Base** | `moodcam/device1` | Root topic. Messages are published to `{base}/emotion` and `{base}/status`. |
-| **Username** | *(empty)* | Username for broker authentication (leave empty if not required). |
-| **Password** | *(empty)* | Password for broker authentication (leave empty if not required). |
-| **Heartbeat interval (ms)** | `2000` | Maximum time between publications. If the dominant emotion doesn't change, a heartbeat is sent after this interval. Range: 500–10,000 ms. |
+| **Username** | `esp32` | Username for broker authentication. |
+| **Password** | *(configured locally)* | Password for broker authentication. Do not commit credentials. |
+| **Heartbeat interval (ms)** | `2000` | Retained for compatibility with saved settings; session summaries are published when a session finishes. |
 
 ### Broker Requirements
 
