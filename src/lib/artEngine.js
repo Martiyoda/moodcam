@@ -1,8 +1,15 @@
+// Motor local que transforma emociones y recetas de pintor en trazos y comandos MQTT para el brazo.
+import { getPainterRecipe, getPhysicalColor, getRecipeColorsForEmotion } from './painterRecipes.js'
+
+// Coordenadas internas compactas; después se proyectan al lienzo A4 calibrado.
 const CANVAS_WIDTH = 220
 const CANVAS_HEIGHT = 160
 const SAFE_MARGIN = 6
 const Z_UP = 28
 const Z_PAINT = 8
+export const MAX_SESSION_STROKES = 8
+
+let activeRandom = Math.random
 
 export const EMOTION_PROFILES = {
   happy: {
@@ -105,6 +112,7 @@ export const EMOTION_PROFILES = {
   },
 }
 
+// Parámetros visuales y de movimiento base de cada artista disponible en la presentación WRO.
 export const ARTISTS = [
   {
     id: 'kandinsky',
@@ -158,30 +166,21 @@ export const ARTISTS = [
     randomness: 28,
     mobility: 68,
   },
-  {
-    id: 'de-kooning',
-    name: 'De Kooning',
-    style: 'gesture',
-    label: 'Gesto intenso',
-    summary: 'Curvas rotas, barridos y trazos fragmentados.',
-    shapes: ['gesture', 'slash', 'curve', 'broken_line'],
-    baseSpeed: 82,
-    basePressure: 72,
-    density: 74,
-    randomness: 70,
-    mobility: 90,
-  },
 ]
 
 export function getArtistById(artistId) {
+  // Un artista desconocido cae en Kandinsky para mantener siempre una receta válida.
   return ARTISTS.find((artist) => artist.id === artistId) || ARTISTS[0]
 }
 
 export function getEmotionLabel(emotion) {
+  // Traduce el identificador técnico a la etiqueta que se muestra en la interfaz.
   return EMOTION_PROFILES[emotion]?.label || emotion
 }
 
 export function calculateEmotionSummary(samples, limit = 2) {
+  // Acumula las muestras de una ventana y devuelve las emociones mas representativas.
+  // Primero sumamos cada senal y despues convertimos las sumas en porcentajes.
   const totals = {}
 
   samples.forEach((sample) => {
@@ -206,6 +205,8 @@ export function calculateEmotionSummary(samples, limit = 2) {
 }
 
 export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibration = null, colorPreferences = [], voiceSummary = null }) {
+  // Generacion del plan completo: parametros artisticos, geometria y secuencia fisica.
+  // OpenAI puede sugerir intencion, pero este motor es quien crea y limita coordenadas.
   const artist = getArtistById(artistId)
   const primary = mainEmotions[0] || { emotion: 'neutral', percentage: 100, label: getEmotionLabel('neutral') }
   const secondary = mainEmotions[1] || primary
@@ -214,8 +215,16 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
   const movementLevel = clamp(mobility, 0, 100)
   const resolvedCalibration = normalizeCalibration(calibration)
 
-  const baseColors = uniqueColors([...primaryProfile.colors, ...secondaryProfile.colors]).slice(0, 5)
-  const colors = selectPalette(baseColors, colorPreferences, resolvedCalibration.paints)
+  const recipe = getPainterRecipe(artist.id)
+  const recipeColors = uniqueStrings([
+    ...getRecipeColorsForEmotion(recipe, primary.emotion),
+    ...getRecipeColorsForEmotion(recipe, secondary.emotion),
+  ])
+  const baseColors = recipeColors.map((colorId) => {
+    const color = getPhysicalColor(colorId)
+    return { name: color.id, hex: color.hex }
+  })
+  const colors = selectPalette(baseColors, colorPreferences, resolvedCalibration.paints).slice(0, 2)
   const speed = clamp(
     Math.round(weightedAverage(primaryProfile.speed, secondaryProfile.speed, primary.percentage) * 0.45 + artist.baseSpeed * 0.35 + movementLevel * 0.2),
     15,
@@ -237,7 +246,9 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
     100
   )
 
-  const strokeCount = clamp(Math.round(6 + density / 8 + movementLevel / 7), 8, 30)
+  const strokeCount = clamp(Math.round(6 + density / 8 + movementLevel / 7), 8, MAX_SESSION_STROKES)
+  // Limitamos el numero de trazos para que una sesion sea manejable por la cola
+  // del ESP32 y no crezca indefinidamente por una entrada emocional inesperada.
   const shapes = uniqueStrings([...artist.shapes, ...primaryProfile.shapes, ...secondaryProfile.shapes]).slice(0, 7)
   const planId = `plan-${Date.now()}`
 
@@ -256,8 +267,10 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
   ))
   const strokes = rawStrokes.map((stroke) => ({
     ...stroke,
-    points: stroke.points.map((strokePoint) => projectPointToCanvas(strokePoint, resolvedCalibration)),
-  }))
+    points: stroke.points
+      .slice(0, 10)
+      .map((strokePoint) => projectPointToCanvas(strokePoint, resolvedCalibration)),
+  })).sort((first, second) => first.color.name.localeCompare(second.color.name))
   const robotCommands = createRobotCommands(strokes, resolvedCalibration)
 
   return {
@@ -289,6 +302,104 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
   }
 }
 
+export function generateArtChunk({ windowSummary = [], artistId, recipe = null, sessionState = {}, calibration = null, mobility = 85, directives = {}, seed = '' }) {
+  // Generación de un único bloque incremental y limitado para no saturar la cola del firmware.
+  const artist = getArtistById(artistId)
+  const resolvedRecipe = recipe || getPainterRecipe(artist.id)
+  const primary = windowSummary[0] || { emotion: 'neutral', percentage: 100, label: getEmotionLabel('neutral') }
+  const secondary = windowSummary[1] || primary
+  const primaryProfile = getProfile(primary.emotion)
+  const secondaryProfile = getProfile(secondary.emotion)
+  const movementLevel = clamp(mobility, 0, 100)
+  const resolvedCalibration = normalizeCalibration(calibration)
+  const chunkSeed = seed || `${sessionState.session_id || 'session'}:${sessionState.window_index || 0}:${resolvedRecipe.id}:${primary.emotion}`
+
+  return withDeterministicRandom(chunkSeed, () => {
+    const recipeColors = uniqueStrings([
+      ...(directives.palette_slots || []),
+      ...getRecipeColorsForEmotion(resolvedRecipe, primary.emotion),
+      ...getRecipeColorsForEmotion(resolvedRecipe, secondary.emotion),
+    ])
+    const baseColors = recipeColors.map((colorId) => {
+      const color = getPhysicalColor(colorId)
+      return { name: color.id, hex: color.hex }
+    })
+    const colors = selectPalette(baseColors, recipeColors, resolvedCalibration.paints).slice(0, 2)
+    const speed = clamp(
+      Math.round(weightedAverage(primaryProfile.speed, secondaryProfile.speed, primary.percentage) * 0.4 + artist.baseSpeed * 0.35 + movementLevel * 0.25),
+      resolvedRecipe.speed_range[0],
+      resolvedRecipe.speed_range[1]
+    )
+    const pressure = clamp(
+      Math.round(weightedAverage(primaryProfile.pressure, secondaryProfile.pressure, primary.percentage) * 0.55 + artist.basePressure * 0.45),
+      resolvedRecipe.pressure_range[0],
+      resolvedRecipe.pressure_range[1]
+    )
+    const density = clamp(
+      Math.round(weightedAverage(primaryProfile.density, secondaryProfile.density, primary.percentage) * 0.5 + artist.density * 0.35 + movementLevel * 0.15),
+      resolvedRecipe.density_range[0],
+      resolvedRecipe.density_range[1]
+    )
+    const randomness = clamp(directives.randomness ?? artist.randomness, 0, 100)
+    const completedStrokeCount = Math.max(0, Number(sessionState.completed_stroke_count) || 0)
+    const maxSessionStrokes = Math.max(0, Number(sessionState.max_strokes) || MAX_SESSION_STROKES)
+    const remainingStrokeBudget = Math.max(0, maxSessionStrokes - completedStrokeCount)
+    const strokeCount = remainingStrokeBudget > 0 ? 1 : 0
+    const shapes = uniqueStrings([...(directives.gestures || []), ...resolvedRecipe.allowed_gestures, ...artist.shapes]).slice(0, 7)
+    const chunkId = sessionState.chunk_id || `${sessionState.session_id || 'session'}-window-${sessionState.window_index || 0}-chunk-${sessionState.chunk_index || 1}`
+
+    const rawStrokes = Array.from({ length: strokeCount }, (_, index) => createStroke({
+      index,
+      artist,
+      shapes,
+      colors,
+      speed,
+      pressure,
+      randomness,
+      movementLevel,
+      direction: index % 2 === 0 ? primaryProfile.direction : secondaryProfile.direction,
+    }))
+    const strokes = rawStrokes.map((stroke) => ({
+      ...stroke,
+      id: `${chunkId}-${stroke.id}`,
+      points: stroke.points
+        .slice(0, resolvedRecipe.limits.max_points_per_stroke)
+        .map((strokePoint) => projectPointToCanvas(strokePoint, resolvedCalibration)),
+    })).sort((first, second) => first.color.name.localeCompare(second.color.name))
+    const robotCommands = createRobotCommands(strokes, resolvedCalibration, { finishWithRest: false, cleanAtEnd: false })
+
+    return {
+      id: chunkId,
+      chunk_id: chunkId,
+      session_id: sessionState.session_id,
+      window_index: sessionState.window_index || 0,
+      chunk_index: sessionState.chunk_index || 1,
+      chunk_total: sessionState.chunk_total || 1,
+      artist: artist.id,
+      artist_name: artist.name,
+      recipe_id: resolvedRecipe.id,
+      recipe_version: resolvedRecipe.version,
+      main_emotion: primary.emotion,
+      secondary_emotion: secondary.emotion,
+      main_emotions: [primary, secondary],
+      colors: colors.map((color) => color.name),
+      palette: colors,
+      shapes,
+      speed,
+      pressure,
+      density,
+      randomness,
+      seed: chunkSeed,
+      canvas: { ...resolvedCalibration.canvas, unit: 'mm', orientation: 'horizontal-a4' },
+      calibration: resolvedCalibration,
+      strokes,
+      robot_commands: robotCommands,
+      queue_policy: 'enqueue',
+      close_session: Boolean(sessionState.close_session),
+    }
+  })
+}
+
 function getProfile(emotion) {
   return EMOTION_PROFILES[emotion] || EMOTION_PROFILES.neutral
 }
@@ -303,20 +414,12 @@ function weightedAverage(primaryValue, secondaryValue, primaryPercentage) {
   return primaryValue * primaryWeight + secondaryValue * (1 - primaryWeight)
 }
 
-function uniqueColors(colors) {
-  const seen = new Set()
-  return colors.filter((color) => {
-    if (seen.has(color.name)) return false
-    seen.add(color.name)
-    return true
-  })
-}
-
 function uniqueStrings(values) {
   return [...new Set(values)]
 }
 
 function normalizeCalibration(calibration) {
+  // Completa la calibración parcial con dimensiones A4 y estaciones físicas por defecto.
   const canvas = {
     originX: 0,
     originY: 0,
@@ -340,16 +443,16 @@ function normalizeCalibration(calibration) {
     water: calibration?.water || { x: canvas.originX + canvas.width + 33, y: canvas.originY + 145, z: z.dip },
     towel: calibration?.towel || { x: canvas.originX + canvas.width + 33, y: canvas.originY + 170, z: z.paint },
     paints: paints.length ? paints : [
-      { id: 'yellow', label: 'Amarillo', color: 'yellow', hex: '#f8d447', x: canvas.originX + canvas.width + 33, y: 18, z: z.dip },
-      { id: 'orange', label: 'Naranja', color: 'orange', hex: '#f97316', x: canvas.originX + canvas.width + 33, y: 42, z: z.dip },
-      { id: 'red', label: 'Rojo', color: 'red', hex: '#ef4444', x: canvas.originX + canvas.width + 33, y: 66, z: z.dip },
-      { id: 'blue', label: 'Azul', color: 'light_blue', hex: '#38bdf8', x: canvas.originX + canvas.width + 33, y: 90, z: z.dip },
-      { id: 'black', label: 'Negro', color: 'black', hex: '#111827', x: canvas.originX + canvas.width + 33, y: 114, z: z.dip },
+      { id: 'blue', label: 'Azul', color: 'blue', hex: '#2563eb', x: canvas.originX + canvas.width + 33, y: 18, z: z.dip },
+      { id: 'violet', label: 'Violeta', color: 'violet', hex: '#7c3aed', x: canvas.originX + canvas.width + 33, y: 42, z: z.dip },
+      { id: 'red', label: 'Rojo', color: 'red', hex: '#dc2626', x: canvas.originX + canvas.width + 33, y: 66, z: z.dip },
+      { id: 'yellow', label: 'Amarillo', color: 'yellow', hex: '#facc15', x: canvas.originX + canvas.width + 33, y: 90, z: z.dip },
     ],
   }
 }
 
 function selectPalette(profileColors, colorPreferences, paints) {
+  // Prioriza colores pedidos por la voz y después los compatibles con emoción y pinturas instaladas.
   const available = paints.map((paint) => ({
     name: paint.color,
     hex: paint.hex,
@@ -380,6 +483,7 @@ function uniquePalette(colors) {
 }
 
 function projectPointToCanvas(strokePoint, calibration) {
+  // Convierte las coordenadas internas del generador a milímetros del lienzo real.
   const { canvas, z } = calibration
   const usableWidth = Math.max(1, canvas.width - canvas.margin * 2)
   const usableHeight = Math.max(1, canvas.height - canvas.margin * 2)
@@ -387,22 +491,18 @@ function projectPointToCanvas(strokePoint, calibration) {
   return {
     x: round(canvas.originX + canvas.margin + (strokePoint.x / CANVAS_WIDTH) * usableWidth),
     y: round(canvas.originY + canvas.margin + (strokePoint.y / CANVAS_HEIGHT) * usableHeight),
-    z: strokePoint.brush ? z.paint : z.up,
+    z: strokePoint.z === undefined ? (strokePoint.brush ? z.paint : z.up) : strokePoint.z,
     brush: strokePoint.brush,
   }
 }
 
-function createRobotCommands(strokes, calibration) {
+function createRobotCommands(strokes, calibration, options = {}) {
+  // Inserta trazos, limpieza y reposo en el orden que espera el ESP32.
+  const { finishWithRest = true, cleanAtEnd = true } = options
   const commands = []
-  let currentPaintId = null
 
   strokes.forEach((stroke) => {
     const station = findPaintStation(stroke.color, calibration)
-    if (station.id !== currentPaintId) {
-      if (currentPaintId) commands.push(...createBrushCleaningCommands(calibration))
-      commands.push(...createPaintLoadCommands(station, calibration))
-      currentPaintId = station.id
-    }
 
     commands.push({
       type: 'stroke',
@@ -416,13 +516,15 @@ function createRobotCommands(strokes, calibration) {
     })
   })
 
-  if (currentPaintId) commands.push(...createBrushCleaningCommands(calibration))
-  commands.push({
-    type: 'move_to_rest',
-    points: [
-      { x: calibration.rest.x, y: calibration.rest.y, z: calibration.z.up, brush: 0 },
-    ],
-  })
+  if (strokes.length && cleanAtEnd) commands.push(...createBrushCleaningCommands(calibration))
+  if (finishWithRest) {
+    commands.push({
+      type: 'move_to_rest',
+      points: [
+        { x: calibration.rest.x, y: calibration.rest.y, z: calibration.z.up, brush: 0 },
+      ],
+    })
+  }
 
   return commands
 }
@@ -437,26 +539,6 @@ function createBrushCleaningCommands(calibration) {
 function findPaintStation(color, calibration) {
   const colorName = color.paint_id || color.name
   return calibration.paints.find((paint) => paint.id === colorName || paint.color === color.name) || calibration.paints[0]
-}
-
-function createPaintLoadCommands(station, calibration) {
-  const upPoint = { x: station.x, y: station.y, z: calibration.z.up, brush: 0 }
-  const dipPoint = { x: station.x, y: station.y, z: station.z ?? calibration.z.dip, brush: 0 }
-
-  return [
-    {
-      type: 'move_to_paint',
-      color: station.color,
-      paint_id: station.id,
-      points: [upPoint],
-    },
-    {
-      type: 'dip_paint',
-      color: station.color,
-      paint_id: station.id,
-      points: [upPoint, dipPoint, upPoint],
-    },
-  ]
 }
 
 function createWaterCommands(calibration) {
@@ -506,10 +588,11 @@ function createTowelCommands(calibration) {
 }
 
 function createStroke({ index, artist, shapes, colors, speed, pressure, randomness, movementLevel, direction }) {
+  // Combina estilo, emoción y azar controlado para producir un trazo ejecutable.
   const shape = pickShape(artist, shapes, index)
   const color = colors[index % colors.length]
   const jitter = randomness / 100
-  const strokeSpeed = clamp(Math.round(speed + randomBetween(-10, 14) * jitter + movementLevel * 0.05), 10, 100)
+  const strokeSpeed = clamp(Math.round(speed + randomBetween(-10, 14) * jitter + movementLevel * 0.05), 70, 80)
   const strokePressure = clamp(Math.round(pressure + randomBetween(-8, 10) * jitter), 10, 100)
   const points = createPointsForShape(shape, direction, movementLevel, jitter, index)
 
@@ -524,23 +607,54 @@ function createStroke({ index, artist, shapes, colors, speed, pressure, randomne
 }
 
 function pickShape(artist, shapes, index) {
-  if (artist.id === 'alma-thomas') return index % 3 === 0 ? 'mosaic' : 'dash'
-  if (artist.id === 'rothko') return index % 2 === 0 ? 'block' : 'wash'
-  if (artist.id === 'pollock') return ['splatter', 'flick', 'loop', 'drip'][index % 4]
-  if (artist.id === 'de-kooning') return ['gesture', 'slash', 'curve', 'broken_line'][index % 4]
-  return shapes[index % shapes.length]
+  const supportedShapes = shapes.filter((shape) => [
+    'circle', 'triangle', 'line', 'arc', 'spiral', 'open_arc',
+    'splatter', 'flick', 'loop', 'drip', 'broken_line',
+    'block', 'wash', 'horizon', 'soft_edge',
+    'dash', 'mosaic', 'short_arc', 'column', 'ring',
+  ].includes(shape))
+  const artistShapes = artist.shapes.filter((shape) => supportedShapes.includes(shape))
+  const artistOffset = ARTISTS.findIndex((candidate) => candidate.id === artist.id)
+  const selectedShapes = artistShapes.length ? artistShapes : (supportedShapes.length ? supportedShapes : ['line'])
+  return selectedShapes[(index + Math.max(artistOffset, 0)) % selectedShapes.length]
 }
 
 function createPointsForShape(shape, direction, movementLevel, jitter, index) {
+  // Selecciona el generador geométrico según el gesto solicitado por la receta.
+  if (shape.startsWith('moodcam_')) return moodcamStrokePoints(shape, movementLevel)
   if (shape === 'circle') return circlePoints(randomX(), randomY(), randomBetween(10, 24 + movementLevel * 0.1), 14)
   if (shape === 'spiral') return spiralPoints(randomX(), randomY(), randomBetween(8, 24 + movementLevel * 0.1), 18)
   if (shape === 'triangle') return polygonPoints(randomX(), randomY(), randomBetween(16, 34 + movementLevel * 0.16), 3, -Math.PI / 2)
   if (shape === 'arc' || shape === 'open_arc') return arcPoints(randomX(), randomY(), randomBetween(18, 38), 12)
-  if (shape === 'block' || shape === 'wash' || shape === 'horizon') return blockPoints(index, movementLevel)
-  if (shape === 'mosaic' || shape === 'dash' || shape === 'short_arc') return dashPoints(index, movementLevel, shape === 'short_arc')
+  if (shape === 'block' || shape === 'wash' || shape === 'horizon' || shape === 'soft_edge') return blockPoints(index, movementLevel)
+  if (shape === 'mosaic' || shape === 'dash' || shape === 'short_arc' || shape === 'column' || shape === 'ring') {
+    return dashPoints(index, movementLevel, shape === 'short_arc' || shape === 'ring')
+  }
   if (shape === 'splatter' || shape === 'flick' || shape === 'drip' || shape === 'loop') return actionPoints(shape, movementLevel, jitter)
   if (shape === 'gesture' || shape === 'slash' || shape === 'curve' || shape === 'broken_line') return gesturePoints(direction, movementLevel, jitter)
   return linePoints(direction, movementLevel, jitter)
+}
+
+function moodcamStrokePoints(shape, movementLevel) {
+  const vectors = {
+    moodcam_vertical: { x: 0, y: 1, length: [56, 92] },
+    moodcam_left: { x: -1, y: 0, length: [48, 76] },
+    moodcam_right: { x: 1, y: 0, length: [48, 76] },
+    moodcam_diagonal_left: { x: -0.55, y: 1, length: [52, 82] },
+    moodcam_diagonal_right: { x: 0.55, y: 1, length: [52, 82] },
+  }
+  const vector = vectors[shape]
+  const length = randomBetween(vector.length[0], vector.length[1] + movementLevel * 0.12)
+  const magnitude = Math.hypot(vector.x, vector.y)
+  const dx = (vector.x / magnitude) * length
+  const dy = (vector.y / magnitude) * length
+  const centerX = randomBetween(18 + Math.abs(dx) / 2, CANVAS_WIDTH - 18 - Math.abs(dx) / 2)
+  const centerY = randomBetween(18 + Math.abs(dy) / 2, CANVAS_HEIGHT - 18 - Math.abs(dy) / 2)
+
+  return withLift([
+    point(centerX - dx / 2, centerY - dy / 2, Z_PAINT, 1),
+    point(centerX + dx / 2, centerY + dy / 2, Z_PAINT, 1),
+  ])
 }
 
 function randomX() {
@@ -553,8 +667,9 @@ function randomY() {
 
 function circlePoints(cx, cy, radius, segments) {
   const points = []
-  for (let i = 0; i <= segments; i += 1) {
-    const angle = (Math.PI * 2 * i) / segments
+  const safeSegments = Math.min(8, segments)
+  for (let i = 0; i <= safeSegments; i += 1) {
+    const angle = (Math.PI * 2 * i) / safeSegments
     points.push(point(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, Z_PAINT, 1))
   }
   return withLift(points)
@@ -562,8 +677,9 @@ function circlePoints(cx, cy, radius, segments) {
 
 function spiralPoints(cx, cy, radius, segments) {
   const points = []
-  for (let i = 0; i <= segments; i += 1) {
-    const t = i / segments
+  const safeSegments = Math.min(8, segments)
+  for (let i = 0; i <= safeSegments; i += 1) {
+    const t = i / safeSegments
     const angle = Math.PI * 4.5 * t
     const r = radius * t
     points.push(point(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, Z_PAINT, 1))
@@ -584,8 +700,9 @@ function arcPoints(cx, cy, radius, segments) {
   const start = randomBetween(-Math.PI, Math.PI * 0.3)
   const span = randomBetween(Math.PI * 0.7, Math.PI * 1.5)
   const points = []
-  for (let i = 0; i <= segments; i += 1) {
-    const angle = start + (span * i) / segments
+  const safeSegments = Math.min(8, segments)
+  for (let i = 0; i <= safeSegments; i += 1) {
+    const angle = start + (span * i) / safeSegments
     points.push(point(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, Z_PAINT, 1))
   }
   return withLift(points)
@@ -607,7 +724,7 @@ function blockPoints(index, movementLevel) {
   const height = randomBetween(22, 42 + movementLevel * 0.1)
   const x = clamp(randomBetween(18, CANVAS_WIDTH - width - 18), 12, CANVAS_WIDTH - width - 12)
   const y = clamp(22 + (index % 5) * 24 + randomBetween(-8, 8), 12, CANVAS_HEIGHT - height - 12)
-  const rows = Math.max(3, Math.round(height / 8))
+  const rows = 3
   const points = []
 
   for (let row = 0; row <= rows; row += 1) {
@@ -641,7 +758,7 @@ function dashPoints(index, movementLevel, curved = false) {
 function actionPoints(shape, movementLevel, jitter) {
   const start = { x: randomX(), y: randomY() }
   const points = []
-  const count = shape === 'loop' ? 11 : 4 + Math.round(movementLevel / 18)
+  const count = shape === 'loop' ? 8 : Math.min(8, 4 + Math.round(movementLevel / 18))
   let angle = randomBetween(0, Math.PI * 2)
   let x = start.x
   let y = start.y
@@ -662,7 +779,7 @@ function actionPoints(shape, movementLevel, jitter) {
 function gesturePoints(direction, movementLevel, jitter) {
   const start = { x: randomX(), y: randomY() }
   const points = []
-  const count = 5 + Math.round(movementLevel / 18)
+  const count = Math.min(8, 5 + Math.round(movementLevel / 18))
   let angle = angleForDirection(direction) + randomBetween(-0.8, 0.8)
   let x = start.x
   let y = start.y
@@ -679,12 +796,13 @@ function gesturePoints(direction, movementLevel, jitter) {
 }
 
 function withLift(drawPoints) {
+  // Preposiciona la muneca en contacto antes de apoyar el pincel en el primer trazo.
   if (!drawPoints.length) return []
   const first = drawPoints[0]
   const last = drawPoints[drawPoints.length - 1]
 
   return [
-    point(first.x, first.y, Z_UP, 0),
+    point(first.x, first.y, Z_PAINT, 0),
     ...drawPoints,
     point(last.x, last.y, Z_UP, 0),
   ]
@@ -717,7 +835,36 @@ function clamp(value, min, max) {
 }
 
 function randomBetween(min, max) {
-  return min + Math.random() * (max - min)
+  return min + activeRandom() * (max - min)
+}
+
+function withDeterministicRandom(seed, callback) {
+  // Hace reproducible cada chunk sin cambiar permanentemente el generador global de azar.
+  const previousRandom = activeRandom
+  activeRandom = createSeededRandom(seed)
+  try {
+    return callback()
+  } finally {
+    activeRandom = previousRandom
+  }
+}
+
+function createSeededRandom(seed) {
+  let state = hashSeed(seed)
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0
+    return state / 4294967296
+  }
+}
+
+function hashSeed(seed) {
+  const text = String(seed || 'inner-synergy')
+  let hash = 2166136261
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
 }
 
 function round(value) {

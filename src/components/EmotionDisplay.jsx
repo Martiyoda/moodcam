@@ -1,3 +1,5 @@
+// Traduce nombres internos de emociones a textos entendibles para la interfaz.
+// El mapa tambien permite mostrar un valor razonable si llega una emocion nueva.
 const EMOTION_MAP = {
   neutral: { label: 'Neutral', emoji: '😐', color: 'text-gray-400' },
   happy: { label: 'Feliz', emoji: '😊', color: 'text-yellow-400' },
@@ -27,41 +29,7 @@ function EmotionBar({ name, value }) {
   )
 }
 
-export default function EmotionDisplay({ emotions, dominant, age, gender, sessionResult}) {
-    if (sessionResult) {
-
-      return (
-
-          <div className="space-y-4">
-
-              <div className="text-center">
-
-                  <h3 className="text-lg font-bold text-white">
-                      Resultado de la sesión
-                  </h3>
-
-                  <p className="text-gray-400 text-sm">
-                      {sessionResult.samples} muestras analizadas
-                  </p>
-
-              </div>
-
-              <EmotionBar
-                  name={sessionResult.emotion1}
-                  value={sessionResult.value1}
-              />
-
-              <EmotionBar
-                  name={sessionResult.emotion2}
-                  value={sessionResult.value2}
-              />
-
-          </div>
-
-      )
-
-  }
-  
+export default function EmotionDisplay({ emotions, dominant, age, gender }) {
   if (!emotions) {
     return (
       <div className="text-center text-gray-500 py-8">

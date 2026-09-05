@@ -1,14 +1,34 @@
+// Hook MQTT de la web: gestiona conexión, presencia, eventos de sesión y estado del robot.
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mqtt from 'mqtt'
+import {
+    ARM_CALIBRATION_COMMAND_TYPES,
+    DEFAULT_DEVICE_ID,
+    TOPIC_KEYS,
+    buildFaceEmotionPayload,
+    buildPresencePayload,
+    buildSessionEndPayload,
+    buildSessionStartPayload,
+    buildSessionSummaryPayload,
+    buildSessionWindowPayload,
+    createMqttClientId,
+    createRobotCommandSequence,
+    createTopicMap,
+    parseJsonMessage,
+    topicFor,
+} from '../lib/mqttContract'
 
 const MQTT_STORAGE_KEY = 'moodcam-mqtt-config'
+const WEB_PRESENCE_INTERVAL_MS = 5000
 
 export const DEFAULT_MQTT_CONFIG = {
-    enabled: true,
-    brokerUrl: 'wss://6a2904749cd54c2d9d727a3a85a645b5.s1.eu.hivemq.cloud:8884/mqtt',
-    topicBase: 'moodcam/device1',
-    username: 'esp32',
-    password: 'Esplubot32',
+    enabled: false,
+    brokerUrl: 'wss://broker.hivemq.com:8884/mqtt',
+    deviceId: DEFAULT_DEVICE_ID,
+    topicBase: `moodcam/${DEFAULT_DEVICE_ID}`,
+    topics: createTopicMap(DEFAULT_DEVICE_ID),
+    username: '',
+    password: '',
     interval: 2000,
 }
 
@@ -17,7 +37,7 @@ function loadMqttConfig() {
         const stored = localStorage.getItem(MQTT_STORAGE_KEY)
         if (!stored) return null
         const parsed = JSON.parse(stored)
-        return { ...structuredClone(DEFAULT_MQTT_CONFIG), ...parsed }
+        return mergeDeep(structuredClone(DEFAULT_MQTT_CONFIG), parsed)
     } catch {
         return null
     }
@@ -31,10 +51,52 @@ function saveMqttConfig(config) {
     }
 }
 
+function mergeDeep(target, source) {
+    for (const key of Object.keys(source)) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) && key in target) {
+            mergeDeep(target[key], source[key])
+        } else if (key in target) {
+            target[key] = source[key]
+        }
+    }
+    return target
+}
+
+function getTopic(config, key) {
+    const configured = config.topics?.[key]?.trim()
+    if (configured) return configured
+    return topicFor(key, config.deviceId || DEFAULT_DEVICE_ID)
+}
+
+function toJsonPayload(payload) {
+    return JSON.stringify(payload)
+}
+
+function publishWebPresence(client, config, startedAt = Date.now(), status = 'online', reason) {
+    const payload = buildPresencePayload({
+        deviceId: config.deviceId,
+        component: 'web',
+        status,
+        uptimeMs: status === 'online' ? Date.now() - startedAt : undefined,
+        intervalMs: status === 'online' ? WEB_PRESENCE_INTERVAL_MS : undefined,
+        reason,
+    })
+    client.publish(getTopic(config, TOPIC_KEYS.webPresence), JSON.stringify(payload), { qos: 0, retain: true })
+}
+
 export default function useMqtt() {
     const [mqttConfig, setMqttConfig] = useState(() => loadMqttConfig() || structuredClone(DEFAULT_MQTT_CONFIG))
     const [connectionStatus, setConnectionStatus] = useState('disconnected') // disconnected | connecting | connected | error
     const [lastError, setLastError] = useState(null)
+    const [lastPublished, setLastPublished] = useState(null)
+    const [lastRobotStatus, setLastRobotStatus] = useState(null)
+    const [lastAiPlan, setLastAiPlan] = useState(null)
+    const [lastAiChunk, setLastAiChunk] = useState(null)
+    const [lastSystemError, setLastSystemError] = useState(null)
+    const [lastBridgePresence, setLastBridgePresence] = useState(null)
+    const [lastCalibrationStatus, setLastCalibrationStatus] = useState(null)
+    const [lastCalibrationError, setLastCalibrationError] = useState(null)
+    const [lastCalibrationCommand, setLastCalibrationCommand] = useState(null)
 
     const clientRef = useRef(null)
     const configRef = useRef(mqttConfig)
@@ -51,7 +113,22 @@ export default function useMqtt() {
     }, [mqttConfig])
 
     const updateMqttConfig = useCallback((key, value) => {
-        setMqttConfig(prev => ({ ...prev, [key]: value }))
+        setMqttConfig(prev => {
+            const next = structuredClone(prev)
+            if (key === 'deviceId') {
+                next.deviceId = value
+                next.topicBase = `moodcam/${value || DEFAULT_DEVICE_ID}`
+                next.topics = createTopicMap(value || DEFAULT_DEVICE_ID)
+                return next
+            }
+            const keys = key.split('.')
+            let obj = next
+            for (let i = 0; i < keys.length - 1; i++) {
+                obj = obj[keys[i]]
+            }
+            obj[keys[keys.length - 1]] = value
+            return next
+        })
     }, [])
 
     const resetMqttConfig = useCallback(() => {
@@ -93,8 +170,9 @@ export default function useMqtt() {
             reconnectPeriod: 5000,
             connectTimeout: 10000,
             clean: true,
+            clientId: createMqttClientId('web', mqttConfig.deviceId || DEFAULT_DEVICE_ID, Math.random().toString(16).slice(2)),
             will: {
-                topic: `${mqttConfig.topicBase}/status`,
+                topic: getTopic(mqttConfig, TOPIC_KEYS.moodcamStatus),
                 payload: JSON.stringify({ status: 'offline', timestamp: Date.now() }),
                 qos: 1,
                 retain: true,
@@ -119,15 +197,70 @@ export default function useMqtt() {
         }
         clientRef.current = client
 
+        let presenceTimer = null
+        const startedAt = Date.now()
+
         client.on('connect', () => {
             setConnectionStatus('connected')
             setLastError(null)
             // Publicar estado online
             client.publish(
-                `${configRef.current.topicBase}/status`,
+                getTopic(configRef.current, TOPIC_KEYS.moodcamStatus),
                 JSON.stringify({ status: 'online', timestamp: Date.now() }),
                 { qos: 1, retain: true }
             )
+            publishWebPresence(client, configRef.current, startedAt)
+            if (presenceTimer) window.clearInterval(presenceTimer)
+            presenceTimer = window.setInterval(() => {
+                if (client.connected) publishWebPresence(client, configRef.current, startedAt)
+            }, WEB_PRESENCE_INTERVAL_MS)
+            client.subscribe([...new Set([
+                getTopic(configRef.current, TOPIC_KEYS.robotStatus),
+                getTopic(configRef.current, TOPIC_KEYS.strokePlan),
+                getTopic(configRef.current, TOPIC_KEYS.strokeChunk),
+                getTopic(configRef.current, TOPIC_KEYS.systemError),
+                getTopic(configRef.current, TOPIC_KEYS.bridgePresence),
+            ])], { qos: 0 })
+        })
+
+        client.on('message', (topic, message) => {
+            const parsedPayload = parseJsonMessage(message)
+            const receivedMessage = { topic, payload: parsedPayload, timestamp: Date.now() }
+            if (topic === getTopic(configRef.current, TOPIC_KEYS.robotStatus)) {
+                setLastRobotStatus(receivedMessage)
+                if (isCalibrationStatus(parsedPayload)) {
+                    setLastCalibrationStatus(receivedMessage)
+                }
+            }
+            if (topic === getTopic(configRef.current, TOPIC_KEYS.strokePlan)) {
+                setLastAiPlan({
+                    topic,
+                    payload: parseJsonMessage(message),
+                    timestamp: Date.now(),
+                })
+                setLastSystemError(null)
+            }
+            if (topic === getTopic(configRef.current, TOPIC_KEYS.strokeChunk)) {
+                setLastAiChunk({
+                    topic,
+                    payload: parseJsonMessage(message),
+                    timestamp: Date.now(),
+                })
+                setLastSystemError(null)
+            }
+            if (topic === getTopic(configRef.current, TOPIC_KEYS.systemError)) {
+                setLastSystemError({
+                    topic,
+                    payload: parseJsonMessage(message),
+                    timestamp: Date.now(),
+                })
+                if (parsedPayload?.type !== 'ai_bridge_error' && parsedPayload?.type !== 'bridge_offline' && !isCalibrationOnlyRobotError(parsedPayload)) {
+                    setLastCalibrationError(receivedMessage)
+                }
+            }
+            if (topic === getTopic(configRef.current, TOPIC_KEYS.bridgePresence)) {
+                setLastBridgePresence(receivedMessage)
+            }
         })
 
         client.on('error', (err) => {
@@ -153,22 +286,37 @@ export default function useMqtt() {
         })
 
         return () => {
+            if (presenceTimer) {
+                window.clearInterval(presenceTimer)
+                presenceTimer = null
+            }
             // Publicar offline antes de cerrar
             if (client.connected) {
                 client.publish(
-                    `${configRef.current.topicBase}/status`,
+                    getTopic(configRef.current, TOPIC_KEYS.moodcamStatus),
                     JSON.stringify({ status: 'offline', timestamp: Date.now() }),
                     { qos: 1, retain: true }
                 )
+                publishWebPresence(client, configRef.current, startedAt, 'offline', 'disconnect')
             }
             client.end(true)
             clientRef.current = null
             setConnectionStatus('disconnected')
         }
-    }, [mqttConfig.enabled, mqttConfig.brokerUrl, mqttConfig.username, mqttConfig.password, mqttConfig.topicBase])
+    }, [mqttConfig])
 
-    // Publicar emociones contínuamente
-    /*const publishEmotion = useCallback((emotions, dominant) => {
+    const publishJson = useCallback((topicKey, payload, options = { qos: 0 }) => {
+        const client = clientRef.current
+        const config = configRef.current
+        if (!client || !client.connected || !config.enabled) return false
+
+        const topic = getTopic(config, topicKey)
+        client.publish(topic, toJsonPayload(payload), options)
+        setLastPublished({ topic, payload, timestamp: Date.now() })
+        return true
+    }, [])
+
+    const publishFaceEmotion = useCallback(({ sessionId, artistId, emotions, dominant, calibration, mobility, sampleCount, sessionActive }) => {
         const client = clientRef.current
         const config = configRef.current
         if (!client || !client.connected || !config.enabled || !emotions || !dominant) return
@@ -183,68 +331,108 @@ export default function useMqtt() {
         if (!dominantChanged && !intervalPassed) return
 
         const payload = {
-            dominant,
-            confidence: emotions[dominant] ? Math.round(emotions[dominant] * 100) / 100 : 0,
-            emotions: Object.fromEntries(
-                Object.entries(emotions).map(([k, v]) => [k, Math.round(v * 100) / 100])
-            ),
+            ...buildFaceEmotionPayload({
+                sessionId,
+                deviceId: config.deviceId,
+                artistId,
+                emotions,
+                dominant,
+                calibration,
+                mobility,
+                sampleCount,
+                sessionActive,
+            }),
             trigger: dominantChanged ? 'change' : 'heartbeat',
-            timestamp: now,
         }
 
         client.publish(
-            `${config.topicBase}/emotion`,
+            getTopic(config, TOPIC_KEYS.faceEmotion),
             JSON.stringify(payload),
             { qos: 0 }
         )
+        setLastPublished({ topic: getTopic(config, TOPIC_KEYS.faceEmotion), payload, timestamp: now })
 
         lastSentRef.current = { dominant, timestamp: now }
-    }, [])*/
+    }, [])
 
-    // Publicar solo la sesión de emociones
-    const publishEmotion = useCallback((sessionResult) => {
+    const publishSessionStart = useCallback(({ sessionId, artist, mobility, calibration, conversationMode }) => (
+        publishJson(TOPIC_KEYS.sessionStart, buildSessionStartPayload({
+            sessionId,
+            deviceId: configRef.current.deviceId,
+            artist,
+            mobility,
+            calibration,
+            conversationMode,
+        }), { qos: 1 })
+    ), [publishJson])
 
-        console.log("publishEmotion llamado", sessionResult)
+    const clearSessionState = useCallback(() => {
+        setLastAiPlan(null)
+        setLastAiChunk(null)
+        setLastSystemError(null)
+        setLastCalibrationError(null)
+    }, [])
+
+    const publishArtPlan = useCallback((plan) => (
+        publishJson(TOPIC_KEYS.strokePlan, plan, { qos: 1 })
+    ), [publishJson])
+
+    const publishSessionSummary = useCallback((summary) => (
+        publishJson(TOPIC_KEYS.sessionSummary, buildSessionSummaryPayload({
+            ...summary,
+            deviceId: configRef.current.deviceId,
+        }), { qos: 1 })
+    ), [publishJson])
+
+    const publishSessionWindow = useCallback((windowPayload) => (
+        publishJson(TOPIC_KEYS.sessionWindow, buildSessionWindowPayload({
+            ...windowPayload,
+            deviceId: configRef.current.deviceId,
+        }), { qos: 1 })
+    ), [publishJson])
+
+    const publishSessionEnd = useCallback((payload) => (
+        publishJson(TOPIC_KEYS.sessionEnd, buildSessionEndPayload({
+            ...payload,
+            deviceId: configRef.current.deviceId,
+        }), { qos: 1 })
+    ), [publishJson])
+
+    const publishRobotCommands = useCallback((plan) => {
         const client = clientRef.current
         const config = configRef.current
+        if (!client || !client.connected || !config.enabled) return false
 
-        console.log("publishEmotion llamado")
-        console.log("client:", client)
-        console.log("connected:", client?.connected)
-        console.log("enabled:", config?.enabled)
-        console.log("sessionResult:", sessionResult)
+        const topic = getTopic(config, TOPIC_KEYS.robotCommand)
+        const messages = createRobotCommandSequence(plan)
 
-        if (!client || !client.connected || !config.enabled || !sessionResult) {
-            return
-        }
+        messages.forEach((payload) => {
+            client.publish(topic, toJsonPayload(payload), { qos: 1 })
+        })
+        setLastPublished({
+            topic,
+            payload: { type: 'paint_sequence', command_count: plan.robot_commands.length },
+            timestamp: Date.now(),
+        })
+        return true
+    }, [])
 
-        const payload = {
-            duration: sessionResult.duration,
-            samples: sessionResult.samples,
-            emotion1: sessionResult.emotion1,
-            value1: Math.round(sessionResult.value1 * 100) / 100,
-            emotion2: sessionResult.emotion2,
-            value2: Math.round(sessionResult.value2 * 100) / 100,
+    const publishCalibrationCommand = useCallback((payload) => {
+        const client = clientRef.current
+        const config = configRef.current
+        if (!payload || !ARM_CALIBRATION_COMMAND_TYPES.includes(payload.type)) return false
+        if (!client || !client.connected || !config.enabled) return false
+
+        const topic = getTopic(config, TOPIC_KEYS.robotCommand)
+        client.publish(topic, toJsonPayload(payload), { qos: 1 })
+        const published = {
+            topic,
+            payload,
             timestamp: Date.now(),
         }
-        console.log("Topic:", `${config.topicBase}/emotion`)
-        console.log("MQTT enviado:", payload)
-        // Que vamos a enviar a la ESP32
-        console.log("Payload que voy a enviar:", payload)
-
-        client.publish(
-            `${config.topicBase}/emotion`,
-            JSON.stringify(payload),
-            { qos: 0 },
-            (err) => {
-                if (err) {
-                    console.error("Error publicando MQTT:", err)
-                } else {
-                    console.log("Mensaje publicado correctamente")
-                }
-            }
-        )
-
+        setLastCalibrationCommand(published)
+        setLastPublished(published)
+        return true
     }, [])
 
     return {
@@ -253,6 +441,46 @@ export default function useMqtt() {
         resetMqttConfig,
         connectionStatus,
         lastError,
-        publishEmotion,
+        lastPublished,
+        lastRobotStatus,
+        lastAiPlan,
+        lastAiChunk,
+        lastSystemError,
+        lastBridgePresence,
+        lastCalibrationStatus,
+        lastCalibrationError,
+        lastCalibrationCommand,
+        publishFaceEmotion,
+        clearSessionState,
+        publishSessionStart,
+        publishSessionSummary,
+        publishSessionWindow,
+        publishSessionEnd,
+        publishArtPlan,
+        publishRobotCommands,
+        publishCalibrationCommand,
     }
+}
+
+function isCalibrationStatus(payload) {
+    return [
+        'completed',
+        'joint_state',
+        'calibration_started',
+        'moving',
+        'movement_completed',
+        'stopped',
+        'servos_released',
+        'servo_attaching',
+        'operating_mode_changed',
+        'mode_unchanged',
+        'real_command_received',
+    ].includes(payload?.status)
+}
+
+function isCalibrationOnlyRobotError(payload) {
+    const detail = typeof payload === 'string' ? payload : payload?.detail || payload?.message || payload?.error || ''
+    const normalized = String(detail).toLowerCase()
+    return normalized.includes('tipo de comando de calibracion desconocido')
+        || normalized.includes('comando de obra recibido en modo calibracion')
 }

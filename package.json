@@ -4,13 +4,23 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
+    "dev:client": "vite --host 127.0.0.1",
+    "dev:server": "node server/index.js",
+    "ai:bridge": "node server/ai-bridge/index.js",
+    "demo:session": "node scripts/mqtt-smoke-session.mjs",
+    "robot:bringup": "node scripts/real-mode-bringup.mjs",
+    "test:emotion-bridge": "node examples/emotion_to_hardware_test.mjs",
+    "test:publish-emotion": "node examples/publish_emotion_input.mjs",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "node --test \"src/lib/*.test.js\" \"server/**/*.test.js\" \"tests/*.js\"",
     "preview": "vite preview"
   },
   "dependencies": {
     "@vladmandic/human": "^3.3.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "mqtt": "^5.15.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

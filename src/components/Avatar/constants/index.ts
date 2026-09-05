@@ -9,6 +9,10 @@ export const WEBSOCKET_URL =
       : `ws://${window.location.hostname}:8000/ws`
     : "ws://localhost:8000/ws");
 
+export const VOICE_RELAY_HEALTH_URL =
+  import.meta.env.VITE_VOICE_RELAY_HEALTH_URL ||
+  WEBSOCKET_URL.replace(/^ws/, "http").replace(/\/ws(?:\?.*)?$/, "/health");
+
 export const AUDIO_CONFIG = {
   channelCount: 1,
   sampleRate: 16000,

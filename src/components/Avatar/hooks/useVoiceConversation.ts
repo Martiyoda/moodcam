@@ -385,6 +385,7 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
         onMessage("error", (data: WebSocketMessage) => {
           const directMessage =
             typeof data.message === "string" ? data.message : "";
+          const errorCode = typeof data.code === "string" ? data.code : "";
           const nestedMessage =
             typeof data.error === "object" &&
             data.error !== null &&
@@ -392,7 +393,8 @@ export function useVoiceConversation(): UseVoiceConversationReturn {
             typeof (data.error as { message?: unknown }).message === "string"
               ? (data.error as { message: string }).message
               : "";
-          setError(directMessage || nestedMessage || "Error desconocido");
+          const message = directMessage || nestedMessage || "Error desconocido";
+          setError(errorCode ? `${message} (${errorCode})` : message);
           setConnectionStatus("Disconnected");
         });
 

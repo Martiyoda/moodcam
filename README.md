@@ -1,361 +1,272 @@
-# 🎭 Moodcam by Esplubot
+# Inner Synergy
 
-**Real-time emotion detection web app powered by AI and your webcam.**
+Proyecto para presentar en la WRO 2026 (categoria Future Innovators) que transforma señales emocionales en una propuesta artistica y comandos seguros para un brazo fisico ESP32/Arduino.
 
-Moodcam uses machine learning models running entirely in the browser to detect faces and analyze emotions in real time — no server processing, no data leaving your device.
+## Vision general del proyecto
 
-> [Versión en español](README.es.md) · [Versió en català](README.ca.md)
+Inner Synergy es un sistema de extremo a extremo con tres capas:
 
----
+1. Capa web (Moodcam y experiencia): analiza emocion facial en navegador, usa voz solo con consentimientos explicitos, publica ventanas de sesion y muestra avatar/chunks/plan.
+2. Capa de decision (AI Bridge): recibe ventanas y resumen emocional por MQTT, genera directivas seguras con OpenAI o fallback local y publica chunks/comandos.
+3. Capa fisica (ESP32/Arduino): encola y ejecuta movimientos del brazo dentro de limites seguros, reportando estado, profundidad de cola y errores.
 
-## ✨ Features
+El objetivo no es solo detectar emociones, sino convertirlas en una secuencia de acciones fisicas reproducibles y seguras.
 
-- **Real-time face detection** — Detects faces from the webcam feed using the BlazeFace and FaceMesh models.
-- **Emotion recognition** — Classifies 7 emotions (happy, sad, angry, surprised, scared, disgusted, neutral) with confidence percentages.
-- **Face mesh overlay** — Draws facial polygon meshes on a canvas layer over the live video.
-- **100% client-side** — All inference happens locally in the browser via TensorFlow.js (through the `@vladmandic/human` library). No images or data are sent to any server.
-- **Responsive UI** — Two-column layout on desktop, single-column on mobile. Built with Tailwind CSS v4.
-- **Voice avatar** — Connects to the Fulgencio voice agent through the local backend relay, with live transcription and audio responses.
-- **Robot integration** — Publishes emotion session summaries and arm/servo commands through MQTT over WebSocket.
-- **MQTT telemetry** — Connects to a configurable MQTT broker and publishes session results, online/offline status, and robot commands.
-- **Deployable to Vercel** — Includes `vercel.json` with aggressive caching headers for model files.
 
-## 🛠 Tech Stack
+## Objetivo operativo
 
-| Layer | Technology |
-|---|---|
-| **Framework** | [React 19](https://react.dev/) |
-| **Build tool** | [Vite 7](https://vite.dev/) |
-| **Styling** | [Tailwind CSS 4](https://tailwindcss.com/) (via `@tailwindcss/vite`) |
-| **AI / ML** | [@vladmandic/human 3.x](https://github.com/vladmandic/human) (wraps TensorFlow.js) |
-| **MQTT** | [mqtt.js](https://github.com/mqttjs/MQTT.js) (MQTT over WebSocket) |
-| **Linting** | ESLint 9 with flat config, React Hooks & React Refresh plugins |
-| **Deployment** | [Vercel](https://vercel.com/) |
+Flujo unico soportado:
 
-## 📁 Project Structure
+Web -> MQTT (HiveMQ) -> AI Bridge -> MQTT -> Brazo fisico
 
-```
-moodcam/
-├── public/
-│   ├── logo-esplubot.png          # App logo / favicon
-│   └── models/                    # Pre-trained ML model files
-│       ├── blazeface.{json,bin}   # Face detection model
-│       ├── facemesh.{json,bin}    # Face mesh / landmark model
-│       ├── emotion.{json,bin}     # Emotion classification model
-│       └── faceres.{json,bin}     # Face description model (age/gender)
-├── src/
-│   ├── main.jsx                   # React entry point (StrictMode)
-│   ├── App.jsx                    # Main layout: header, camera, emotions panel, footer
-│   ├── index.css                  # Tailwind CSS import
-│   ├── components/
-│   │   ├── CameraView.jsx         # Video + canvas overlay with live indicator
-│   │   ├── EmotionDisplay.jsx     # Dominant emotion, emotion bars
-│   │   └── Avatar/                # Voice avatar, audio capture/playback and relay client
-│   └── hooks/
-│       ├── useFaceDetection.js    # Core hook: model loading, camera, detection loop
-│       └── useMqtt.js             # MQTT connection, session and robot publishing, LWT
-├── index.html                     # HTML shell (lang="es")
-├── vite.config.js                 # Vite + React + Tailwind plugins
-├── eslint.config.js               # ESLint flat config
-├── vercel.json                    # Vercel deployment config with caching headers
-└── package.json
-```
+No hay modo simulador que sustituya al brazo fisico. Moodcam es el nombre tecnico del modulo web de captura. La experiencia web incluye un avatar 2D; el avatar 3D queda como mejora futura.
 
-## 🏗 Architecture
+## Como funciona de extremo a extremo
 
-### Detection Pipeline
+1. El usuario selecciona un pintor y arranca captura emocional en la web.
+2. La web publica `session_start`, ventanas `session/window` cada 5 s, `session_end` y mantiene `session_summary` por compatibilidad.
+3. AI Bridge consume cada ventana, decide directivas artisticas seguras y genera chunks de trazos sin permitir que OpenAI controle coordenadas fisicas.
+4. Cada chunk se publica en MQTT y se traduce en comandos FIFO para el robot.
+5. El firmware encola comandos reales, ejecuta uno a uno y publica estado, `queue_depth`, `queue_full` y errores.
+6. La web monitoriza estado del sistema en tiempo real.
 
-1. **Model loading** — On mount, `useFaceDetection` creates a singleton `Human` instance, loads the models from `/models`, and warms them up.
-2. **Camera access** — When the user clicks "Iniciar Cámara", the hook requests `getUserMedia` with front-facing camera at 640×480.
-3. **Detection loop** — Once the video starts playing, a `requestAnimationFrame` loop continuously calls `human.detect(video)`, which runs BlazeFace → FaceMesh → Emotion classification.
-4. **Drawing** — The detected face mesh is drawn onto a `<canvas>` overlay using `human.draw.face()` with polygon rendering.
-5. **State updates** — Emotion scores and dominant emotion are pushed to React state and rendered by `EmotionDisplay`.
+## Estructura minima
 
-### Key Design Decisions
+- src/: interfaz web (camara, emocion, calibracion y control).
+- server/: backend local y AI Bridge.
+- arduino/main/: firmware del brazo.
+- packages/contracts/: contrato MQTT compartido.
+- examples/: utilidades de prueba por MQTT.
 
-- **Singleton pattern** for the `Human` instance prevents re-downloading models on re-renders.
-- **Mirror effect** — Both video and canvas use `scaleX(-1)` so the camera acts like a mirror.
-- **Single face** — `maxDetected: 1` keeps inference fast by only processing one face.
-- **Lazy description** — `description` (age/gender) is disabled in config but age/gender are still extracted from `faceres` when available.
-- **Frame-rate adaptive** — Uses `requestAnimationFrame` so detection speed adapts to device capabilities.
+## Requisitos
 
-### Voice and Robot Flow
+- Node.js 18+
+- npm
+- ESP32/Arduino con firmware del proyecto
+- Broker MQTT accesible (por defecto HiveMQ)
 
-1. The browser connects to the backend relay at `ws://localhost:8000/ws` (or
-  the URL provided by `VITE_WS_URL`), so Fulgencio credentials remain on the server.
-2. The relay connects to `FULGENCIO_AGENT_URL`, forwards microphone audio, and
-  returns transcription, agent text, and TTS audio events.
-3. Face detection continues locally while the voice conversation is active.
-4. MQTT publishes the completed emotion session to `{topicBase}/emotion` and
-  robot commands to `robot/arm` and `robot/servo1`.
+## Instalacion
 
-## 🚀 Getting Started
+1. Entrar en project.
+2. Instalar dependencias.
+3. Crear entorno local.
 
-### Prerequisites
+Comandos:
 
-- **Node.js** ≥ 18
-- **npm** (or any compatible package manager)
-- A device with a **webcam** and a modern browser (Chrome, Firefox, Edge, Safari)
-
-### Installation
-
-```bash
-git clone <repository-url>
-cd moodcam
 npm install
-```
+cp .env.example .env
 
-### Development
+## Variables de entorno clave
 
-```bash
+- OPENAI_API_KEY: habilita la decision artistica con OpenAI en AI Bridge. Sin ella, el bridge usa fallback local y la captura de voz permanece desactivada.
+- OPENAI_DECISION_MODEL: modelo de decision artistica; por defecto `gpt-4.1-mini`.
+- OPENAI_REALTIME_MODEL, OPENAI_REALTIME_VOICE y OPENAI_TRANSCRIBE_MODEL: configuracion preparada para conversaciones Realtime; no forman parte del flujo de voz activo.
+- MQTT_URL: URL websocket del broker MQTT.
+- MQTT_DEVICE_ID: identificador unico del dispositivo; por defecto `device1`.
+- MQTT_USERNAME y MQTT_PASSWORD: solo si tu broker las exige.
+- MQTT_COMMAND_DELAY_MS: separacion entre comandos enviados al robot.
+
+## Arranque diario
+
+Terminal 1 (web + backend local):
+
 npm run dev
-```
 
-Opens at `http://localhost:5173`. Click **"📷 Iniciar Cámara"**, grant camera permissions, and see your emotions detected live.
+Terminal 2 (AI Bridge):
 
-To use the voice avatar, configure `back/.env` as described in
-[`back/README.md`](back/README.md) and start both services with:
+npm run ai:bridge
 
-```bash
-./macrun
-```
+Abrir:
 
-The robot can remain connected through MQTT while the avatar is conversing.
+http://127.0.0.1:5173
 
-### Build for Production
+## Flujo de uso
 
-```bash
+La aplicacion usa una sola pantalla operativa:
+
+1. Confirmar que una persona adulta responsable autoriza la sesion.
+2. Seleccionar pintor.
+3. Activar camara.
+4. Activar voz solo cuando el AI Bridge confirme que OpenAI esta configurado. La transcripcion temporal puede enviarse a OpenAI para orientar la obra; no se envia ni guarda audio o video. Sin voz, la sesion usa solo camara.
+5. Iniciar captura emocional.
+6. Durante la sesion, la web publica ventanas y AI Bridge genera chunks dinamicos para la obra.
+7. Supervisar ultimo chunk, estado MQTT, respuesta del robot y profundidad FIFO.
+
+## Privacidad y consentimiento
+
+- La deteccion facial se procesa en el navegador. MQTT no transporta imagen ni audio.
+- Si se activa voz tras los consentimientos requeridos, Moodcam crea una transcripcion temporal. El AI Bridge puede enviar fragmentos recientes a OpenAI para obtener directivas artisticas cuando `OPENAI_API_KEY` esta configurada.
+- La aplicacion no conserva imagenes, audio, transcripciones ni resumenes emocionales al terminar la sesion.
+- Inner Synergy no diagnostica emociones ni sustituye el acompanamiento profesional.
+
+## Pasos seguidos para crear el proyecto
+
+Esta es la secuencia de implementacion del proyecto completo, desde la base hasta el MVP actual:
+
+1. Definicion del problema y alcance
+- Objetivo: transformar emocion en una accion artistica ejecutable por un brazo.
+- Restriccion principal: priorizar seguridad fisica y trazabilidad tecnica.
+
+2. Construccion del frontend base
+- Se creo la app React para captura de camara, lectura emocional y flujo operativo en una sola pantalla.
+- Se integraron modelos de deteccion facial/emocional en navegador.
+
+3. Capa de comunicacion MQTT
+- Se definio contrato compartido de topics y payloads.
+- Se implemento publicacion desde web y suscripcion de estado del robot.
+
+4. Capa de decision artistica (AI Bridge)
+- Se creo backend Node para consumir resumen emocional por MQTT.
+- Se implemento decision con OpenAI y fallback seguro en caso de error.
+
+5. Sistema de estilos y recetas
+- Se modelaron pintores, estilos y recetas de trazo en JSON.
+- Se conecto la seleccion artistica a comandos ejecutables por firmware.
+
+6. Firmware y control de brazo
+- Se implemento firmware ESP32/Arduino con comandos de calibracion y ejecucion.
+- Se fijaron limites y politicas de seguridad para evitar movimientos peligrosos.
+
+7. Integracion extremo a extremo
+- Se conecto web -> bridge -> firmware sobre MQTT con un deviceId comun.
+- Se validaron estados, errores y ciclo completo de sesion artistica.
+
+8. Construccion del brazo robotico
+- Se diseno y fabrico un brazo robotico mediante impresion 3D.
+- El brazo se construyo con 4 articulaciones: base, hombro, codo y muneca.
+
+## Decisiones tecnicas clave
+
+- Contrato MQTT centralizado en packages/contracts para evitar desalineacion entre web, bridge y firmware.
+- Device ID como pivote de todos los topics para aislar sesiones/dispositivos.
+- Prompt del AI Bridge mantenido como archivo de texto externo para trazabilidad.
+- Seguridad del brazo priorizada frente a automatismos agresivos.
+
+## Contrato MQTT esencial
+
+Topics base por device id:
+
+- moodcam/{deviceId}/session/start
+- moodcam/{deviceId}/emotion/face
+- moodcam/{deviceId}/session/summary
+- moodcam/{deviceId}/session/window
+- moodcam/{deviceId}/session/end
+- ai/{deviceId}/stroke_plan
+- ai/{deviceId}/stroke_chunk
+- robot/{deviceId}/command
+- robot/{deviceId}/status
+- system/{deviceId}/error
+- moodcam/{deviceId}/status
+- system/{deviceId}/presence/web
+- system/{deviceId}/presence/ai-bridge
+- system/{deviceId}/presence/esp32
+
+Reglas:
+
+- Mantener deviceId consistente entre web, bridge y firmware.
+- Publicar JSON valido en snake_case cuando aplique.
+- No cambiar topics sin actualizar contrato compartido.
+- `robot/{deviceId}/status` puede incluir `queue_depth`, `queue_capacity`, `queue_full` y `queue_executing`; AI Bridge usa esos campos para backpressure.
+- La presencia retenida de `system/{deviceId}/presence/ai-bridge` incluye `openai_configured`; la web la usa para habilitar voz solo cuando puede emplearse para la decision artistica.
+
+## Parametros de interfaz que se mantienen
+
+En configuracion web:
+
+- Duracion de captura (session.captureSeconds).
+- Confianza minima detector facial.
+- Confianza minima emocion.
+- Suavizado (activar y factor).
+- Ecualizacion y auto-brillo.
+- MQTT: activar, URL del broker y device id.
+- Panel de calibracion del brazo.
+
+Se han eliminado de la interfaz opciones avanzadas de baja utilidad para operacion normal.
+
+## Seguridad del brazo (obligatorio)
+
+Antes de mover:
+
+1. Confirmar area despejada.
+2. Confirmar limites de articulaciones cargados en firmware.
+3. Verificar HOME fisico antes de secuencias largas.
+4. Usar calibracion incremental (jog) antes de set_angle agresivo.
+
+Durante pruebas:
+
+- No ejecutar movimientos fuera de limites.
+- Parar inmediatamente ante ruido, bloqueo o trayectoria anomala.
+- Mantener supervision directa del brazo en todo momento.
+
+## Firmware
+
+Firmware activo en:
+
+arduino/main/main.ino
+
+Compilacion orientativa:
+
+arduino-cli compile --fqbn esp32:esp32:esp32 arduino/main
+
+## Scripts disponibles
+
+- npm run dev
+- npm run dev:client
+- npm run dev:server
+- npm run ai:bridge
+- npm run demo:session
+- npm run test:emotion-bridge
+- npm run test:publish-emotion
+- npm run test
+- npm run lint
+- npm run build
+- npm run preview
+
+## Pruebas y verificacion
+
+Comprobacion recomendada despues de cambios:
+
+npm run lint
+npm run test
 npm run build
-npm run preview   # preview the production build locally
-```
 
-### Deploy to Vercel
+Verificacion operativa minima:
 
-```bash
-npx vercel
-```
+1. MQTT conectado desde la web.
+2. AI Bridge conectado y publicando presencia.
+3. Recepcion de chunks dinamicos tras publicar ventanas de sesion.
+4. Brazo responde en robot/{deviceId}/status con estado de cola.
 
-The included `vercel.json` configures the build command, output directory, and sets `Cache-Control: public, max-age=31536000, immutable` on all model files under `/models/`.
+## Troubleshooting rapido
 
-## ⚙️ Detection Settings
+No conecta MQTT:
 
-The app includes a settings panel (⚙️ gear icon in the header) that lets you fine-tune all detection parameters in real time. Changes are applied instantly without reloading models and are **automatically persisted in `localStorage`**, so your preferred configuration is restored on the next visit.
+- Revisar MQTT_URL, credenciales y puerto websocket.
+- Verificar que deviceId coincide en todos los componentes.
 
-### 🔍 Face Detector
+No llegan chunks dinamicos:
 
-Parameters controlling how faces are located in the video frame.
+- Revisar OPENAI_API_KEY y logs de AI Bridge.
+- Confirmar que se publican `session/window` y `session/end`.
 
-| Parameter | Default | Range | Description |
-|---|---|---|---|
-| **Min. Confidence** | `0.50` | 0.10 – 1.00 | Minimum score to accept a detected face. Higher values reduce false positives (e.g. objects mistaken for faces) but may miss partially visible faces. |
-| **Max. Faces** | `1` | 1 – 5 | Maximum number of faces to detect simultaneously. Keeping it at 1 provides the best performance. |
-| **IoU Threshold** | `0.10` | 0.01 – 0.90 | Intersection over Union threshold for Non-Maximum Suppression. Controls how much two bounding boxes can overlap before the weaker one is discarded. Lower values are more aggressive at removing duplicates. |
-| **Rotation Correction** | `off` | on / off | Enables multi-angle face detection. Improves accuracy for tilted heads but significantly increases processing time. |
-| **Skip Frames** | `99` | 0 – 100 | Maximum number of consecutive frames the detector can reuse cached bounding boxes instead of re-running. Works together with cache sensitivity. |
-| **Skip Time (ms)** | `2500` | 0 – 5000 | Maximum time in milliseconds the detector can reuse cached results. After this time, a new detection is forced regardless of skip frames. |
+Brazo no se mueve:
 
-### 🎭 Emotions
+- Revisar alimentacion y puerto serie del ESP32.
+- Revisar topic robot/{deviceId}/command y status.
+- Ejecutar calibracion antes de pintar.
 
-Parameters for the emotion classification model that runs on each detected face.
+## Estado esperado tras arrancar
 
-| Parameter | Default | Range | Description |
-|---|---|---|---|
-| **Min. Confidence** | `0.30` | 0.01 – 0.80 | Minimum score to include an emotion in the results. **This is the most impactful parameter for stability.** Higher values filter out low-confidence "noise" emotions that cause flickering between states. |
-| **Skip Frames** | `99` | 0 – 100 | Maximum frames the emotion model can reuse its previous result from cache. Higher values reduce CPU/GPU load but make emotion updates less responsive. |
-| **Skip Time (ms)** | `1500` | 0 – 5000 | Maximum time before forcing the emotion model to re-run. Lower values give faster updates; higher values produce more stable (but delayed) readings. |
+Checklist rapido:
 
-### 📊 Smoothing
+1. Web disponible en http://127.0.0.1:5173.
+2. MQTT en estado conectado desde ajustes.
+3. AI Bridge activo y sin errores de credenciales.
+4. Llegan mensajes de estado del robot en robot/{deviceId}/status.
+5. Durante una sesion, aparecen chunks en ai/{deviceId}/stroke_chunk.
+6. La UI muestra ultimo chunk y cola del robot sin requerir una pantalla final de obra.
 
-Custom exponential moving average (EMA) applied on top of raw emotion scores to reduce abrupt jumps. This is not a native `@vladmandic/human` feature — it is implemented in the app's detection hook.
+## Notas de mantenimiento
 
-Formula: `smoothed = α × raw + (1 − α) × previous`
-
-| Parameter | Default | Range | Description |
-|---|---|---|---|
-| **Enable Smoothing** | `on` | on / off | Toggles temporal interpolation of emotion scores. |
-| **Smoothing Factor (α)** | `0.25` | 0.05 – 0.95 | Weight given to the new raw reading. **Low values** (e.g. 0.10) produce very smooth, slow-to-change results. **High values** (e.g. 0.80) follow raw data closely with minimal delay. |
-
-### 🖼 Image Filters
-
-GPU-accelerated preprocessing applied to the video frame before inference (near-zero latency via WebGL).
-
-| Parameter | Default | Range | Description |
-|---|---|---|---|
-| **Equalization** | `on` | on / off | Histogram equalization of the input image and cropped face regions. **Recommended for variable lighting conditions** — normalizes brightness distribution so the model sees more consistent inputs. |
-| **Auto Brightness** | `on` | on / off | Automatically adjusts brightness based on the scene. Only active when frame caching is enabled (cache sensitivity > 0). |
-| **Sharpness** | `0.00` | 0.00 – 1.00 | Edge enhancement filter. Low values (0.1–0.3) can help with soft/blurry webcams. High values may amplify noise. |
-| **Brightness** | `0.00` | −1.00 – 1.00 | Manual brightness offset. Negative darkens, positive brightens. |
-| **Contrast** | `0.00` | −1.00 – 1.00 | Manual contrast adjustment. Negative reduces contrast, positive increases it. |
-| **Blur** | `0` | 0 – 15 | Gaussian blur radius in pixels. Can reduce noise in grainy camera feeds, but too much will harm detection accuracy. |
-
-### ⚡ Cache & Performance
-
-| Parameter | Default | Range | Description |
-|---|---|---|---|
-| **Cache Sensitivity** | `0.70` | 0.00 – 1.00 | Controls how much the scene must change between frames to invalidate the cache and force re-detection. `0` disables caching entirely (every frame is processed). Higher values allow more frame-skipping when the scene is stable, reducing CPU/GPU usage. This parameter **enables** the skip frames/time mechanism across all sub-models. |
-
-### 💾 Persistence
-
-All settings are automatically saved to **`localStorage`** under the key `moodcam-detection-config`. When you reopen the app, your previous configuration is restored. Clicking "🔄 Restore defaults" resets all values and clears the stored data.
-
-### 🎯 Recommended Tuning Tips
-
-For the most stable emotion readings, try this combination:
-
-1. **Emotion min. confidence** → `0.30`–`0.40` (eliminates noise)
-2. **Smoothing** → enabled, factor `0.15`–`0.25` (dampens rapid changes)
-3. **Equalization** → on (normalizes lighting)
-4. **Blur** → `1`–`2` (if your camera is noisy)
-
-## 🔒 Privacy
-
-Face detection and emotion inference happen **entirely in your browser**. No
-video frames or images are sent to the backend. When the voice avatar is active,
-microphone audio is sent through the relay to Fulgencio so it can transcribe and
-answer. MQTT receives only the configured emotion/session payloads and robot
-commands, never camera images or video.
-
-**Note on MQTT:** When MQTT is enabled, only the detected emotion label, confidence scores, and a timestamp are published to the configured broker. No images or video data are ever sent. MQTT is disabled by default.
-
-## 📡 MQTT Telemetry
-
-Moodcam can publish emotion session data and robot commands to an MQTT broker via
-WebSocket, enabling integration with dashboards, IoT devices, home automation,
-or any MQTT-compatible robot.
-
-### How It Works
-
-Emotion publishing currently occurs when a camera session finishes and produces a
-session summary. The same MQTT connection is also used for robot controls.
-
-1. **On change** — A message is published immediately when the dominant emotion changes (e.g. "happy" → "surprised").
-2. **Heartbeat** — If the dominant emotion stays the same, a heartbeat message is sent after a configurable interval (default: 2 seconds).
-
-This minimizes traffic while ensuring subscribers always have up-to-date data.
-
-### Topics
-
-| Topic | QoS | Retain | Description |
-|---|---|---|---|
-| `{topicBase}/emotion` | 0 | No | Emotion data payload (published on change or heartbeat) |
-| `{topicBase}/status` | 1 | Yes | Online/offline status. Uses MQTT Last Will and Testament (LWT) for automatic offline notification on disconnect. |
-| `robot/arm` | 0 | No | Emotion pose commands such as `SOFT`, `STRONG`, or `REST`. |
-| `robot/servo1` | 0 | No | Servo commands and generated drawing points. |
-
-### Emotion Payload
-
-```json
-{
-  "duration": 12,
-  "samples": 42,
-  "emotion1": "happy",
-  "value1": 0.87,
-  "emotion2": "neutral",
-  "value2": 0.10,
-  "timestamp": 1719500000000
-}
-```
-
-| Field | Type | Description |
-|---|---|---|
-| `duration` | number | Session duration in seconds. |
-| `samples` | number | Number of samples captured during the session. |
-| `emotion1`, `emotion2` | string | The two most representative emotions in the session. |
-| `value1`, `value2` | number | Session score for each representative emotion (0–1). |
-| `timestamp` | number | Unix timestamp in milliseconds. |
-
-### Configuration
-
-All MQTT settings are available in the settings panel under **📡 MQTT** and are persisted in `localStorage` under the key `moodcam-mqtt-config`.
-
-| Parameter | Default | Description |
-|---|---|---|
-| **Enable MQTT** | `on` | Enables or disables the MQTT connection used by the robot and session publishing. |
-| **Broker URL** | `wss://6a2904749cd54c2d9d727a3a85a645b5.s1.eu.hivemq.cloud:8884/mqtt` | WebSocket URL of the MQTT broker. Must use `wss://` when the app is served over HTTPS. |
-| **Topic Base** | `moodcam/device1` | Root topic. Messages are published to `{base}/emotion` and `{base}/status`. |
-| **Username** | `esp32` | Username for broker authentication. |
-| **Password** | *(configured locally)* | Password for broker authentication. Do not commit credentials. |
-| **Heartbeat interval (ms)** | `2000` | Retained for compatibility with saved settings; session summaries are published when a session finishes. |
-
-### Broker Requirements
-
-- Must support **MQTT over WebSocket** (ports 8083 for `ws://` or 8084/8884 for `wss://`).
-- For apps served over HTTPS, the broker **must** use `wss://` (TLS).
-
-#### Recommended: HiveMQ Cloud (free)
-
-[HiveMQ Cloud](https://www.hivemq.com/mqtt-cloud-broker/) offers a **free forever** plan (up to 100 connections, 10 GB/month) that is ideal for educational use:
-
-1. Sign up at [hivemq.cloud](https://console.hivemq.cloud/) and create a free cluster.
-2. Go to **Access Management** and create credentials (username and password).
-3. Copy the cluster URL (e.g. `xxxxxx.s1.eu.hivemq.cloud`).
-4. In Moodcam's MQTT settings, paste the URL — the app will automatically prepend `wss://` and append `:8884/mqtt` if missing.
-5. Enter the username and password you created.
-6. Enable MQTT and you're connected.
-
-No infrastructure to manage, TLS included, and enough capacity for a classroom or workshop.
-
-#### Alternative: Docker Mosquitto with WebSocket
-
-```yaml
-# docker-compose.yml
-services:
-  mosquitto:
-    image: eclipse-mosquitto:2
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
-```
-
-```conf
-# mosquitto.conf
-listener 1883
-listener 9001
-protocol websockets
-allow_anonymous true
-```
-
-### 🧪 Verifying with MQTT Explorer
-
-[MQTT Explorer](https://mqtt-explorer.com/) is a free, cross-platform graphical client that lets you visualize all messages arriving at a broker in real time. It's the easiest way to verify that Moodcam is publishing correctly:
-
-1. Download and install [MQTT Explorer](https://mqtt-explorer.com/).
-2. Connect to your broker (e.g. `mqtt://localhost:1883` or `wss://broker.emqx.io:8084/mqtt`).
-3. Enable MQTT in Moodcam's settings and start the camera.
-4. In MQTT Explorer you should see the topics `moodcam/device1/status` (with `"online"`) and `moodcam/device1/emotion` updating with each emotion change or heartbeat.
-
-This is especially useful for **debugging connection issues**, inspecting the JSON payload structure, and confirming that LWT (`"offline"`) fires correctly when you close the app.
-
-## 📖 Glossary
-
-| Term | Definition |
-|---|---|
-| **AI (Artificial Intelligence)** | Technology that allows computers to perform tasks that normally require human intelligence, such as recognizing faces or emotions. |
-| **Machine Learning (ML)** | A branch of AI where computers learn patterns from data (in this case, thousands of face images) instead of being explicitly programmed. |
-| **Model** | A file containing the "learned knowledge" from training. Moodcam uses several models: one to find faces, one to map facial landmarks, and one to classify emotions. |
-| **Inference** | The process of feeding new data (your webcam image) into a model to get a prediction (e.g. "happy 82%"). |
-| **TensorFlow.js** | A Google library that allows ML models to run directly in the web browser using your device's CPU or GPU. |
-| **@vladmandic/human** | The open-source library Moodcam uses. It wraps TensorFlow.js and provides ready-to-use face detection, emotion recognition, and other capabilities. |
-| **BlazeFace** | A lightweight model that quickly locates faces in an image and returns their bounding boxes (rectangular coordinates). |
-| **FaceMesh** | A model that identifies 468+ landmark points on a face (eyes, nose, mouth, jawline, etc.), forming a detailed mesh. |
-| **Bounding Box** | The rectangle drawn around a detected face, defined by its position and size in the image. |
-| **Confidence Score** | A number from 0 to 1 (shown as 0%–100%) indicating how certain the model is about its prediction. Higher = more certain. |
-| **IoU (Intersection over Union)** | A measure of overlap between two bounding boxes. Used to remove duplicate detections of the same face. |
-| **NMS (Non-Maximum Suppression)** | An algorithm that removes redundant overlapping detections, keeping only the strongest one. |
-| **Smoothing / EMA** | Exponential Moving Average — a technique that blends the current reading with previous ones to reduce abrupt jumps and produce more stable results. |
-| **Cache** | A temporary store of previous detection results. When the scene hasn't changed much, cached results are reused to save processing power. |
-| **Skip Frames** | The number of consecutive video frames the system can reuse cached results instead of running the model again. |
-| **Equalization** | An image processing technique that redistributes brightness levels to improve contrast, especially useful under uneven lighting. |
-| **WebGL** | A browser technology that allows the GPU (graphics card) to accelerate computations, making image filters and ML inference faster. |
-| **localStorage** | A browser feature that stores small amounts of data (like your settings) on your device, persisting across page reloads and browser restarts. |
-| **Webcam** | The built-in or external camera on your device. Moodcam uses it to capture live video for analysis. |
-| **Client-side** | Processing that happens entirely on your device (in the browser), as opposed to being sent to a remote server. |
-| **MQTT** | A lightweight messaging protocol designed for IoT devices. Moodcam uses it to optionally publish detected emotions to a broker, which then distributes them to any subscribed clients. |
-| **MQTT Broker** | A server that receives messages from publishers (like Moodcam) and forwards them to subscribers. Examples include Mosquitto, EMQX, and HiveMQ. |
-| **WebSocket** | A protocol that enables two-way communication between a browser and a server over a single, persistent connection. Moodcam uses WebSocket to connect to MQTT brokers from the browser. |
-| **LWT (Last Will and Testament)** | An MQTT feature where the broker automatically publishes a pre-configured message (e.g. "offline") if a client disconnects unexpectedly, so subscribers know it's gone. |
-| **QoS (Quality of Service)** | MQTT delivery guarantee levels: QoS 0 = at most once (fire and forget), QoS 1 = at least once, QoS 2 = exactly once. Moodcam uses QoS 0 for emotion data and QoS 1 for status messages. |
-| **Topic** | An MQTT addressing string (e.g. `moodcam/device1/emotion`) that organizes messages into channels. Publishers send to a topic; subscribers listen on a topic. |
-| **Heartbeat** | A periodic message sent even when nothing has changed, to confirm the sender is still active and connected. |
+- [AGENTS.md](AGENTS.md) contiene el contexto para agentes y [docs/real-mode-bringup.md](docs/real-mode-bringup.md) es el protocolo fisico supervisado.
+- Cualquier cambio de flujo, consentimiento, contrato MQTT o seguridad debe actualizar la documentacion afectada en la misma tarea.

@@ -1,7 +1,11 @@
+// Hook de captura facial local: carga Human, procesa frames y suaviza las emociones detectadas.
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Human } from '@vladmandic/human'
 
 export const DEFAULT_CONFIG = {
+    session: {
+        captureSeconds: 60,
+    },
     face: {
         detector: { minConfidence: 0.5, maxDetected: 1, rotation: false, iouThreshold: 0.1, skipFrames: 99, skipTime: 2500 },
         mesh: { enabled: true },
@@ -26,7 +30,12 @@ function loadStoredConfig() {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (!stored) return null
         const parsed = JSON.parse(stored)
-        return mergeDeep(structuredClone(DEFAULT_CONFIG), parsed)
+        // Merge con defaults para cubrir nuevas keys tras actualizaciones
+        const config = mergeDeep(structuredClone(DEFAULT_CONFIG), parsed)
+        if (parsed.session?.captureSeconds === 30) {
+            config.session.captureSeconds = DEFAULT_CONFIG.session.captureSeconds
+        }
+        return config
     } catch {
         return null
     }
@@ -36,7 +45,7 @@ function saveConfig(config) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
     } catch {
-        // Ignore storage quota or private browsing failures.
+        // Silenciar errores de quota o modo privado
     }
 }
 
@@ -77,6 +86,7 @@ function buildHumanConfig(userConfig) {
     }
 }
 
+// Instancia singleton para evitar recargar modelos
 let humanInstance = null
 function getHuman(config) {
     if (!humanInstance) {
@@ -91,17 +101,7 @@ export default function useFaceDetection() {
     const streamRef = useRef(null)
     const rafRef = useRef(null)
     const detectingRef = useRef(false)
-    // 
-    const sessionActiveRef = useRef(false)
-
     const smoothedEmotionsRef = useRef(null)
-
-    // Creamos la estructura de la sesión de 60 s
-    const SESSION_DURATION = 5000 // 60 segundos
-    // Guardaremos todas las muestras
-    const sessionRef = useRef({start: Date.now(), samples: []})
-    // Resultado final que enviaremos más adelante por MQTT
-    const [sessionResult, setSessionResult] = useState(null)
 
     const [modelsLoaded, setModelsLoaded] = useState(false)
     const [cameraActive, setCameraActive] = useState(false)
@@ -115,10 +115,12 @@ export default function useFaceDetection() {
 
     const configRef = useRef(detectionConfig)
 
+    // Mantener configRef sincronizado
     useEffect(() => {
         configRef.current = detectionConfig
     }, [detectionConfig])
 
+    // Aplicar cambios de config al Human instance en caliente
     const updateConfig = useCallback((key, value) => {
         setDetectionConfig(prev => {
             const next = structuredClone(prev)
@@ -137,19 +139,23 @@ export default function useFaceDetection() {
         setDetectionConfig(defaults)
     }, [])
 
+    // Persistir config en localStorage cuando cambia
     useEffect(() => {
         saveConfig(detectionConfig)
     }, [detectionConfig])
 
+    // Sincronizar config con Human instance
     useEffect(() => {
         if (!humanInstance) return
         const newHumanConfig = buildHumanConfig(detectionConfig)
+        // Actualizar config del runtime sin recargar modelos
         Object.assign(humanInstance.config.face.detector, newHumanConfig.face.detector)
         Object.assign(humanInstance.config.face.emotion, newHumanConfig.face.emotion)
         Object.assign(humanInstance.config.filter, newHumanConfig.filter)
         humanInstance.config.cacheSensitivity = newHumanConfig.cacheSensitivity
     }, [detectionConfig])
 
+    // Suavizado exponencial de emociones
     const smoothEmotions = useCallback((rawEmotions) => {
         const cfg = configRef.current.smoothing
         if (!cfg.enabled || !smoothedEmotionsRef.current) {
@@ -166,57 +172,7 @@ export default function useFaceDetection() {
         return smoothed
     }, [])
 
-    const addEmotionSample = useCallback((emotionMap) => {
-        sessionRef.current.samples.push(emotionMap)
-    }, [])
-
-
-    const finishSession = useCallback(() => {
-
-        const samples = sessionRef.current.samples
-
-        if (samples.length === 0) {
-            sessionRef.current = {
-                start: Date.now(),
-                samples: []
-            }
-            return null
-        }
-
-        const totals = {}
-
-        samples.forEach(sample => {
-            Object.entries(sample).forEach(([emotion, value]) => {
-                totals[emotion] = (totals[emotion] || 0) + value
-            })
-        })
-
-        Object.keys(totals).forEach(key => {
-            totals[key] /= samples.length
-        })
-
-        const top2 = Object.entries(totals)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 2)
-
-        const result = {
-            duration: SESSION_DURATION / 1000, // Duración de la sesión
-            samples: samples.length,
-            emotion1: top2[0]?.[0],
-            value1: top2[0]?.[1],
-            emotion2: top2[1]?.[0],
-            value2: top2[1]?.[1]
-        }
-
-        sessionRef.current = {
-            start: Date.now(),
-            samples: []
-        }
-
-        return result
-
-    }, [])
-
+    // Cargar modelos
     useEffect(() => {
         async function loadModels() {
             try {
@@ -227,15 +183,15 @@ export default function useFaceDetection() {
                 setModelsLoaded(true)
             } catch (err) {
                 console.error('Error cargando modelos:', err)
-                setError('No se pudieron cargar los modelos de deteccion facial.')
+                setError('No se pudieron cargar los modelos de detección facial.')
             } finally {
                 setLoading(false)
             }
         }
         loadModels()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    // Iniciar cámara
     const startCamera = useCallback(async () => {
         if (!modelsLoaded) return false
         try {
@@ -252,19 +208,16 @@ export default function useFaceDetection() {
             if (videoRef.current) {
                 videoRef.current.srcObject = stream
             }
-            //
-            // Reiniciar la sesión cada vez que se inicia la cámara
-            sessionRef.current = {start: Date.now(),samples: []}
-            sessionActiveRef.current = true
             setCameraActive(true)
             return true
         } catch (err) {
-            console.error('Error accediendo a camara:', err)
-            setError('No se pudo acceder a la camara. Asegurate de dar permisos.')
+            console.error('Error accediendo a cámara:', err)
+            setError('No se pudo acceder a la cámara. Asegúrate de dar permisos.')
             return false
         }
     }, [modelsLoaded])
 
+    // Detener cámara
     const stopCamera = useCallback(() => {
         if (streamRef.current) {
             streamRef.current.getTracks().forEach((track) => track.stop())
@@ -278,9 +231,6 @@ export default function useFaceDetection() {
             rafRef.current = null
         }
         detectingRef.current = false
-        //
-        sessionActiveRef.current = false
-
         smoothedEmotionsRef.current = null
         setCameraActive(false)
         setEmotions(null)
@@ -289,6 +239,7 @@ export default function useFaceDetection() {
         setGender(null)
     }, [])
 
+    // Detección en loop
     useEffect(() => {
         if (!cameraActive || !modelsLoaded) return
 
@@ -313,6 +264,7 @@ export default function useFaceDetection() {
                         const ctx = canvas.getContext('2d')
                         ctx.clearRect(0, 0, canvas.width, canvas.height)
 
+                        // Dibujar detecciones usando la API de drawing de Human
                         human.draw.face(canvas, result.face, {
                             drawBoxes: true,
                             drawLabels: false,
@@ -325,6 +277,7 @@ export default function useFaceDetection() {
                     if (result.face && result.face.length > 0) {
                         const face = result.face[0]
 
+                        // Procesar emociones con suavizado
                         if (face.emotion && face.emotion.length > 0) {
                             const rawMap = {}
                             face.emotion.forEach(({ emotion, score }) => {
@@ -332,36 +285,13 @@ export default function useFaceDetection() {
                             })
                             const smoothed = smoothEmotions(rawMap)
                             setEmotions(smoothed)
-                            
-                            // Guardar esta muestra en la sesión
-                            addEmotionSample(smoothed)
 
+                            // Emoción dominante del resultado suavizado
                             const dominantEmotion = Object.entries(smoothed).sort(([, a], [, b]) => b - a)[0][0]
                             setDominant(dominantEmotion)
-                            
-                            // Comprobamos si han pasado 60 segundos
-                            if (Date.now() - sessionRef.current.start >= SESSION_DURATION) {
-
-                                const result = finishSession()
-
-                                if (result) {
-
-                                    console.log("Sesión terminada")
-
-                                    setSessionResult(result)
-
-                                    sessionActiveRef.current = false
-
-                                    stopCamera()
-
-                                    return
-
-                                }
-
-                            }
-                           
                         }
 
+                        // Edad y género (extras)
                         if (face.age) setAge(Math.round(face.age))
                         if (face.gender) setGender(face.gender)
                     } else {
@@ -371,10 +301,11 @@ export default function useFaceDetection() {
                         setGender(null)
                     }
                 } catch (err) {
-                    console.error('Error en deteccion:', err)
+                    console.error('Error en detección:', err)
                 }
 
-                if (detectingRef.current && sessionActiveRef.current) {
+                // Siguiente frame con un pequeño delay para no saturar
+                if (detectingRef.current) {
                     rafRef.current = requestAnimationFrame(detectLoop)
                 }
             }
@@ -395,6 +326,7 @@ export default function useFaceDetection() {
         }
     }, [cameraActive, modelsLoaded, smoothEmotions])
 
+    // Cleanup al desmontar
     useEffect(() => {
         return () => {
             stopCamera()
@@ -408,7 +340,6 @@ export default function useFaceDetection() {
         cameraActive,
         emotions,
         dominant,
-        sessionResult, // Nos devuelve el resultado de la sesión de 60s
         age,
         gender,
         error,

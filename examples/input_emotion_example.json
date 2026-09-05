@@ -1,0 +1,15 @@
+{
+  "selected_artist": "Pollock",
+  "facial_emotion": "alegría",
+  "facial_confidence": 0.76,
+  "voice_emotion": "energía alta",
+  "voice_confidence": 0.68,
+  "user_text": "Hoy me siento muy motivado",
+  "available_colors": [
+    "rojo",
+    "azul",
+    "amarillo",
+    "negro",
+    "blanco"
+  ]
+}

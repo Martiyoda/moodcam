@@ -35,7 +35,7 @@ app = FastAPI(title="Voice Relay API")
 
 cors_origins = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080",
+    "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:8080",
 ).split(",")
 
 app.add_middleware(
@@ -148,7 +148,8 @@ async def handle_fulgencio_agent(websocket: WebSocket) -> None:
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(connection_url, ssl=ssl_context) as agent_ws:
+    connect_options = {"ssl": ssl_context} if ssl_context else {}
+    async with websockets.connect(connection_url, **connect_options) as agent_ws:
         if FULGENCIO_CONVERSATION_INSTRUCTIONS:
             await agent_ws.send(
                 json.dumps(
@@ -204,13 +205,15 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as exc:
-        print(f"Voice agent connection error: {type(exc).__name__}: {exc}")
+        error_type = type(exc).__name__
+        print(f"Voice agent connection error: {error_type}: {exc}")
         if websocket.client_state.name != "DISCONNECTED":
             try:
                 await websocket.send_json(
                     {
                         "type": "error",
                         "message": "No se ha podido conectar con el agente de voz.",
+                        "code": f"voice_agent_connection_failed:{error_type}",
                     }
                 )
             except Exception:
