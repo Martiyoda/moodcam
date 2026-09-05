@@ -23,7 +23,7 @@ export default function ArtistSelector({ selectedArtist, onSelect }) {
               onClick={() => onSelect(artist.id)}
               className={`min-h-20 text-left p-3 rounded-lg border transition-colors ${
                 active
-                  ? 'border-[#2092D1] bg-[#2092D1]/10 text-white'
+                  ? 'border-[#2295D4] bg-[#2295D4]/10 text-white'
                   : 'border-gray-800 bg-gray-900/70 text-gray-300 hover:border-gray-700 hover:bg-gray-800/70'
               }`}
             >
