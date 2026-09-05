@@ -65,6 +65,7 @@ function App() {
     lastAiChunk,
     lastSystemError,
     lastCalibrationStatus,
+    lastBridgePresence,
     lastCalibrationError,
     lastCalibrationCommand,
     publishFaceEmotion,
@@ -671,8 +672,13 @@ function App() {
                 aiPlan={lastAiPlan}
                 aiChunk={lastAiChunk}
                 hasEmotionSummary={combinedEmotionSummary.length > 0}
+                bridgePresence={lastBridgePresence}
                 robotStatus={lastCalibrationStatus || lastRobotStatus}
                 voiceStatus={voiceStatus}
+                cameraModelsLoaded={modelsLoaded}
+                cameraActive={cameraActive}
+                cameraLoading={loading}
+                cameraError={error}
                 voiceEnabled={voiceCaptureActive}
                 avatarConnectionStatus={avatarConnectionStatus}
                 avatarRelayStatus={avatarRelayStatus}

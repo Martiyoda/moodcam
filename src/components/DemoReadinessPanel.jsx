@@ -1,11 +1,18 @@
+import { bridgeReadiness, cameraReadiness, voiceReadiness } from '../lib/systemReadiness'
+
 // Resumen rapido de si la demostracion esta lista para comenzar.
 // No realiza acciones fisicas: ayuda a detectar conexiones o permisos pendientes.
 export default function DemoReadinessPanel({
   mqttStatus,
   aiPlan,
   aiChunk,
+  bridgePresence,
   hasEmotionSummary,
   robotStatus,
+  cameraModelsLoaded,
+  cameraActive,
+  cameraLoading,
+  cameraError,
   voiceStatus,
   voiceEnabled,
   avatarConnectionStatus,
@@ -16,6 +23,9 @@ export default function DemoReadinessPanel({
   calibrationLocked,
   calibrationMoving,
 }) {
+  const camera = cameraReadiness({ modelsLoaded: cameraModelsLoaded, cameraActive, loading: cameraLoading, error: cameraError })
+  const voice = voiceReadiness({ voiceAvailable: true, voiceEnabled, voiceStatus, sessionActive })
+  const bridge = bridgeReadiness({ bridgePresence, calibrationLocked, aiPlan, aiChunk, hasEmotionSummary, sessionActive })
   const checks = [
     {
       label: 'MQTT',
@@ -28,9 +38,14 @@ export default function DemoReadinessPanel({
       state: painter ? 'ok' : 'idle',
     },
     {
+      label: 'Cámara',
+      value: camera.label,
+      state: camera.state,
+    },
+    {
       label: 'Voz',
-      value: voiceEnabled ? voiceStatusLabel(voiceStatus, sessionActive) : 'desactivada',
-      state: voiceEnabled ? voiceStatus === 'listening' || voiceStatus === 'ended' ? 'ok' : sessionActive ? 'pending' : 'idle' : 'idle',
+      value: voice.label,
+      state: voice.state,
     },
     {
       label: 'Avatar',
@@ -39,8 +54,8 @@ export default function DemoReadinessPanel({
     },
     {
       label: 'AI Bridge',
-      value: aiBridgeLabel({ calibrationLocked, aiPlan, aiChunk, hasEmotionSummary, sessionActive }),
-      state: calibrationLocked ? 'idle' : aiChunk || aiPlan ? 'ok' : sessionActive || hasEmotionSummary ? 'pending' : 'idle',
+      value: bridge.label,
+      state: bridge.state,
     },
     {
       label: 'Brazo',
@@ -57,7 +72,7 @@ export default function DemoReadinessPanel({
           <p className="mt-1 text-xs text-zinc-500">{calibrationActive ? 'Calibración directa del brazo. AI Bridge aislado.' : 'Ruta esperada: emoción, chunks artísticos y brazo físico.'}</p>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2">
         {checks.map((check) => (
           <div key={check.label} className="rounded-md border border-zinc-800 bg-zinc-950/70 px-3 py-2 min-w-0">
             <div className="flex items-center gap-2">
@@ -70,22 +85,6 @@ export default function DemoReadinessPanel({
       </div>
     </section>
   )
-}
-
-function aiBridgeLabel({ calibrationLocked, aiPlan, aiChunk, hasEmotionSummary, sessionActive }) {
-  if (calibrationLocked) return 'bloqueado por movimiento'
-  if (aiChunk) return `chunk ${aiChunk.payload?.window_index ?? '?'}`
-  if (aiPlan) return `plan ${aiPlan.payload?.plan_id || aiPlan.payload?.id || 'recibido'}`
-  if (sessionActive) return 'esperando chunks'
-  if (hasEmotionSummary) return 'esperando plan'
-  return 'esperando resumen'
-}
-
-function voiceStatusLabel(status, sessionActive) {
-  if (status === 'listening') return 'escuchando'
-  if (status === 'ended') return 'analizada'
-  if (status === 'error') return 'error micro'
-  return sessionActive ? 'iniciando' : 'lista'
 }
 
 function avatarStatusLabel(status, relayStatus) {

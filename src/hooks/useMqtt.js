@@ -1,6 +1,7 @@
 // Hook MQTT de la web: gestiona conexión, presencia, eventos de sesión y estado del robot.
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mqtt from 'mqtt'
+import { isBridgePresenceForDevice } from '../lib/bridgePresence.js'
 import {
     ARM_CALIBRATION_COMMAND_TYPES,
     DEFAULT_DEVICE_ID,
@@ -20,6 +21,7 @@ import {
 
 const MQTT_STORAGE_KEY = 'moodcam-mqtt-config'
 const WEB_PRESENCE_INTERVAL_MS = 5000
+const BRIDGE_PRESENCE_WILDCARD = 'system/+/presence/ai-bridge'
 
 export const DEFAULT_MQTT_CONFIG = {
     enabled: false,
@@ -220,6 +222,7 @@ export default function useMqtt() {
                 getTopic(configRef.current, TOPIC_KEYS.strokeChunk),
                 getTopic(configRef.current, TOPIC_KEYS.systemError),
                 getTopic(configRef.current, TOPIC_KEYS.bridgePresence),
+                BRIDGE_PRESENCE_WILDCARD,
             ])], { qos: 0 })
         })
 
@@ -258,7 +261,8 @@ export default function useMqtt() {
                     setLastCalibrationError(receivedMessage)
                 }
             }
-            if (topic === getTopic(configRef.current, TOPIC_KEYS.bridgePresence)) {
+            if (topic === getTopic(configRef.current, TOPIC_KEYS.bridgePresence)
+                || isBridgePresenceForDevice(parsedPayload, configRef.current.deviceId)) {
                 setLastBridgePresence(receivedMessage)
             }
         })

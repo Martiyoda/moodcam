@@ -132,7 +132,7 @@ Reglas:
 - Usar `createTopicMap`, `topicFor`, `createMqttClientId`, `createSessionId`, builders de payload y `createRobotCommandSequence`.
 - Si cambias topics, actualiza contrato, README, tests y firmware/configuracion relacionada.
 - La web publica presencia retenida cada 5 s; el bridge publica presencia retenida cada 5 s; el firmware publica presencia ESP32 por topic separado.
-- La presencia del bridge incluye `openai_configured`. La web solo habilita voz cuando este campo es `true`.
+- La presencia del bridge incluye `openai_configured` para informar de la capacidad de decisiones OpenAI. La captura y analisis local de voz no dependen de este campo.
 - El firmware publica `queue_depth`, `queue_capacity`, `queue_full` y `queue_executing` en `robot/status`; el AI Bridge los usa para pausar ventanas cuando la FIFO se llena.
 
 Secuencia de comandos de robot:
@@ -148,7 +148,7 @@ Cada comando envuelto debe conservar `plan_id`, `session_id`, `artist`, `sequenc
 La UI esta centrada en una sesion artistica:
 
 1. Una sola pantalla operativa combina seleccion de pintor, camara, consentimiento de voz, captura y estado de obra dinamica.
-2. La cámara procesa la detección localmente en el navegador. La voz es opcional y solo se habilita con consentimiento explícito cuando el bridge publica `openai_configured=true`.
+2. La cámara y la voz se procesan localmente en el navegador. La voz es opcional y solo se habilita con consentimiento explícito; su disponibilidad no depende del AI Bridge.
 3. Publicacion de `session_start` al iniciar captura.
 4. Captura de muestras de cara cada aproximadamente `650 ms` durante la sesion.
 5. Publicacion de `session/window` cada `SESSION_WINDOW_MS = 5000`, con resumen de cara, voz si hay consentimiento, `transcript_delta` temporal y receta de pintor.
@@ -183,7 +183,7 @@ Comportamiento:
 - Al recibir `session/end`, publica chunk final de limpieza/reposo.
 - Si `OPENAI_API_KEY` existe, pide una decision JSON estructurada a OpenAI Responses API y anuncia `openai_configured=true` en presencia.
 - Si falta la key o OpenAI falla/devuelve algo invalido, usa fallback local con `generateArtPlan`.
-- Sin `OPENAI_API_KEY`, la web debe mantener la voz desactivada para no publicar transcripciones que no se usaran en la decision artistica.
+- Sin `OPENAI_API_KEY`, el bridge usa su fallback local y la web puede seguir capturando voz con consentimiento para enriquecer la decision artistica.
 - Publica el plan en `ai/{deviceId}/stroke_plan` con QoS 1.
 - Publica chunks en `ai/{deviceId}/stroke_chunk` con QoS 1.
 - Publica todos los comandos en `robot/{deviceId}/command` con QoS 1 y pausa `MQTT_COMMAND_DELAY_MS`.
