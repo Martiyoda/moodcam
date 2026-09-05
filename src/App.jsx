@@ -593,7 +593,7 @@ function App() {
                   className={`min-h-12 shrink-0 px-8 rounded-lg font-semibold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     sessionActive || sessionPreparing
                       ? 'bg-red-500 text-white hover:bg-red-400'
-                      : 'bg-amber-400 text-zinc-950 hover:bg-amber-300'
+                      : 'bg-[#2092D1] text-zinc-950 hover:bg-[#1F88CA]'
                   }`}
                 >
                   {sessionActive || sessionPreparing ? 'Detener' : loading ? 'Cargando modelos...' : 'Iniciar'}
