@@ -114,7 +114,6 @@ function App() {
   const [sessionId, setSessionId] = useState(null)
   const [conversationModeId] = useState(DEFAULT_CONVERSATION_MODE)
   const [armCalibrationState, setArmCalibrationState] = useState({ active: false, moving: false })
-  const [voiceConsentGranted, setVoiceConsentGranted] = useState(false)
   const [avatarRelayStatus, setAvatarRelayStatus] = useState('checking')
 
   const faceSamplesRef = useRef([])
@@ -135,7 +134,7 @@ function App() {
   const selectedPainterRecipe = useMemo(() => getPainterRecipe(selectedArtist), [selectedArtist])
   const conversationMode = useMemo(() => getConversationMode(conversationModeId), [conversationModeId])
   const voiceAvailable = VOICE_CAPTURE_ENABLED
-  const voiceCaptureActive = voiceAvailable && voiceConsentGranted
+  const voiceCaptureActive = voiceAvailable
   const calibrationLocked = armCalibrationState.moving
   const captureDurationSeconds = Math.max(1, Number(detectionConfig.session?.captureSeconds) || 60)
   const captureDurationMs = captureDurationSeconds * 1000
@@ -601,13 +600,6 @@ function App() {
                 </button>
               </div>
 
-              <VoiceConsentPanel
-                voiceAvailable={voiceAvailable}
-                voiceConsentGranted={voiceConsentGranted}
-                sessionActive={sessionActive || sessionPreparing}
-                onVoiceConsentChange={setVoiceConsentGranted}
-              />
-
               {error && <div className="bg-red-950/40 border border-red-700 text-red-200 rounded-lg p-3 text-sm text-center">{error}</div>}
 
               <div ref={captureSectionRef} className="grid grid-cols-1 xl:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.55fr)] gap-4 xl:items-start">
@@ -744,34 +736,6 @@ function DynamicArtworkStatus({ aiChunk, aiPlan, robotStatus, sessionActive }) {
         <p className="text-xs text-zinc-500">Plan compatible recibido: {aiPlan.payload?.id || aiPlan.payload?.plan_id || 'sin id'}</p>
       )}
     </div>
-  )
-}
-
-function VoiceConsentPanel({ voiceAvailable, voiceConsentGranted, sessionActive, onVoiceConsentChange }) {
-  if (!voiceAvailable) {
-    return (
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-500">
-        La captura de voz estará disponible cuando el servicio artístico con IA esté preparado.
-      </div>
-    )
-  }
-
-  return (
-    <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-300">
-      <input
-        type="checkbox"
-        checked={voiceConsentGranted}
-        disabled={sessionActive}
-        onChange={(event) => onVoiceConsentChange(event.target.checked)}
-        className="mt-1 h-4 w-4 shrink-0 accent-amber-300 disabled:opacity-40"
-      />
-      <span>
-        <span className="block font-semibold text-zinc-100">Activar captura de voz</span>
-        <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
-          Al activar la voz, su transcripción temporal puede enviarse a OpenAI para ayudar a crear la obra. No guardamos ni enviamos audio o vídeo. Sin voz, la sesión usa solo la cámara.
-        </span>
-      </span>
-    </label>
   )
 }
 
