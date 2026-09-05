@@ -21,7 +21,7 @@ export default function ArtistSelector({ selectedArtist, onSelect }) {
             <button
               key={artist.id}
               onClick={() => onSelect(artist.id)}
-              className={`min-h-24 text-left p-3 rounded-lg border transition-colors ${
+              className={`min-h-20 text-left p-3 rounded-lg border transition-colors ${
                 active
                   ? 'border-amber-400 bg-amber-400/10 text-white'
                   : 'border-gray-800 bg-gray-900/70 text-gray-300 hover:border-gray-700 hover:bg-gray-800/70'

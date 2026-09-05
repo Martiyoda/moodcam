@@ -29,6 +29,8 @@ const DEFAULT_SESSION_MS = 60_000
 const SESSION_WINDOW_SCHEDULE_MS = [7500, 15000, 22500, 30000, 37500, 45000, 52500, 60000]
 const FACE_SAMPLE_INTERVAL_MS = 650
 const VOICE_CAPTURE_ENABLED = true
+// Ajustar este valor si cambia la duracion de la introduccion del avatar.
+const AVATAR_INTRODUCTION_DELAY_MS = 20_000
 
 function App() {
   // Cada hook se ocupa de una fuente distinta de informacion. App los coordina:
@@ -45,6 +47,7 @@ function App() {
     error,
     loading,
     startCamera,
+    stopCamera,
     detectionConfig,
     updateConfig,
     resetConfig,
@@ -96,6 +99,9 @@ function App() {
 
   const [showSettingsPage, setShowSettingsPage] = useState(false)
   const [sessionActive, setSessionActive] = useState(false)
+  const [sessionPreparing, setSessionPreparing] = useState(false)
+  const [introductionStartedAt, setIntroductionStartedAt] = useState(null)
+  const [introductionRemainingMs, setIntroductionRemainingMs] = useState(AVATAR_INTRODUCTION_DELAY_MS)
   const [sessionStartedAt, setSessionStartedAt] = useState(null)
   const [remainingMs, setRemainingMs] = useState(DEFAULT_SESSION_MS)
   const [faceEmotionSamples, setFaceEmotionSamples] = useState([])
@@ -122,6 +128,7 @@ function App() {
   const lastWindowTranscriptCursorRef = useRef(0)
   const lastPublishedWindowIndexRef = useRef(-1)
   const captureSectionRef = useRef(null)
+  const preparationIdRef = useRef(0)
 
   const selectedArtistInfo = useMemo(() => getArtistById(selectedArtist), [selectedArtist])
   const selectedPainterProfile = useMemo(() => getPainterProfile(selectedArtist), [selectedArtist])
@@ -297,6 +304,7 @@ function App() {
 
     stopVoiceDetection()
     stopConversation()
+    stopCamera()
     publishEmotionWindow({
       isFinalWindow: true,
       windowIndex: SESSION_WINDOW_SCHEDULE_MS.length - 1,
@@ -347,6 +355,7 @@ function App() {
     selectedArtistInfo,
     sessionId,
     stopConversation,
+    stopCamera,
     stopVoiceDetection,
     voiceCaptureActive,
   ])
@@ -375,11 +384,42 @@ function App() {
     return () => window.clearInterval(timer)
   }, [captureDurationMs, finishSession, publishEmotionWindow, sessionActive, sessionStartedAt])
 
+  useEffect(() => {
+    if (!sessionPreparing || !introductionStartedAt) return undefined
+
+    const timer = window.setInterval(() => {
+      setIntroductionRemainingMs(Math.max(0, AVATAR_INTRODUCTION_DELAY_MS - (Date.now() - introductionStartedAt)))
+    }, 250)
+
+    return () => window.clearInterval(timer)
+  }, [introductionStartedAt, sessionPreparing])
+
+  const handleStopSession = useCallback(() => {
+    if (sessionPreparing) {
+      preparationIdRef.current += 1
+      setSessionPreparing(false)
+      setIntroductionStartedAt(null)
+      setIntroductionRemainingMs(AVATAR_INTRODUCTION_DELAY_MS)
+      stopVoiceDetection()
+      stopConversation()
+      stopCamera()
+      setActionMessage('Presentación cancelada.')
+      return
+    }
+
+    finishSession()
+  }, [finishSession, sessionPreparing, stopCamera, stopConversation, stopVoiceDetection])
+
   const handleStartSession = useCallback(async () => {
     if (calibrationLocked) {
       setActionMessage('La captura emocional está bloqueada mientras la calibración del brazo está activa.')
       return
     }
+    const preparationId = preparationIdRef.current + 1
+    preparationIdRef.current = preparationId
+    setSessionPreparing(true)
+    setIntroductionStartedAt(Date.now())
+    setIntroductionRemainingMs(AVATAR_INTRODUCTION_DELAY_MS)
     setActionMessage(null)
     clearSessionState()
     setFaceEmotionSamples([])
@@ -395,12 +435,27 @@ function App() {
     const nextSessionId = createSessionId(mqttConfig.deviceId)
     setSessionId(nextSessionId)
 
+    requestAnimationFrame(() => {
+      captureSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+
     let ready = cameraActive
     if (!ready) ready = await startCamera()
-    if (!ready) return
+    if (preparationId !== preparationIdRef.current) {
+      stopCamera()
+      return
+    }
+    if (!ready) {
+      setSessionPreparing(false)
+      return
+    }
 
     if (voiceCaptureActive && conversationMode.id === 'voice_detector') {
       const started = await startVoiceDetection()
+      if (preparationId !== preparationIdRef.current) {
+        stopVoiceDetection()
+        return
+      }
       if (!started) {
         setActionMessage('No se pudo activar el micrófono. La sesión puede continuar solo con rostro si lo deseas.')
       }
@@ -409,11 +464,19 @@ function App() {
     if (voiceCaptureActive) {
       try {
         await startConversation()
+        if (preparationId !== preparationIdRef.current) {
+          stopConversation()
+          return
+        }
       } catch (avatarError) {
+        if (preparationId !== preparationIdRef.current) return
         console.error('No se pudo iniciar la conversación del avatar:', avatarError)
         setActionMessage('La sesión continúa sin conversación del avatar.')
       }
     }
+
+    await new Promise((resolve) => window.setTimeout(resolve, AVATAR_INTRODUCTION_DELAY_MS))
+  if (preparationId !== preparationIdRef.current) return
 
     publishSessionStart({
       sessionId: nextSessionId,
@@ -426,9 +489,7 @@ function App() {
     setRemainingMs(captureDurationMs)
     setSessionStartedAt(Date.now())
     setSessionActive(true)
-    requestAnimationFrame(() => {
-      captureSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
+    setSessionPreparing(false)
   }, [
     cameraActive,
     conversationMode.id,
@@ -444,6 +505,9 @@ function App() {
     calibrationLocked,
     resetVoiceDetection,
     startConversation,
+    stopCamera,
+    stopConversation,
+    stopVoiceDetection,
     voiceCaptureActive,
   ])
 
@@ -460,6 +524,7 @@ function App() {
   }, [sessionActive])
 
   const remainingSeconds = Math.ceil(remainingMs / 1000)
+  const introductionRemainingSeconds = Math.ceil(introductionRemainingMs / 1000)
   const captureProgress = combinedEmotionSummary.length > 0
     ? 100
     : sessionActive
@@ -470,41 +535,16 @@ function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-      <header className="py-4 px-4 flex items-center justify-between border-b border-zinc-800">
-        <a
-          href="/proyecto"
-          className="h-10 px-3 hidden sm:inline-flex items-center justify-center rounded-lg text-xs font-semibold text-zinc-400 border border-zinc-800 hover:text-white hover:bg-zinc-800 transition-colors"
-        >
-          Proyecto
-        </a>
-        <a
-          href="/proyecto"
-          className="w-10 h-10 sm:hidden flex items-center justify-center rounded-lg text-zinc-400 border border-zinc-800 hover:text-white hover:bg-zinc-800 transition-colors"
-          title="Proyecto"
-          aria-label="Proyecto"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 19.5V6.75A2.75 2.75 0 016.75 4h10.5A2.75 2.75 0 0120 6.75V19.5l-4-2-4 2-4-2-4 2z" />
-          </svg>
-        </a>
-        <div className="text-center">
+      <header className="grid grid-cols-3 items-center border-b border-zinc-800 px-4 py-4">
+        <div className="col-start-2 text-center shrink-0">
             <div className="flex items-center justify-center gap-2">
               <img src="/logo-esplubot.png" alt="Esplubot" className="h-9 w-9 rounded-full border border-zinc-700 bg-zinc-900 p-1" />
               <span className="text-xl font-semibold tracking-[0.18em] uppercase text-white sm:text-2xl">Moodcam</span>
           </div>
             <p className="mt-1 text-xs text-zinc-500">Inner Synergy · emoción · arte generativo · pintura A4</p>
+            <p className="text-xs text-zinc-500">by Esplubot Natzaret</p>
         </div>
-        <div className="flex items-center gap-1">
-          {mqttConfig.enabled && (
-            <span
-              className={`w-2 h-2 rounded-full transition-colors ${
-                connectionStatus === 'connected' ? 'bg-emerald-500' :
-                connectionStatus === 'connecting' ? 'bg-amber-400 animate-pulse' :
-                connectionStatus === 'error' ? 'bg-red-500' : 'bg-zinc-500'
-              }`}
-              title={`MQTT: ${connectionStatus}`}
-            />
-          )}
+        <div className="col-start-3 flex items-center justify-self-end gap-1">
           <button
             onClick={() => setShowSettingsPage(true)}
             className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
@@ -544,29 +584,29 @@ function App() {
         ) : (
           <>
             <section className="space-y-4">
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-                <PainterSelector selectedArtist={selectedArtist} onSelect={handleSelectArtist} />
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-3 lg:items-stretch">
-                <VoiceConsentPanel
-                  voiceAvailable={voiceAvailable}
-                  voiceConsentGranted={voiceConsentGranted}
-                  sessionActive={sessionActive}
-                  onVoiceConsentChange={setVoiceConsentGranted}
-                />
+              <div className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <PainterSelector selectedArtist={selectedArtist} onSelect={handleSelectArtist} />
+                </div>
                 <button
-                  onClick={sessionActive ? finishSession : handleStartSession}
-                  disabled={!sessionActive && (!modelsLoaded || loading || calibrationLocked)}
-                  className={`min-h-16 px-8 rounded-lg font-semibold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                    sessionActive
+                  onClick={sessionActive || sessionPreparing ? handleStopSession : handleStartSession}
+                  disabled={!sessionActive && !sessionPreparing && (!modelsLoaded || loading || calibrationLocked)}
+                  className={`min-h-12 shrink-0 px-8 rounded-lg font-semibold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    sessionActive || sessionPreparing
                       ? 'bg-red-500 text-white hover:bg-red-400'
                       : 'bg-amber-400 text-zinc-950 hover:bg-amber-300'
                   }`}
                 >
-                  {sessionActive ? 'Detener' : loading ? 'Cargando modelos...' : 'Iniciar'}
+                  {sessionActive || sessionPreparing ? 'Detener' : loading ? 'Cargando modelos...' : 'Iniciar'}
                 </button>
               </div>
+
+              <VoiceConsentPanel
+                voiceAvailable={voiceAvailable}
+                voiceConsentGranted={voiceConsentGranted}
+                sessionActive={sessionActive || sessionPreparing}
+                onVoiceConsentChange={setVoiceConsentGranted}
+              />
 
               {error && <div className="bg-red-950/40 border border-red-700 text-red-200 rounded-lg p-3 text-sm text-center">{error}</div>}
 
@@ -578,6 +618,8 @@ function App() {
                     captureDurationSeconds={captureDurationSeconds}
                     progress={captureProgress}
                     sessionActive={sessionActive}
+                    sessionPreparing={sessionPreparing}
+                    introductionRemainingSeconds={introductionRemainingSeconds}
                     captureComplete={combinedEmotionSummary.length > 0}
                   />
                 </div>
@@ -599,20 +641,8 @@ function App() {
 
                   <div className="space-y-4">
                     <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
-                      {combinedEmotionSummary.length > 0 ? (
-                        <VoiceEmotionPanel
-                          latestSample={latestVoiceSample}
-                          summary={voiceSummary}
-                          combinedSummary={combinedEmotionSummary}
-                          faceSummary={displayedFaceSummary}
-                          title="Emociones predominantes"
-                        />
-                      ) : (
-                        <>
-                          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emociones predominantes</h2>
-                          <EmotionDisplay emotions={physicalFaceEmotions} dominant={physicalDominant} age={age} gender={gender} />
-                        </>
-                      )}
+                      <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Emociones predominantes</h2>
+                      <EmotionDisplay emotions={physicalFaceEmotions} dominant={physicalDominant} age={age} gender={gender} />
                     </div>
 
                     <VoiceCaptureStatus
@@ -625,6 +655,22 @@ function App() {
                   </div>
                 </div>
               </div>
+
+              {combinedEmotionSummary.length > 0 && (
+                <section className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-4 md:p-5">
+                  <div className="mb-4">
+                    <h2 className="text-lg font-semibold text-amber-100">Experiencia finalizada</h2>
+                    <p className="mt-1 text-sm text-amber-50/80">Gracias por compartir este momento. Este es el resumen de las emociones capturadas durante la experiencia.</p>
+                  </div>
+                  <VoiceEmotionPanel
+                    latestSample={latestVoiceSample}
+                    summary={voiceSummary}
+                    combinedSummary={combinedEmotionSummary}
+                    faceSummary={displayedFaceSummary}
+                    title="Resumen emocional"
+                  />
+                </section>
+              )}
 
               <DynamicArtworkStatus aiChunk={lastAiChunk} aiPlan={lastAiPlan} robotStatus={robotStatusPayload} sessionActive={sessionActive} />
 
@@ -748,17 +794,21 @@ function VoiceCaptureStatus({ enabled, status, error, latestSample, transcript }
   )
 }
 
-function CaptureTimer({ remainingSeconds, captureDurationSeconds, progress, sessionActive, captureComplete }) {
+function CaptureTimer({ remainingSeconds, captureDurationSeconds, progress, sessionActive, sessionPreparing, introductionRemainingSeconds, captureComplete }) {
   const progressValue = Math.max(0, Math.min(100, progress || 0))
   const progressStyle = sessionActive
     ? { animation: `capture-progress-fill ${captureDurationSeconds}s linear forwards` }
     : { transform: `scaleX(${progressValue / 100})` }
-  const timeValue = captureComplete ? '0s' : sessionActive ? `${remainingSeconds}s` : `${captureDurationSeconds}s`
+  const isIntroduction = sessionPreparing && !sessionActive
+  const label = isIntroduction ? 'Tiempo de presentación' : 'Tiempo de captura'
+  const timeValue = isIntroduction
+    ? `${introductionRemainingSeconds}s`
+    : captureComplete ? '0s' : sessionActive ? `${remainingSeconds}s` : `${captureDurationSeconds}s`
 
   return (
     <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Tiempo de captura</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{label}</span>
         <span className="text-2xl font-semibold text-zinc-100">{timeValue}</span>
       </div>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800">
