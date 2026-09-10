@@ -72,6 +72,12 @@ Terminal 1 (web + backend local):
 
 npm run dev
 
+Backend del avatar:
+
+```powershell
+.\back\.venv\Scripts\python.exe .\back\main.py
+```
+
 Terminal 2 (AI Bridge):
 
 npm run ai:bridge
