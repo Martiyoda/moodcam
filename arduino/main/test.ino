@@ -34,18 +34,29 @@
 */
 
 #include <ESP32Servo.h>
+#include "src/robot_config.h"
 
 // ---------- Definicion de pines ----------
-#define PIN_BASE    26
-#define PIN_HOMBRO  25
-#define PIN_CODO    33
-#define PIN_MUNECA  32
+#define PIN_BASE    BASE_SERVO_CONFIG.pin
+#define PIN_HOMBRO  SHOULDER_SERVO_CONFIG.pin
+#define PIN_CODO    ELBOW_SERVO_CONFIG.pin
+#define PIN_MUNECA  WRIST_SERVO_CONFIG.pin
 
-// ---------- Limites de angulo (ajusta si tu servo lo requiere) ----------
-const int ANGULO_MIN_BASE = -30;
-const int ANGULO_MIN_OTROS = 0;
-const int ANGULO_MAX_BASE = 180;
-const int ANGULO_MAX_OTROS = 180;
+// La prueba usa la misma referencia fisica y los mismos limites que main.ino.
+const int ANGULO_MIN_BASE = BASE_SERVO_CONFIG.minAngle;
+const int ANGULO_MIN_HOMBRO = SHOULDER_SERVO_CONFIG.minAngle;
+const int ANGULO_MIN_CODO = ELBOW_SERVO_CONFIG.minAngle;
+const int ANGULO_MIN_MUNECA = WRIST_SERVO_CONFIG.minAngle;
+const int ANGULO_MAX_BASE = BASE_SERVO_CONFIG.maxAngle;
+const int ANGULO_MAX_HOMBRO = SHOULDER_SERVO_CONFIG.maxAngle;
+const int ANGULO_MAX_CODO = ELBOW_SERVO_CONFIG.maxAngle;
+const int ANGULO_MAX_MUNECA = WRIST_SERVO_CONFIG.maxAngle;
+const int OFFSET_SERVO_HOMBRO = 45;
+const int OFFSET_SERVO_CODO = -10;
+const int ANGULO_MIN_HOMBRO_FISICO = ANGULO_MIN_HOMBRO - OFFSET_SERVO_HOMBRO;
+const int ANGULO_MAX_HOMBRO_FISICO = ANGULO_MAX_HOMBRO - OFFSET_SERVO_HOMBRO;
+const int ANGULO_MIN_CODO_FISICO = ANGULO_MIN_CODO - OFFSET_SERVO_CODO;
+const int ANGULO_MAX_CODO_FISICO = ANGULO_MAX_CODO - OFFSET_SERVO_CODO;
 
 // ---------- Objetos Servo ----------
 Servo servoBase;
@@ -54,13 +65,13 @@ Servo servoCodo;
 Servo servoMuneca;
 
 // ---------- Posiciones actuales (para poder mostrarlas con 's') ----------
-int posBase   = 90;
-int posHombro = 90;
-int posCodo   = 90;
-int posMuneca = 90;
+int posBase   = BASE_SERVO_CONFIG.homeAngle;
+int posHombro = SHOULDER_SERVO_CONFIG.homeAngle - OFFSET_SERVO_HOMBRO;
+int posCodo   = ELBOW_SERVO_CONFIG.homeAngle - OFFSET_SERVO_CODO;
+int posMuneca = WRIST_SERVO_CONFIG.homeAngle;
 
-void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, bool invertirDireccion, int anguloMin, int anguloMax);
-void moverServo(Servo &servo, int grados, const char* nombre);
+void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, int anguloMin, int anguloMax, int offsetServo = 0);
+void moverServo(Servo &servo, int gradosServo, const char* nombre, int offsetServo = 0);
 void mostrarPosiciones();
 void testBarrido();
 void testUnServo(Servo &servo, int &posActual, const char* nombre, int posicionHome, int anguloMin, int anguloMax);
@@ -87,16 +98,16 @@ void setup() {
   servoMuneca.attach(PIN_MUNECA, 500, 2400);
 
   // Posicion inicial centrada
-  moverServo(servoBase,   posBase,   "BASE");
-  moverServo(servoHombro, posHombro, "HOMBRO");
-  moverServo(servoCodo,   posCodo,   "CODO");
+  moverServo(servoBase, posBase, "BASE");
+  moverServo(servoHombro, posHombro + OFFSET_SERVO_HOMBRO, "HOMBRO", OFFSET_SERVO_HOMBRO);
+  moverServo(servoCodo, posCodo + OFFSET_SERVO_CODO, "CODO", OFFSET_SERVO_CODO);
   moverServo(servoMuneca, posMuneca, "MUNECA");
 
   Serial.println("==========================================");
   Serial.println(" Brazo robotico listo para pruebas");
   Serial.println(" Comandos relativos: b+/-grados h+/-grados c+/-grados m+/-grados");
   Serial.println(" Ejemplo: b10 suma 10; b-10 resta 10 desde la posicion actual");
-  Serial.println(" Posicion HOME: BASE=90 HOMBRO=90 CODO=90 MUNECA=90");
+  Serial.println(" Posicion HOME fisica: BASE=90 HOMBRO=45 CODO=100 MUNECA=90");
   Serial.println(" t = test de barrido automatico");
   Serial.println(" s = mostrar posiciones actuales");
   Serial.println("==========================================");
@@ -115,16 +126,16 @@ void loop() {
 
     switch (comando) {
       case 'b':
-        procesarComando(servoBase, posBase, resto, "BASE", false, ANGULO_MIN_BASE, ANGULO_MAX_BASE);
+        procesarComando(servoBase, posBase, resto, "BASE", ANGULO_MIN_BASE, ANGULO_MAX_BASE);
         break;
       case 'h':
-        procesarComando(servoHombro, posHombro, resto, "HOMBRO", true, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
+        procesarComando(servoHombro, posHombro, resto, "HOMBRO", ANGULO_MIN_HOMBRO_FISICO, ANGULO_MAX_HOMBRO_FISICO, OFFSET_SERVO_HOMBRO);
         break;
       case 'c':
-        procesarComando(servoCodo, posCodo, resto, "CODO", true, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
+        procesarComando(servoCodo, posCodo, resto, "CODO", ANGULO_MIN_CODO_FISICO, ANGULO_MAX_CODO_FISICO, OFFSET_SERVO_CODO);
         break;
       case 'm':
-        procesarComando(servoMuneca, posMuneca, resto, "MUNECA", false, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
+        procesarComando(servoMuneca, posMuneca, resto, "MUNECA", ANGULO_MIN_MUNECA, ANGULO_MAX_MUNECA);
         break;
       case 't':
         testBarrido();
@@ -141,7 +152,7 @@ void loop() {
 
 // ---------- Funciones auxiliares ----------
 
-void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, bool invertirDireccion, int anguloMin, int anguloMax) {
+void procesarComando(Servo &servo, int &posActual, String valor, const char* nombre, int anguloMin, int anguloMax, int offsetServo) {
   if (valor.length() == 0) {
     Serial.print("Falta el desplazamiento. Ejemplo: b10 o b-10 para mover ");
     Serial.println(nombre);
@@ -151,11 +162,8 @@ void procesarComando(Servo &servo, int &posActual, String valor, const char* nom
   int desplazamiento = valor.toInt();
   int posicionObjetivo = posActual + desplazamiento;
   int posicionLimitada = constrain(posicionObjetivo, anguloMin, anguloMax);
-  int posicionServo = invertirDireccion
-    ? anguloMax - posicionLimitada
-    : posicionLimitada;
 
-  moverServo(servo, posicionServo, nombre);
+  moverServo(servo, posicionLimitada + offsetServo, nombre, offsetServo);
   posActual = posicionLimitada;
 
   if (posicionObjetivo != posicionLimitada) {
@@ -164,16 +172,16 @@ void procesarComando(Servo &servo, int &posActual, String valor, const char* nom
   }
 }
 
-void moverServo(Servo &servo, int grados, const char* nombre) {
-  servo.write(grados);
+void moverServo(Servo &servo, int gradosServo, const char* nombre, int offsetServo) {
+  servo.write(gradosServo);
   Serial.print(nombre);
   Serial.print(" -> ");
-  Serial.print(grados);
+  Serial.print(gradosServo - offsetServo);
   Serial.println(" grados");
 }
 
 void mostrarPosiciones() {
-  Serial.println("---- Posiciones actuales ----");
+  Serial.println("---- Posiciones fisicas actuales ----");
   Serial.print("BASE:   "); Serial.println(posBase);
   Serial.print("HOMBRO: "); Serial.println(posHombro);
   Serial.print("CODO:   "); Serial.println(posCodo);
@@ -181,14 +189,16 @@ void mostrarPosiciones() {
   Serial.println("------------------------------");
 }
 
-// Test automatico: mueve la base de -30 a 180 y los otros servos de 0 a 180.
+// Test automatico con los limites configurados para cada articulacion.
 void testBarrido() {
   Serial.println(">> Iniciando test de barrido automatico...");
 
-  testUnServo(servoBase, posBase, "BASE", 90, ANGULO_MIN_BASE, ANGULO_MAX_BASE);
-  testUnServo(servoHombro, posHombro, "HOMBRO", 90, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
-  testUnServo(servoCodo, posCodo, "CODO", 90, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
-  testUnServo(servoMuneca, posMuneca, "MUNECA", 90, ANGULO_MIN_OTROS, ANGULO_MAX_OTROS);
+  testUnServo(servoBase, posBase, "BASE", BASE_SERVO_CONFIG.homeAngle, ANGULO_MIN_BASE, ANGULO_MAX_BASE);
+  testUnServo(servoHombro, posHombro, "HOMBRO", SHOULDER_SERVO_CONFIG.homeAngle, ANGULO_MIN_HOMBRO, ANGULO_MAX_HOMBRO);
+  posHombro = SHOULDER_SERVO_CONFIG.homeAngle - OFFSET_SERVO_HOMBRO;
+  testUnServo(servoCodo, posCodo, "CODO", ELBOW_SERVO_CONFIG.homeAngle, ANGULO_MIN_CODO, ANGULO_MAX_CODO);
+  posCodo = ELBOW_SERVO_CONFIG.homeAngle - OFFSET_SERVO_CODO;
+  testUnServo(servoMuneca, posMuneca, "MUNECA", WRIST_SERVO_CONFIG.homeAngle, ANGULO_MIN_MUNECA, ANGULO_MAX_MUNECA);
 
   Serial.println(">> Test de barrido finalizado.");
 }

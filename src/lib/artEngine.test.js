@@ -21,6 +21,7 @@ test('genera plan dentro de A4 horizontal', () => {
   assert.ok(plan.strokes.length > 0)
   assert.ok(plan.strokes.length <= 8)
   assert.ok(plan.strokes.every((stroke) => stroke.points.length <= 10))
+  assert.ok(plan.strokes.every((stroke) => stroke.speed >= 6 && stroke.speed <= 10))
 
   const strokePoints = plan.robot_commands
     .filter((command) => command.type === 'stroke')
@@ -34,6 +35,10 @@ test('genera plan dentro de A4 horizontal', () => {
   })
   assert.ok(strokePoints.some((point) => point.brush === 0 && point.z === DEFAULT_ROBOT_CALIBRATION.z.paint))
   assert.ok(strokePoints.some((point) => point.brush === 1 && point.z === DEFAULT_ROBOT_CALIBRATION.z.paint))
+  assert.ok(Math.min(...strokePoints.map((point) => point.x)) < 50)
+  assert.ok(Math.max(...strokePoints.map((point) => point.x)) > 250)
+  assert.ok(Math.min(...strokePoints.map((point) => point.y)) < 50)
+  assert.ok(Math.max(...strokePoints.map((point) => point.y)) > 160)
 
   const firstStroke = plan.robot_commands.find((command) => command.type === 'stroke')
   assert.equal(firstStroke.points[0].brush, 0)

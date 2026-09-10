@@ -591,7 +591,7 @@ function App() {
                 <button
                   onClick={sessionActive || sessionPreparing ? handleStopSession : handleStartSession}
                   disabled={!sessionActive && !sessionPreparing && (!modelsLoaded || loading || calibrationLocked)}
-                  className={`min-h-12 shrink-0 px-8 rounded-lg font-semibold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                  className={`min-h-16 shrink-0 px-10 rounded-lg font-semibold text-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     sessionActive || sessionPreparing
                       ? 'bg-red-500 text-white hover:bg-red-400'
                       : 'bg-[#2295D4] text-zinc-950 hover:bg-[#2EADE2]'

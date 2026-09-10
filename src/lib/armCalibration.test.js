@@ -33,7 +33,7 @@ test('rechaza ángulos y duraciones fuera de límites', () => {
   })
   assert.throws(() => buildSetAngleCommand('base', 181, 500))
   assert.throws(() => buildSetAngleCommand('shoulder', 166, 400))
-  assert.throws(() => buildSetAngleCommand('shoulder', 59, 400))
+  assert.throws(() => buildSetAngleCommand('shoulder', 44, 400))
   assert.throws(() => buildSetAngleCommand('shoulder', 85, 100))
 })
 

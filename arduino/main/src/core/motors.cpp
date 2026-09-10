@@ -84,15 +84,19 @@ int degreesPerStepForSpeed(int speed) {
   return map(constrain(speed, SAFE_MIN_SPEED, SAFE_MAX_SPEED), SAFE_MIN_SPEED, SAFE_MAX_SPEED, 1, 4);
 }
 
+void writeServoAngle(Servo& servo, const RobotServoConfig& config, int logicalAngle) {
+  servo.write(constrain(logicalAngle + config.outputOffset, 0, 180));
+}
+
 void writePose(const ServoPose& nextPose) {
   pose = nextPose;
   if (!finalArmAttached) {
     return;
   }
-  baseServo.write(pose.base);
-  shoulderServo.write(pose.shoulder);
-  elbowServo.write(pose.elbow);
-  wristServo.write(pose.wrist);
+  writeServoAngle(baseServo, BASE_SERVO_CONFIG, pose.base);
+  writeServoAngle(shoulderServo, SHOULDER_SERVO_CONFIG, pose.shoulder);
+  writeServoAngle(elbowServo, ELBOW_SERVO_CONFIG, pose.elbow);
+  writeServoAngle(wristServo, WRIST_SERVO_CONFIG, pose.wrist);
 }
 
 void waitWithMotionTick(unsigned long durationMs) {
@@ -191,11 +195,11 @@ bool runSingleServoHardwareTest(int servoPin, const char* servoName, int angle, 
 
   Servo localServo;
   localServo.attach(servo->pin);
-  localServo.write(homeAngle);
+  writeServoAngle(localServo, *servo, homeAngle);
   delay(200);
-  localServo.write(safeAngle);
+  writeServoAngle(localServo, *servo, safeAngle);
   delay(safeDuration);
-  localServo.write(homeAngle);
+  writeServoAngle(localServo, *servo, homeAngle);
   delay(250);
   localServo.detach();
   return true;
@@ -255,7 +259,7 @@ bool startCalibrationMove(const char* servoName, int targetAngle, int durationMs
   const int previousAngle = joint->commandedAngle;
   if (!joint->attached) {
     joint->servo->attach(joint->config->pin);
-    joint->servo->write(previousAngle);
+    writeServoAngle(*joint->servo, *joint->config, previousAngle);
     joint->attached = true;
   }
 
@@ -297,7 +301,7 @@ bool updateCalibrationMotion(const char*& completedServo, int& completedAngle) {
 
   CalibrationJoint* joint = calibrationMotion.joint;
   joint->commandedAngle += calibrationMotion.direction;
-  joint->servo->write(joint->commandedAngle);
+  writeServoAngle(*joint->servo, *joint->config, joint->commandedAngle);
 
   if (joint->commandedAngle == calibrationMotion.targetAngle) {
     calibrationMotion.active = false;

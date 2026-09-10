@@ -6,7 +6,7 @@
 
 #define DEMO_MODE true
 #define SAFE_TEST_MODE true
-#define CALIBRATION_MODE false
+#define CALIBRATION_MODE true
 #define FINAL_ARM_MODE true
 #define FINAL_ARM_EXPLICITLY_CONFIGURED true
 
@@ -33,25 +33,26 @@ struct RobotServoConfig {
   int minAngle;
   int maxAngle;
   int homeAngle;
+  int outputOffset;
   int safeSpeed;
 };
 
 // Rangos verificados por la coreografia fisica de Moodcam para pinturas,
 // agua y toalla. Ajustar solo tras una nueva calibracion mecanica.
 constexpr RobotServoConfig BASE_SERVO_CONFIG = {
-  SERVO_BASE, "base", 26, true, -30, 180, 90, DEFAULT_SAFE_SPEED
+  SERVO_BASE, "base", 26, true, -30, 180, 90, 0, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig SHOULDER_SERVO_CONFIG = {
-  SERVO_SHOULDER, "shoulder", 25, true, 45, 165, 45, DEFAULT_SAFE_SPEED
+  SERVO_SHOULDER, "shoulder", 25, true, 45, 165, 90, -45, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig ELBOW_SERVO_CONFIG = {
-  SERVO_ELBOW, "elbow", 33, true, 35, 150, 90, DEFAULT_SAFE_SPEED
+  SERVO_ELBOW, "elbow", 33, true, 35, 150, 90, 0, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig WRIST_SERVO_CONFIG = {
-  SERVO_WRIST, "wrist", 32, true, 0, 120, 90, DEFAULT_SAFE_SPEED
+  SERVO_WRIST, "wrist", 32, true, 0, 120, 90, 0, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig ROBOT_SERVOS[] = {

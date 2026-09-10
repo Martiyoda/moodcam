@@ -7,6 +7,9 @@ const CANVAS_HEIGHT = 160
 const SAFE_MARGIN = 6
 const Z_UP = 28
 const Z_PAINT = 8
+const STROKE_SIZE_SCALE = 1.35
+const SLOW_STROKE_MIN_SPEED = 6
+const SLOW_STROKE_MAX_SPEED = 10
 export const MAX_SESSION_STROKES = 8
 
 let activeRandom = Math.random
@@ -255,6 +258,8 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
   const rawStrokes = Array.from({ length: strokeCount }, (_, index) => (
     createStroke({
       index,
+      placementIndex: index,
+      placementTotal: strokeCount,
       artist,
       shapes,
       colors,
@@ -350,6 +355,8 @@ export function generateArtChunk({ windowSummary = [], artistId, recipe = null, 
 
     const rawStrokes = Array.from({ length: strokeCount }, (_, index) => createStroke({
       index,
+      placementIndex: completedStrokeCount + index,
+      placementTotal: maxSessionStrokes,
       artist,
       shapes,
       colors,
@@ -587,14 +594,18 @@ function createTowelCommands(calibration) {
   ]
 }
 
-function createStroke({ index, artist, shapes, colors, speed, pressure, randomness, movementLevel, direction }) {
+function createStroke({ index, placementIndex = index, placementTotal = MAX_SESSION_STROKES, artist, shapes, colors, speed, pressure, randomness, movementLevel, direction }) {
   // Combina estilo, emoción y azar controlado para producir un trazo ejecutable.
   const shape = pickShape(artist, shapes, index)
   const color = colors[index % colors.length]
   const jitter = randomness / 100
-  const strokeSpeed = clamp(Math.round(speed + randomBetween(-10, 14) * jitter + movementLevel * 0.05), 70, 80)
+  const strokeSpeed = clamp(Math.round(speed + randomBetween(-10, 14) * jitter + movementLevel * 0.05), SLOW_STROKE_MIN_SPEED, SLOW_STROKE_MAX_SPEED)
   const strokePressure = clamp(Math.round(pressure + randomBetween(-8, 10) * jitter), 10, 100)
-  const points = createPointsForShape(shape, direction, movementLevel, jitter, index)
+  const points = distributeStrokeAcrossCanvas(
+    createPointsForShape(shape, direction, movementLevel, jitter, index),
+    placementIndex,
+    placementTotal
+  )
 
   return {
     id: `stroke-${index + 1}`,
@@ -604,6 +615,29 @@ function createStroke({ index, artist, shapes, colors, speed, pressure, randomne
     pressure: strokePressure,
     points,
   }
+}
+
+function distributeStrokeAcrossCanvas(points, placementIndex, placementTotal) {
+  const paintPoints = points.filter((strokePoint) => strokePoint.brush > 0)
+  if (!paintPoints.length) return points
+
+  const total = Math.max(1, placementTotal)
+  const columns = Math.ceil(Math.sqrt(total * (CANVAS_WIDTH / CANVAS_HEIGHT)))
+  const rows = Math.ceil(total / columns)
+  const cell = placementIndex % total
+  const column = cell % columns
+  const row = Math.floor(cell / columns)
+  const centerX = paintPoints.reduce((sum, strokePoint) => sum + strokePoint.x, 0) / paintPoints.length
+  const centerY = paintPoints.reduce((sum, strokePoint) => sum + strokePoint.y, 0) / paintPoints.length
+  const targetX = columns === 1 ? CANVAS_WIDTH / 2 : 18 + ((CANVAS_WIDTH - 36) * column) / (columns - 1)
+  const targetY = rows === 1 ? CANVAS_HEIGHT / 2 : 18 + ((CANVAS_HEIGHT - 36) * row) / (rows - 1)
+
+  return points.map((strokePoint) => point(
+    strokePoint.x + targetX - centerX,
+    strokePoint.y + targetY - centerY,
+    strokePoint.z,
+    strokePoint.brush
+  ))
 }
 
 function pickShape(artist, shapes, index) {
@@ -622,10 +656,10 @@ function pickShape(artist, shapes, index) {
 function createPointsForShape(shape, direction, movementLevel, jitter, index) {
   // Selecciona el generador geométrico según el gesto solicitado por la receta.
   if (shape.startsWith('moodcam_')) return moodcamStrokePoints(shape, movementLevel)
-  if (shape === 'circle') return circlePoints(randomX(), randomY(), randomBetween(10, 24 + movementLevel * 0.1), 14)
-  if (shape === 'spiral') return spiralPoints(randomX(), randomY(), randomBetween(8, 24 + movementLevel * 0.1), 18)
-  if (shape === 'triangle') return polygonPoints(randomX(), randomY(), randomBetween(16, 34 + movementLevel * 0.16), 3, -Math.PI / 2)
-  if (shape === 'arc' || shape === 'open_arc') return arcPoints(randomX(), randomY(), randomBetween(18, 38), 12)
+  if (shape === 'circle') return circlePoints(randomX(), randomY(), randomBetween(10, 24 + movementLevel * 0.1) * STROKE_SIZE_SCALE, 14)
+  if (shape === 'spiral') return spiralPoints(randomX(), randomY(), randomBetween(8, 24 + movementLevel * 0.1) * STROKE_SIZE_SCALE, 18)
+  if (shape === 'triangle') return polygonPoints(randomX(), randomY(), randomBetween(16, 34 + movementLevel * 0.16) * STROKE_SIZE_SCALE, 3, -Math.PI / 2)
+  if (shape === 'arc' || shape === 'open_arc') return arcPoints(randomX(), randomY(), randomBetween(18, 38) * STROKE_SIZE_SCALE, 12)
   if (shape === 'block' || shape === 'wash' || shape === 'horizon' || shape === 'soft_edge') return blockPoints(index, movementLevel)
   if (shape === 'mosaic' || shape === 'dash' || shape === 'short_arc' || shape === 'column' || shape === 'ring') {
     return dashPoints(index, movementLevel, shape === 'short_arc' || shape === 'ring')
@@ -710,7 +744,7 @@ function arcPoints(cx, cy, radius, segments) {
 
 function linePoints(direction, movementLevel, jitter) {
   const start = { x: randomX(), y: randomY() }
-  const length = randomBetween(30, 58 + movementLevel * 0.45)
+  const length = randomBetween(30, 58 + movementLevel * 0.45) * STROKE_SIZE_SCALE
   const angle = angleForDirection(direction) + randomBetween(-0.55, 0.55) * (1 + jitter)
   const end = {
     x: start.x + Math.cos(angle) * length,
@@ -720,8 +754,8 @@ function linePoints(direction, movementLevel, jitter) {
 }
 
 function blockPoints(index, movementLevel) {
-  const width = randomBetween(72, 120 + movementLevel * 0.25)
-  const height = randomBetween(22, 42 + movementLevel * 0.1)
+  const width = randomBetween(72, 120 + movementLevel * 0.25) * STROKE_SIZE_SCALE
+  const height = randomBetween(22, 42 + movementLevel * 0.1) * STROKE_SIZE_SCALE
   const x = clamp(randomBetween(18, CANVAS_WIDTH - width - 18), 12, CANVAS_WIDTH - width - 12)
   const y = clamp(22 + (index % 5) * 24 + randomBetween(-8, 8), 12, CANVAS_HEIGHT - height - 12)
   const rows = 3
@@ -743,7 +777,7 @@ function dashPoints(index, movementLevel, curved = false) {
   const row = Math.floor(index / 8)
   const x = 22 + column * 24 + randomBetween(-5, 5)
   const y = 22 + row * 20 + randomBetween(-5, 5)
-  const length = randomBetween(10, 18 + movementLevel * 0.12)
+  const length = randomBetween(10, 18 + movementLevel * 0.12) * STROKE_SIZE_SCALE
 
   if (curved) {
     return arcPoints(x, y, length, 5)
@@ -764,7 +798,7 @@ function actionPoints(shape, movementLevel, jitter) {
   let y = start.y
 
   for (let i = 0; i < count; i += 1) {
-    const step = randomBetween(10, 26 + movementLevel * 0.2)
+    const step = randomBetween(10, 26 + movementLevel * 0.2) * STROKE_SIZE_SCALE
     angle += randomBetween(-1.2, 1.2) * (1 + jitter)
     if (shape === 'drip') angle = Math.PI / 2 + randomBetween(-0.25, 0.25)
     if (shape === 'loop') angle += Math.PI * 0.42
@@ -786,7 +820,7 @@ function gesturePoints(direction, movementLevel, jitter) {
 
   for (let i = 0; i < count; i += 1) {
     angle += randomBetween(-0.95, 0.95) * (0.5 + jitter)
-    const step = randomBetween(16, 30 + movementLevel * 0.22)
+    const step = randomBetween(16, 30 + movementLevel * 0.22) * STROKE_SIZE_SCALE
     x += Math.cos(angle) * step
     y += Math.sin(angle) * step
     points.push(point(x, y, Z_PAINT, 1))

@@ -95,6 +95,23 @@ function getHuman(config) {
     return humanInstance
 }
 
+function cameraErrorMessage(error) {
+    switch (error?.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+        return 'El navegador bloqueó la cámara. Permite el acceso a la cámara y abre la app desde localhost o HTTPS.'
+    case 'NotFoundError':
+        return 'No se encontró ninguna cámara disponible.'
+    case 'NotReadableError':
+    case 'AbortError':
+        return 'La cámara está ocupada por otra aplicación. Ciérrala e inténtalo de nuevo.'
+    case 'OverconstrainedError':
+        return 'La cámara no admite la configuración solicitada.'
+    default:
+        return 'No se pudo acceder a la cámara. Comprueba los permisos del navegador.'
+    }
+}
+
 export default function useFaceDetection() {
     const videoRef = useRef(null)
     const canvasRef = useRef(null)
@@ -194,6 +211,10 @@ export default function useFaceDetection() {
     // Iniciar cámara
     const startCamera = useCallback(async () => {
         if (!modelsLoaded) return false
+        if (!navigator.mediaDevices?.getUserMedia) {
+            setError('Este navegador no permite usar la cámara. Abre la app desde localhost o HTTPS.')
+            return false
+        }
         try {
             setError(null)
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -205,14 +226,24 @@ export default function useFaceDetection() {
                 audio: false,
             })
             streamRef.current = stream
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream
+            const video = videoRef.current
+            if (!video) {
+                stream.getTracks().forEach((track) => track.stop())
+                streamRef.current = null
+                throw new Error('VideoElementUnavailable')
             }
+
+            video.srcObject = stream
+            await video.play()
             setCameraActive(true)
             return true
         } catch (err) {
             console.error('Error accediendo a cámara:', err)
-            setError('No se pudo acceder a la cámara. Asegúrate de dar permisos.')
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((track) => track.stop())
+                streamRef.current = null
+            }
+            setError(cameraErrorMessage(err))
             return false
         }
     }, [modelsLoaded])
