@@ -85,7 +85,11 @@ int degreesPerStepForSpeed(int speed) {
 }
 
 void writeServoAngle(Servo& servo, const RobotServoConfig& config, int logicalAngle) {
-  servo.write(constrain(logicalAngle + config.outputOffset, 0, 180));
+  const int offsetAngle = logicalAngle + config.outputOffset;
+  const int physicalAngle = config.outputReversed
+    ? (2 * config.homeAngle + config.outputOffset - logicalAngle)
+    : offsetAngle;
+  servo.write(constrain(physicalAngle, 0, 180));
 }
 
 void writePose(const ServoPose& nextPose) {

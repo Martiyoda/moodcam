@@ -536,6 +536,34 @@ function createRobotCommands(strokes, calibration, options = {}) {
   return commands
 }
 
+export function createA4RectangleCommand(calibration = null) {
+  const resolvedCalibration = normalizeCalibration(calibration)
+  const { canvas, z } = resolvedCalibration
+  const left = canvas.originX + canvas.margin
+  const top = canvas.originY + canvas.margin
+  const right = canvas.originX + canvas.width - canvas.margin
+  const bottom = canvas.originY + canvas.height - canvas.margin
+
+  return {
+    type: 'stroke',
+    id: 'a4-rectangle',
+    shape: 'rectangle',
+    color: 'test',
+    paint_id: null,
+    speed: 6,
+    pressure: 40,
+    points: [
+      { x: left, y: top, z: z.up, brush: 0 },
+      { x: left, y: top, z: z.paint, brush: 1 },
+      { x: right, y: top, z: z.paint, brush: 1 },
+      { x: right, y: bottom, z: z.paint, brush: 1 },
+      { x: left, y: bottom, z: z.paint, brush: 1 },
+      { x: left, y: top, z: z.paint, brush: 1 },
+      { x: left, y: top, z: z.up, brush: 0 },
+    ],
+  }
+}
+
 function createBrushCleaningCommands(calibration) {
   return [
     ...createWaterCommands(calibration),

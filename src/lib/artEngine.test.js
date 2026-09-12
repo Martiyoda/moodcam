@@ -2,8 +2,28 @@
 // Si fallan, no conviene enviar el plan al brazo porque podria estar incompleto.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { generateArtChunk, generateArtPlan } from './artEngine.js'
+import { createA4RectangleCommand, generateArtChunk, generateArtPlan } from './artEngine.js'
 import { DEFAULT_ROBOT_CALIBRATION } from './voiceEngine.js'
+
+test('genera un rectangulo cerrado dentro del area util del A4', () => {
+  const command = createA4RectangleCommand(DEFAULT_ROBOT_CALIBRATION)
+  const { canvas, z } = DEFAULT_ROBOT_CALIBRATION
+  const left = canvas.originX + canvas.margin
+  const top = canvas.originY + canvas.margin
+  const right = canvas.originX + canvas.width - canvas.margin
+  const bottom = canvas.originY + canvas.height - canvas.margin
+
+  assert.equal(command.type, 'stroke')
+  assert.deepEqual(command.points, [
+    { x: left, y: top, z: z.up, brush: 0 },
+    { x: left, y: top, z: z.paint, brush: 1 },
+    { x: right, y: top, z: z.paint, brush: 1 },
+    { x: right, y: bottom, z: z.paint, brush: 1 },
+    { x: left, y: bottom, z: z.paint, brush: 1 },
+    { x: left, y: top, z: z.paint, brush: 1 },
+    { x: left, y: top, z: z.up, brush: 0 },
+  ])
+})
 
 test('genera plan dentro de A4 horizontal', () => {
   const plan = generateArtPlan({

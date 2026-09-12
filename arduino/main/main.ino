@@ -86,36 +86,17 @@
     constexpr float PATH_MIN_Z = 0.0f;
     constexpr float PATH_MAX_Z = 35.0f;
 
-    // Centro A4 medido: base=90, hombro=120, codo=120 y muneca=40.
-    // Los extremos conservan el recorrido ya validado y todos se limitan mas
-    // abajo con los margenes mecanicos configurados.
-    constexpr int CANVAS_BASE_LEFT_DEG = 125;
-    constexpr int CANVAS_BASE_RIGHT_DEG = 55;
-    constexpr int CANVAS_NEAR_SHOULDER_DEG = 158;
-    constexpr int CANVAS_FAR_SHOULDER_DEG = 162;
-    constexpr int CANVAS_NEAR_ELBOW_DEG = 70;
-    constexpr int CANVAS_FAR_ELBOW_DEG = 144;
-    constexpr int CANVAS_CENTER_SHOULDER_CORRECTION_DEG = -39;
-    constexpr int CANVAS_CENTER_ELBOW_CORRECTION_DEG = 24;
-    constexpr int CANVAS_WRIST_CONTACT_OFFSET_DEG = 3;
-    constexpr int CANVAS_SHOULDER_CONTACT_OFFSET_DEG = 4;
+    // Zona de trabajo de los trazos, centrada en HOME de base y tomando la
+    // postura de la estacion roja como referencia de hombro, codo y muneca.
     constexpr int PAINTING_WRIST_ANGLE_DEG = 40;
-    constexpr ServoPose CANVAS_CENTER_POSE = {90, 120, 120, 40};
-    // Primera referencia medida durante la localizacion manual del A4.
-    // Coordenadas: x=297 mm, y=210 mm (esquina inferior derecha).
-    constexpr ServoPose CANVAS_BOTTOM_RIGHT_POSE = {49, 115, 100, 40};
-    // Coordenadas: x=0 mm, y=210 mm (esquina inferior izquierda).
-    constexpr ServoPose CANVAS_BOTTOM_LEFT_POSE = {124, 115, 100, 40};
-    // Mediciones brutas de las esquinas superiores. El codo a 180 grados
-    // excede su limite operativo actual; no usar para movimiento hasta revisar
-    // la referencia mecanica y los limites seguros.
-    constexpr CanvasCornerMeasurement CANVAS_TOP_RIGHT_MEASUREMENT = {60, 145, 180, 40};
-    constexpr CanvasCornerMeasurement CANVAS_TOP_LEFT_MEASUREMENT = {110, 145, 180, 40};
-    // El eje de la base queda fuera del borde frontal del A4. La IK usa esta
-    // distancia para extender el brazo de forma distinta en cada punto.
-    constexpr float CANVAS_BASE_TO_PAPER_MM = 120.0f;
-    constexpr float CANVAS_CENTER_X_MM = PATH_MAX_X * 0.5f;
-
+    constexpr int PAINTING_BASE_MIN_DEG = 50;
+    constexpr int PAINTING_BASE_MAX_DEG = 130;
+    constexpr int PAINTING_SHOULDER_MIN_DEG = 162;
+    constexpr int PAINTING_SHOULDER_MAX_DEG = 162;
+    constexpr int PAINTING_ELBOW_MIN_DEG = 70;
+    constexpr int PAINTING_ELBOW_MAX_DEG = 130;
+    constexpr int PAINTING_WRIST_MIN_DEG = 20;
+    constexpr int PAINTING_WRIST_MAX_DEG = 60;
     // Geometria medida del brazo impreso 3D (aprox):
     // - hombro -> codo: 230 mm
     // - codo -> muneca: 180 mm
@@ -126,7 +107,7 @@
 
     // Margenes de seguridad para no usar extremos mecanicos en brazo ad-hoc 3D.
     constexpr int SHOULDER_SAFE_MARGIN_DEG = 3;
-    constexpr int ELBOW_SAFE_MARGIN_DEG = 6;
+    constexpr int ELBOW_SAFE_MARGIN_DEG = 0;
     constexpr int WRIST_SAFE_MARGIN_DEG = 10;
 
     // Perfil base calibrable en campo para ejecucion artistica real.
@@ -149,10 +130,10 @@
     constexpr int WATER_SHAKE_REPETITIONS = 7;
     constexpr int DRY_TOWEL_REPETITIONS = 7;
     constexpr unsigned long DRY_TOWEL_HALF_CYCLE_MS = 20;
-    constexpr int DRY_TOWEL_START_BASE_DEG = 180;
-    constexpr int DRY_TOWEL_SWIPE_BASE_DEG = 140;
-    constexpr int DRY_TOWEL_SHOULDER_DEG = 105;
-    constexpr int DRY_TOWEL_ELBOW_DEG = 65;
+    constexpr int DRY_TOWEL_START_BASE_DEG = 0;
+    constexpr int DRY_TOWEL_SWIPE_BASE_DEG = 30;
+    constexpr int DRY_TOWEL_SHOULDER_DEG = 150;
+    constexpr int DRY_TOWEL_ELBOW_DEG = 50;
     constexpr int DRY_TOWEL_WRIST_DEG = 0;
     constexpr int PAINT_LOAD_CIRCLE_REPETITIONS = 2;
     constexpr int PAINT_LOAD_CIRCLE_RADIUS_DEG = 5;
@@ -1097,11 +1078,9 @@
         const bool contactPoint = !profile.forceBrushUp && (profile.forceBrushDown || points[index].brush > 0);
         ServoPose target = mapPointToPose(points[index]);
         if (strokePath) {
-          target.shoulder = constrain(
-            target.shoulder + CANVAS_SHOULDER_CONTACT_OFFSET_DEG,
-            SHOULDER_SERVO_CONFIG.minAngle + SHOULDER_SAFE_MARGIN_DEG,
-            SHOULDER_SERVO_CONFIG.maxAngle - SHOULDER_SAFE_MARGIN_DEG
-          );
+          // La pose interpolada ya es la calibración de contacto del papel.
+          // No añadir offsets por articulación: desplazaría el centro y las
+          // esquinas medidas fuera de sus referencias físicas.
           target.wrist = PAINTING_WRIST_ANGLE_DEG;
         }
 
@@ -1291,13 +1270,13 @@
       String normalized = paintId;
       normalized.toLowerCase();
       if (normalized == "yellow" || normalized == "amarillo") {
-        pose = {170, 109, 80, PAINTING_WRIST_ANGLE_DEG};
+        pose = {170, 158, 80, PAINTING_WRIST_ANGLE_DEG};
       } else if (normalized == "red" || normalized == "rojo") {
-        pose = {140, 110, 90, PAINTING_WRIST_ANGLE_DEG};
+        pose = {140, 158, 90, PAINTING_WRIST_ANGLE_DEG};
       } else if (normalized == "violet" || normalized == "purple" || normalized == "morado") {
-        pose = {20, 110, 90, PAINTING_WRIST_ANGLE_DEG};
+        pose = {20, 158, 90, PAINTING_WRIST_ANGLE_DEG};
       } else if (normalized == "blue" || normalized == "light_blue" || normalized == "azul") {
-        pose = {0, 110, 80, PAINTING_WRIST_ANGLE_DEG};
+        pose = {0, 162, 80, PAINTING_WRIST_ANGLE_DEG};
       } else {
         return false;
       }
@@ -1359,12 +1338,12 @@
     }
 
     bool rinseMoodcamBrush(int speed) {
-      const ServoPose waterPose = {90, 100, 50, 0};
+      const ServoPose waterPose = {90, 150, 48, 5};
       if (!moveMoodcamWaterPose(waterPose, speed)) {
         return false;
       }
-      const ServoPose right = {90, 100, 50, WATER_SHAKE_WRIST_AMPLITUDE_DEG};
-      const ServoPose left = {90, 100, 50, 0};
+      const ServoPose right = {90, 150, 48, WATER_SHAKE_WRIST_AMPLITUDE_DEG};
+      const ServoPose left = {90, 150, 48, 0};
       for (int repetition = 0; repetition < WATER_SHAKE_REPETITIONS; repetition++) {
         if (!moveMoodcamPose(right, speed) || !waitSafely(WATER_SHAKE_HALF_CYCLE_MS)
           || !moveMoodcamPose(left, speed) || !waitSafely(WATER_SHAKE_HALF_CYCLE_MS)) {
@@ -1415,7 +1394,7 @@
           && moveMoodcamPaintPose(paintPose, paintRequiresElbowBeforeShoulder(paintId));
       }
       if (type == "move_to_water") {
-        return moveMoodcamWaterPose({90, 100, 50, 0}, speed);
+        return moveMoodcamWaterPose({90, 150, 48, 5}, speed);
       }
       if (type == "rinse_brush") {
         return rinseMoodcamBrush(speed);
@@ -1580,64 +1559,41 @@
       const int wristMin = WRIST_SERVO_CONFIG.minAngle + WRIST_SAFE_MARGIN_DEG;
       const int wristMax = WRIST_SERVO_CONFIG.maxAngle - WRIST_SAFE_MARGIN_DEG;
 
-      // X del lienzo (0..PATH_MAX_X) usa la franja 120..50 grados identificada
-      // por los trazos laterales del Moodcam original; no todo el rango de base.
-      const int base = static_cast<int>(mapFloatRange(
+      const float verticalRatio = mapFloatRange(
+        safeY,
+        PATH_MIN_Y,
+        PATH_MAX_Y,
+        0.0f,
+        1.0f
+      );
+      const float horizontalRatio = mapFloatRange(
         safeX,
         PATH_MIN_X,
         PATH_MAX_X,
-        static_cast<float>(CANVAS_BASE_LEFT_DEG),
-        static_cast<float>(CANVAS_BASE_RIGHT_DEG)
-      ));
-      // La distancia radial incluye X e Y: los puntos laterales ya no reciben
-      // siempre la misma profundidad aunque compartan la misma coordenada Y.
-      const float radialX = safeY + CANVAS_BASE_TO_PAPER_MM;
-      const float radialY = safeX - CANVAS_CENTER_X_MM;
-      const float radialDistance = sqrt(radialX * radialX + radialY * radialY);
-      const float linkA = ARM_SHOULDER_TO_ELBOW_MM;
-      const float linkB = ARM_ELBOW_TO_WRIST_MM;
-      const float minimumReach = fabs(linkA - linkB);
-      const float maximumReach = linkA + linkB;
-      const float reachableDistance = constrain(radialDistance, minimumReach + 1.0f, maximumReach - 1.0f);
-      const float elbowCosine = constrain(
-        (reachableDistance * reachableDistance - linkA * linkA - linkB * linkB) / (-2.0f * linkA * linkB),
-        -1.0f,
+        0.0f,
         1.0f
       );
-      const float elbowGeometryDeg = acos(elbowCosine) * 180.0f / PI;
-      const float shoulderGeometryDeg = atan2(radialY, radialX) * 180.0f / PI
-        + acos(constrain(
-          (linkA * linkA + reachableDistance * reachableDistance - linkB * linkB) / (2.0f * linkA * reachableDistance),
-          -1.0f,
-          1.0f
-        )) * 180.0f / PI;
-      const int shoulder = static_cast<int>(mapFloatRange(
-        shoulderGeometryDeg,
-        0.0f,
-        180.0f,
-        static_cast<float>(CANVAS_NEAR_SHOULDER_DEG),
-        static_cast<float>(CANVAS_FAR_SHOULDER_DEG)
-      )) + CANVAS_CENTER_SHOULDER_CORRECTION_DEG;
-      const int elbow = static_cast<int>(mapFloatRange(
-        elbowGeometryDeg,
-        0.0f,
-        180.0f,
-        static_cast<float>(CANVAS_NEAR_ELBOW_DEG),
-        static_cast<float>(CANVAS_FAR_ELBOW_DEG)
-      )) + CANVAS_CENTER_ELBOW_CORRECTION_DEG;
-      // Z (altura del pincel) -> pitch de la muneca (rango efectivo reducido).
+      const float base = mapFloatRange(
+        horizontalRatio, 0.0f, 1.0f, PAINTING_BASE_MIN_DEG, PAINTING_BASE_MAX_DEG
+      );
+      const float shoulder = mapFloatRange(
+        verticalRatio, 0.0f, 1.0f, PAINTING_SHOULDER_MIN_DEG, PAINTING_SHOULDER_MAX_DEG
+      );
+      const float elbow = mapFloatRange(
+        verticalRatio, 0.0f, 1.0f, PAINTING_ELBOW_MAX_DEG, PAINTING_ELBOW_MIN_DEG
+      );
       const int wrist = static_cast<int>(mapFloatRange(
         safeZ,
         PATH_MIN_Z,
         PATH_MAX_Z,
-        static_cast<float>(wristMin + CANVAS_WRIST_CONTACT_OFFSET_DEG),
-        static_cast<float>(wristMax + CANVAS_WRIST_CONTACT_OFFSET_DEG)
+        PAINTING_WRIST_MIN_DEG,
+        PAINTING_WRIST_MAX_DEG
       ));
 
       return {
-        constrain(base, baseMin, baseMax),
-        constrain(shoulder, shoulderMin, shoulderMax),
-        constrain(elbow, elbowMin, elbowMax),
+        constrain(static_cast<int>(base), baseMin, baseMax),
+        constrain(static_cast<int>(shoulder), shoulderMin, shoulderMax),
+        constrain(static_cast<int>(elbow), elbowMin, elbowMax),
         constrain(wrist, wristMin, wristMax)
       };
     }
