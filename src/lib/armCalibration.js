@@ -1,7 +1,7 @@
 // Configuración visible en la web para calibrar cada articulación dentro de sus límites.
 export const ARM_SERVOS = [
   { id: 'base', label: 'Base', gpio: 26, minAngle: -30, maxAngle: 180 },
-  { id: 'shoulder', label: 'Hombro', gpio: 25, minAngle: 45, maxAngle: 165 },
+  { id: 'shoulder', label: 'Hombro', gpio: 25, minAngle: 45, maxAngle: 170 },
   { id: 'elbow', label: 'Codo', gpio: 33, minAngle: 35, maxAngle: 150 },
   { id: 'wrist', label: 'Muñeca', gpio: 32, minAngle: 0, maxAngle: 120 },
 ]

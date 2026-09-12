@@ -123,7 +123,7 @@ export const ARTISTS = [
     style: 'geometric',
     label: 'Geometría musical',
     summary: 'Círculos, triángulos, arcos y líneas con ritmo.',
-    shapes: ['circle', 'triangle', 'line', 'arc', 'spiral'],
+    shapes: ['circle', 'triangle', 'square', 'arc', 'spiral'],
     baseSpeed: 64,
     basePressure: 42,
     density: 58,
@@ -261,6 +261,7 @@ export function generateArtPlan({ mainEmotions, artistId, mobility = 85, calibra
       placementIndex: index,
       placementTotal: strokeCount,
       artist,
+      emotion: index % 2 === 0 ? primary.emotion : secondary.emotion,
       shapes,
       colors,
       speed,
@@ -358,6 +359,7 @@ export function generateArtChunk({ windowSummary = [], artistId, recipe = null, 
       placementIndex: completedStrokeCount + index,
       placementTotal: maxSessionStrokes,
       artist,
+      emotion: primary.emotion,
       shapes,
       colors,
       speed,
@@ -433,8 +435,8 @@ function normalizeCalibration(calibration) {
     width: 297,
     height: 210,
     margin: 12,
-    paintableMarginX: 42,
-    paintableMarginY: 24,
+    paintableMarginX: 30,
+    paintableMarginY: 18,
     ...(calibration?.canvas || {}),
   }
   const z = {
@@ -626,9 +628,9 @@ function createTowelCommands(calibration) {
   ]
 }
 
-function createStroke({ index, placementIndex = index, placementTotal = MAX_SESSION_STROKES, artist, shapes, colors, speed, pressure, randomness, movementLevel, direction }) {
+function createStroke({ index, placementIndex = index, placementTotal = MAX_SESSION_STROKES, artist, emotion, shapes, colors, speed, pressure, randomness, movementLevel, direction }) {
   // Combina estilo, emoción y azar controlado para producir un trazo ejecutable.
-  const shape = pickShape(artist, shapes, index)
+  const shape = pickShape(artist, emotion, shapes, index)
   const color = colors[index % colors.length]
   const jitter = randomness / 100
   const strokeSpeed = clamp(Math.round(speed + randomBetween(-10, 14) * jitter + movementLevel * 0.05), SLOW_STROKE_MIN_SPEED, SLOW_STROKE_MAX_SPEED)
@@ -663,23 +665,30 @@ function distributeStrokeAcrossCanvas(points, placementIndex, placementTotal) {
   const centerY = paintPoints.reduce((sum, strokePoint) => sum + strokePoint.y, 0) / paintPoints.length
   const targetX = columns === 1 ? CANVAS_WIDTH / 2 : 18 + ((CANVAS_WIDTH - 36) * column) / (columns - 1)
   const targetY = rows === 1 ? CANVAS_HEIGHT / 2 : 18 + ((CANVAS_HEIGHT - 36) * row) / (rows - 1)
+  const offsetX = randomBetween(-12, 12)
+  const offsetY = randomBetween(-9, 9)
 
   return points.map((strokePoint) => point(
-    strokePoint.x + targetX - centerX,
-    strokePoint.y + targetY - centerY,
+    strokePoint.x + targetX - centerX + offsetX,
+    strokePoint.y + targetY - centerY + offsetY,
     strokePoint.z,
     strokePoint.brush
   ))
 }
 
-function pickShape(artist, shapes, index) {
+function pickShape(artist, emotion, shapes, index) {
   const supportedShapes = shapes.filter((shape) => [
-    'circle', 'triangle', 'line', 'arc', 'spiral', 'open_arc',
+    'circle', 'triangle', 'square', 'line', 'arc', 'spiral', 'open_arc',
     'splatter', 'flick', 'loop', 'drip', 'broken_line',
     'block', 'wash', 'horizon', 'soft_edge',
     'dash', 'mosaic', 'short_arc', 'column', 'ring',
   ].includes(shape))
   const artistShapes = artist.shapes.filter((shape) => supportedShapes.includes(shape))
+  if (artist.id === 'kandinsky') {
+    if (['happy', 'angry', 'fear', 'surprise'].includes(emotion)) return 'triangle'
+    if (emotion === 'neutral') return 'square'
+    if (emotion === 'sad') return 'arc'
+  }
   const artistOffset = ARTISTS.findIndex((candidate) => candidate.id === artist.id)
   const selectedShapes = artistShapes.length ? artistShapes : (supportedShapes.length ? supportedShapes : ['line'])
   return selectedShapes[(index + Math.max(artistOffset, 0)) % selectedShapes.length]
@@ -688,9 +697,10 @@ function pickShape(artist, shapes, index) {
 function createPointsForShape(shape, direction, movementLevel, jitter, index) {
   // Selecciona el generador geométrico según el gesto solicitado por la receta.
   if (shape.startsWith('moodcam_')) return moodcamStrokePoints(shape, movementLevel)
-  if (shape === 'circle') return circlePoints(randomX(), randomY(), randomBetween(10, 24 + movementLevel * 0.1) * STROKE_SIZE_SCALE, 14)
+  if (shape === 'circle') return circlePoints(randomX(), randomY(), randomBetween(20, 36 + movementLevel * 0.1) * STROKE_SIZE_SCALE, 14)
   if (shape === 'spiral') return spiralPoints(randomX(), randomY(), randomBetween(8, 24 + movementLevel * 0.1) * STROKE_SIZE_SCALE, 18)
   if (shape === 'triangle') return polygonPoints(randomX(), randomY(), randomBetween(16, 34 + movementLevel * 0.16) * STROKE_SIZE_SCALE, 3, -Math.PI / 2)
+  if (shape === 'square') return polygonPoints(randomX(), randomY(), randomBetween(18, 32 + movementLevel * 0.12) * STROKE_SIZE_SCALE, 4, Math.PI / 4)
   if (shape === 'arc' || shape === 'open_arc') return arcPoints(randomX(), randomY(), randomBetween(18, 38) * STROKE_SIZE_SCALE, 12)
   if (shape === 'block' || shape === 'wash' || shape === 'horizon' || shape === 'soft_edge') return blockPoints(index, movementLevel)
   if (shape === 'mosaic' || shape === 'dash' || shape === 'short_arc' || shape === 'column' || shape === 'ring') {

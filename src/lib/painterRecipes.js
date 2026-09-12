@@ -23,7 +23,7 @@ export const WRO_PAINTER_RECIPES = [
         artist_id: 'kandinsky',
         artist_name: 'Kandinsky',
         style: 'geometric',
-        allowed_gestures: ['circle', 'triangle', 'line', 'arc', 'spiral', 'open_arc'],
+        allowed_gestures: ['circle', 'triangle', 'square', 'line', 'arc', 'spiral', 'open_arc'],
         preferred_zones: ['center', 'upper_left', 'lower_right'],
         density_range: [35, 75],
         speed_range: [35, 78],

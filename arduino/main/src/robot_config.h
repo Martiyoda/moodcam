@@ -45,7 +45,7 @@ constexpr RobotServoConfig BASE_SERVO_CONFIG = {
 };
 
 constexpr RobotServoConfig SHOULDER_SERVO_CONFIG = {
-  SERVO_SHOULDER, "shoulder", 25, true, 45, 165, 90, -45, false, DEFAULT_SAFE_SPEED
+  SERVO_SHOULDER, "shoulder", 25, true, 45, 170, 90, -45, false, DEFAULT_SAFE_SPEED
 };
 
 constexpr RobotServoConfig ELBOW_SERVO_CONFIG = {

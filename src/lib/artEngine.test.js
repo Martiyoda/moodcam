@@ -69,7 +69,7 @@ test('genera plan dentro de A4 horizontal', () => {
 
 test('genera trazos propios para cada pintor dentro del limite seguro', () => {
   const expectedShapes = {
-    kandinsky: new Set(['circle', 'triangle', 'line', 'arc', 'spiral', 'open_arc']),
+    kandinsky: new Set(['circle', 'triangle', 'square', 'line', 'arc', 'spiral', 'open_arc']),
     pollock: new Set(['splatter', 'flick', 'loop', 'drip', 'broken_line']),
     rothko: new Set(['block', 'wash', 'horizon', 'soft_edge']),
     'alma-thomas': new Set(['dash', 'mosaic', 'short_arc', 'column', 'ring']),
@@ -208,20 +208,76 @@ test('genera ocho paquetes de un trazo sin superar ocho trazos por sesion', () =
   assert.equal(fullSessionChunk.strokes.length, 0)
 })
 
-test('Kandinsky avanza la figura en cada ventana de una sesion', () => {
-  const shapes = Array.from({ length: 5 }, (_, completedStrokeCount) => {
+test('Kandinsky adapta su geometria a la emocion de cada ventana', () => {
+  const shapes = [
+    ['angry', 'triangle'],
+    ['happy', 'triangle'],
+    ['neutral', 'square'],
+    ['sad', 'arc'],
+  ].map(([emotion, expectedShape], windowIndex) => {
+    const chunk = generateArtChunk({
+      windowSummary: [{ emotion, label: emotion, percentage: 100 }],
+      artistId: 'kandinsky',
+      calibration: DEFAULT_ROBOT_CALIBRATION,
+      sessionState: {
+        session_id: 'kandinsky-shapes',
+        window_index: windowIndex,
+        completed_stroke_count: windowIndex,
+      },
+    })
+    assert.equal(chunk.strokes[0].shape, expectedShape)
+    return chunk.strokes[0].shape
+  })
+
+  assert.deepEqual(shapes, ['triangle', 'triangle', 'square', 'arc'])
+})
+
+test('distribuye los origenes de los trazos por toda la zona pintable', () => {
+  const origins = Array.from({ length: 8 }, (_, completedStrokeCount) => {
     const chunk = generateArtChunk({
       windowSummary: [{ emotion: 'happy', label: 'Alegria', percentage: 100 }],
       artistId: 'kandinsky',
       calibration: DEFAULT_ROBOT_CALIBRATION,
       sessionState: {
-        session_id: 'kandinsky-shapes',
+        session_id: 'distributed-origins',
         window_index: completedStrokeCount,
         completed_stroke_count: completedStrokeCount,
       },
     })
-    return chunk.strokes[0].shape
+    return chunk.strokes[0].points.find((point) => point.brush === 1)
   })
 
-  assert.deepEqual(shapes, ['circle', 'triangle', 'line', 'arc', 'spiral'])
+  const uniqueOrigins = new Set(origins.map((point) => `${point.x}:${point.y}`))
+  assert.equal(uniqueOrigins.size, origins.length)
+  assert.ok(Math.min(...origins.map((point) => point.x)) < 65)
+  assert.ok(Math.max(...origins.map((point) => point.x)) > 230)
+  assert.ok(Math.min(...origins.map((point) => point.y)) < 40)
+})
+
+test('todos los pintores usan la zona de trabajo y distribucion compartidas', () => {
+  const artists = ['kandinsky', 'pollock', 'rothko', 'alma-thomas']
+  const { canvas } = DEFAULT_ROBOT_CALIBRATION
+
+  artists.forEach((artistId) => {
+    const points = Array.from({ length: 8 }, (_, completedStrokeCount) => {
+      const chunk = generateArtChunk({
+        windowSummary: [{ emotion: 'happy', label: 'Alegria', percentage: 100 }],
+        artistId,
+        calibration: DEFAULT_ROBOT_CALIBRATION,
+        sessionState: {
+          session_id: `${artistId}-coverage`,
+          window_index: completedStrokeCount,
+          completed_stroke_count: completedStrokeCount,
+        },
+        seed: `${artistId}-coverage-${completedStrokeCount}`,
+      })
+      return chunk.strokes[0].points.filter((point) => point.brush === 1)
+    }).flat()
+
+    assert.ok(points.every((point) => point.x >= canvas.paintableMarginX && point.x <= canvas.width - canvas.paintableMarginX))
+    assert.ok(points.every((point) => point.y >= canvas.paintableMarginY && point.y <= canvas.height - canvas.paintableMarginY))
+    assert.ok(Math.min(...points.map((point) => point.x)) < 65)
+    assert.ok(Math.max(...points.map((point) => point.x)) > 230)
+    assert.ok(Math.min(...points.map((point) => point.y)) < 40)
+  })
 })

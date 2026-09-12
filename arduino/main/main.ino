@@ -91,10 +91,10 @@
     constexpr int PAINTING_WRIST_ANGLE_DEG = 40;
     constexpr int PAINTING_BASE_MIN_DEG = 50;
     constexpr int PAINTING_BASE_MAX_DEG = 130;
-    constexpr int PAINTING_SHOULDER_MIN_DEG = 162;
-    constexpr int PAINTING_SHOULDER_MAX_DEG = 162;
-    constexpr int PAINTING_ELBOW_MIN_DEG = 75;
-    constexpr int PAINTING_ELBOW_MAX_DEG = 135;
+    constexpr int PAINTING_SHOULDER_MIN_DEG = 167;
+    constexpr int PAINTING_SHOULDER_MAX_DEG = 167;
+    constexpr int PAINTING_ELBOW_MIN_DEG = 80;
+    constexpr int PAINTING_ELBOW_MAX_DEG = 145;
     constexpr int PAINTING_WRIST_MIN_DEG = 20;
     constexpr int PAINTING_WRIST_MAX_DEG = 60;
     constexpr int PAINT_LOAD_WRIST_ANGLE_DEG = 20;
@@ -1271,13 +1271,13 @@
       String normalized = paintId;
       normalized.toLowerCase();
       if (normalized == "yellow" || normalized == "amarillo") {
-        pose = {170, 158, 80, PAINT_LOAD_WRIST_ANGLE_DEG};
+        pose = {170, 156, 80, PAINT_LOAD_WRIST_ANGLE_DEG};
       } else if (normalized == "red" || normalized == "rojo") {
         pose = {140, 158, 90, PAINT_LOAD_WRIST_ANGLE_DEG};
       } else if (normalized == "violet" || normalized == "purple" || normalized == "morado") {
         pose = {20, 158, 90, PAINT_LOAD_WRIST_ANGLE_DEG};
       } else if (normalized == "blue" || normalized == "light_blue" || normalized == "azul") {
-        pose = {0, 162, 80, PAINT_LOAD_WRIST_ANGLE_DEG};
+        pose = {0, 160, 80, PAINT_LOAD_WRIST_ANGLE_DEG};
       } else {
         return false;
       }
@@ -1339,12 +1339,12 @@
     }
 
     bool rinseMoodcamBrush(int speed) {
-      const ServoPose waterPose = {90, 150, 48, 5};
+      const ServoPose waterPose = {90, 150, 55, 5};
       if (!moveMoodcamWaterPose(waterPose, speed)) {
         return false;
       }
-      const ServoPose right = {90, 150, 48, WATER_SHAKE_WRIST_AMPLITUDE_DEG};
-      const ServoPose left = {90, 150, 48, 0};
+      const ServoPose right = {90, 150, 55, WATER_SHAKE_WRIST_AMPLITUDE_DEG};
+      const ServoPose left = {90, 150, 55, 0};
       for (int repetition = 0; repetition < WATER_SHAKE_REPETITIONS; repetition++) {
         if (!moveMoodcamPose(right, speed) || !waitSafely(WATER_SHAKE_HALF_CYCLE_MS)
           || !moveMoodcamPose(left, speed) || !waitSafely(WATER_SHAKE_HALF_CYCLE_MS)) {
@@ -1395,7 +1395,7 @@
           && moveMoodcamPaintPose(paintPose, paintRequiresElbowBeforeShoulder(paintId));
       }
       if (type == "move_to_water") {
-        return moveMoodcamWaterPose({90, 150, 48, 5}, speed);
+        return moveMoodcamWaterPose({90, 150, 55, 5}, speed);
       }
       if (type == "rinse_brush") {
         return rinseMoodcamBrush(speed);
