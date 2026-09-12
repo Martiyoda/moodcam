@@ -225,6 +225,11 @@ interpolacion gracias al `MotionTickCallback`).
 - La `presence` MQTT del ESP32 no se interrumpe durante los strokes.
 - Sin ruidos nuevos ni calentamiento perceptible.
 
+La carga de pintura usa una elevacion de muneca independiente de los trazos.
+Tras cambiarla, valida cada bote con `jog` y supervision directa antes de
+ejecutar una sesion: la punta debe quedar separada del metacrilato durante la
+aproximacion y el contacto con la pintura debe seguir siendo suficiente.
+
 ---
 
 ## 5. Diagnostico rapido

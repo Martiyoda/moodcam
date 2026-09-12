@@ -48,15 +48,15 @@ test('genera plan dentro de A4 horizontal', () => {
     .flatMap((command) => command.points)
 
   strokePoints.forEach((point) => {
-    assert.ok(point.x >= DEFAULT_ROBOT_CALIBRATION.canvas.originX + DEFAULT_ROBOT_CALIBRATION.canvas.margin)
-    assert.ok(point.x <= DEFAULT_ROBOT_CALIBRATION.canvas.width - DEFAULT_ROBOT_CALIBRATION.canvas.margin)
-    assert.ok(point.y >= DEFAULT_ROBOT_CALIBRATION.canvas.originY + DEFAULT_ROBOT_CALIBRATION.canvas.margin)
-    assert.ok(point.y <= DEFAULT_ROBOT_CALIBRATION.canvas.height - DEFAULT_ROBOT_CALIBRATION.canvas.margin)
+    assert.ok(point.x >= DEFAULT_ROBOT_CALIBRATION.canvas.originX + DEFAULT_ROBOT_CALIBRATION.canvas.paintableMarginX)
+    assert.ok(point.x <= DEFAULT_ROBOT_CALIBRATION.canvas.width - DEFAULT_ROBOT_CALIBRATION.canvas.paintableMarginX)
+    assert.ok(point.y >= DEFAULT_ROBOT_CALIBRATION.canvas.originY + DEFAULT_ROBOT_CALIBRATION.canvas.paintableMarginY)
+    assert.ok(point.y <= DEFAULT_ROBOT_CALIBRATION.canvas.height - DEFAULT_ROBOT_CALIBRATION.canvas.paintableMarginY)
   })
   assert.ok(strokePoints.some((point) => point.brush === 0 && point.z === DEFAULT_ROBOT_CALIBRATION.z.paint))
   assert.ok(strokePoints.some((point) => point.brush === 1 && point.z === DEFAULT_ROBOT_CALIBRATION.z.paint))
   assert.ok(Math.min(...strokePoints.map((point) => point.x)) < 50)
-  assert.ok(Math.max(...strokePoints.map((point) => point.x)) > 250)
+  assert.ok(Math.max(...strokePoints.map((point) => point.x)) > 220)
   assert.ok(Math.min(...strokePoints.map((point) => point.y)) < 50)
   assert.ok(Math.max(...strokePoints.map((point) => point.y)) > 160)
 
@@ -165,10 +165,10 @@ test('genera chunks deterministas y acotados por ventana', () => {
     .flatMap((command) => command.points)
 
   strokePoints.forEach((point) => {
-    assert.ok(point.x >= DEFAULT_ROBOT_CALIBRATION.canvas.originX + DEFAULT_ROBOT_CALIBRATION.canvas.margin)
-    assert.ok(point.x <= DEFAULT_ROBOT_CALIBRATION.canvas.width - DEFAULT_ROBOT_CALIBRATION.canvas.margin)
-    assert.ok(point.y >= DEFAULT_ROBOT_CALIBRATION.canvas.originY + DEFAULT_ROBOT_CALIBRATION.canvas.margin)
-    assert.ok(point.y <= DEFAULT_ROBOT_CALIBRATION.canvas.height - DEFAULT_ROBOT_CALIBRATION.canvas.margin)
+    assert.ok(point.x >= DEFAULT_ROBOT_CALIBRATION.canvas.originX + DEFAULT_ROBOT_CALIBRATION.canvas.paintableMarginX)
+    assert.ok(point.x <= DEFAULT_ROBOT_CALIBRATION.canvas.width - DEFAULT_ROBOT_CALIBRATION.canvas.paintableMarginX)
+    assert.ok(point.y >= DEFAULT_ROBOT_CALIBRATION.canvas.originY + DEFAULT_ROBOT_CALIBRATION.canvas.paintableMarginY)
+    assert.ok(point.y <= DEFAULT_ROBOT_CALIBRATION.canvas.height - DEFAULT_ROBOT_CALIBRATION.canvas.paintableMarginY)
   })
 })
 
@@ -206,4 +206,22 @@ test('genera ocho paquetes de un trazo sin superar ocho trazos por sesion', () =
   })
 
   assert.equal(fullSessionChunk.strokes.length, 0)
+})
+
+test('Kandinsky avanza la figura en cada ventana de una sesion', () => {
+  const shapes = Array.from({ length: 5 }, (_, completedStrokeCount) => {
+    const chunk = generateArtChunk({
+      windowSummary: [{ emotion: 'happy', label: 'Alegria', percentage: 100 }],
+      artistId: 'kandinsky',
+      calibration: DEFAULT_ROBOT_CALIBRATION,
+      sessionState: {
+        session_id: 'kandinsky-shapes',
+        window_index: completedStrokeCount,
+        completed_stroke_count: completedStrokeCount,
+      },
+    })
+    return chunk.strokes[0].shape
+  })
+
+  assert.deepEqual(shapes, ['circle', 'triangle', 'line', 'arc', 'spiral'])
 })

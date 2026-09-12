@@ -354,7 +354,7 @@ export function generateArtChunk({ windowSummary = [], artistId, recipe = null, 
     const chunkId = sessionState.chunk_id || `${sessionState.session_id || 'session'}-window-${sessionState.window_index || 0}-chunk-${sessionState.chunk_index || 1}`
 
     const rawStrokes = Array.from({ length: strokeCount }, (_, index) => createStroke({
-      index,
+      index: completedStrokeCount + index,
       placementIndex: completedStrokeCount + index,
       placementTotal: maxSessionStrokes,
       artist,
@@ -433,6 +433,8 @@ function normalizeCalibration(calibration) {
     width: 297,
     height: 210,
     margin: 12,
+    paintableMarginX: 42,
+    paintableMarginY: 24,
     ...(calibration?.canvas || {}),
   }
   const z = {
@@ -492,12 +494,14 @@ function uniquePalette(colors) {
 function projectPointToCanvas(strokePoint, calibration) {
   // Convierte las coordenadas internas del generador a milímetros del lienzo real.
   const { canvas, z } = calibration
-  const usableWidth = Math.max(1, canvas.width - canvas.margin * 2)
-  const usableHeight = Math.max(1, canvas.height - canvas.margin * 2)
+  const paintableMarginX = Math.max(canvas.margin, canvas.paintableMarginX || canvas.margin)
+  const paintableMarginY = Math.max(canvas.margin, canvas.paintableMarginY || canvas.margin)
+  const usableWidth = Math.max(1, canvas.width - paintableMarginX * 2)
+  const usableHeight = Math.max(1, canvas.height - paintableMarginY * 2)
 
   return {
-    x: round(canvas.originX + canvas.margin + (strokePoint.x / CANVAS_WIDTH) * usableWidth),
-    y: round(canvas.originY + canvas.margin + (strokePoint.y / CANVAS_HEIGHT) * usableHeight),
+    x: round(canvas.originX + paintableMarginX + (strokePoint.x / CANVAS_WIDTH) * usableWidth),
+    y: round(canvas.originY + paintableMarginY + (strokePoint.y / CANVAS_HEIGHT) * usableHeight),
     z: strokePoint.z === undefined ? (strokePoint.brush ? z.paint : z.up) : strokePoint.z,
     brush: strokePoint.brush,
   }

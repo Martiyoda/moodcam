@@ -93,10 +93,11 @@
     constexpr int PAINTING_BASE_MAX_DEG = 130;
     constexpr int PAINTING_SHOULDER_MIN_DEG = 162;
     constexpr int PAINTING_SHOULDER_MAX_DEG = 162;
-    constexpr int PAINTING_ELBOW_MIN_DEG = 70;
-    constexpr int PAINTING_ELBOW_MAX_DEG = 130;
+    constexpr int PAINTING_ELBOW_MIN_DEG = 75;
+    constexpr int PAINTING_ELBOW_MAX_DEG = 135;
     constexpr int PAINTING_WRIST_MIN_DEG = 20;
     constexpr int PAINTING_WRIST_MAX_DEG = 60;
+    constexpr int PAINT_LOAD_WRIST_ANGLE_DEG = 20;
     // Geometria medida del brazo impreso 3D (aprox):
     // - hombro -> codo: 230 mm
     // - codo -> muneca: 180 mm
@@ -1270,13 +1271,13 @@
       String normalized = paintId;
       normalized.toLowerCase();
       if (normalized == "yellow" || normalized == "amarillo") {
-        pose = {170, 158, 80, PAINTING_WRIST_ANGLE_DEG};
+        pose = {170, 158, 80, PAINT_LOAD_WRIST_ANGLE_DEG};
       } else if (normalized == "red" || normalized == "rojo") {
-        pose = {140, 158, 90, PAINTING_WRIST_ANGLE_DEG};
+        pose = {140, 158, 90, PAINT_LOAD_WRIST_ANGLE_DEG};
       } else if (normalized == "violet" || normalized == "purple" || normalized == "morado") {
-        pose = {20, 158, 90, PAINTING_WRIST_ANGLE_DEG};
+        pose = {20, 158, 90, PAINT_LOAD_WRIST_ANGLE_DEG};
       } else if (normalized == "blue" || normalized == "light_blue" || normalized == "azul") {
-        pose = {0, 162, 80, PAINTING_WRIST_ANGLE_DEG};
+        pose = {0, 162, 80, PAINT_LOAD_WRIST_ANGLE_DEG};
       } else {
         return false;
       }
@@ -1311,7 +1312,7 @@
         paintPose.base,
         paintPose.shoulder,
         paintPose.elbow,
-        PAINTING_WRIST_ANGLE_DEG
+        paintPose.wrist
       };
       if (!moveMoodcamPose(dipPose, paintLoadSpeed) || !waitSafely(PAINT_LOAD_SETTLE_MS)) {
         return false;

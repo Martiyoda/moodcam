@@ -9,6 +9,8 @@ export const DEFAULT_ROBOT_CALIBRATION = {
     width: 297,
     height: 210,
     margin: 12,
+    paintableMarginX: 42,
+    paintableMarginY: 24,
   },
   z: {
     up: 30,
